@@ -1,346 +1,375 @@
-# Excel Lite launch-readiness evaluation
+# Kensho Excel Lite Retrospective
 
-**Audit date:** 2026-07-10
-**Audited revision:** `4f112c9305930e9c947e5d0a52b558b3af656dc7` (`main`)
-**Environment:** macOS 26.4.1 arm64, Node 22.23.1, npm 10.9.8, Rust/Cargo 1.96.1, Python 3.13.7
-**Purpose:** determine whether Excel Lite is ready for a local demonstration, a public macOS release, and the v1 claim defined by `SPEC.md`.
+Date of analysis: 2026-07-10
 
-## Project context
+Product repo: `projects/excel-lite`
 
-- **Motivation.** Excel Lite was chosen as a demanding, legible demonstration of Kensho's autonomous parallel-engineering model: users can judge the product immediately by entering a formula, while a broad function library creates substantial independent implementation and review work.
-- **Requirements.** The v1 specification calls for a fully local macOS spreadsheet with a headless Rust calculation engine, 148 documented worksheet functions, automatic recalculation, lossless native files, CSV interchange, undo/redo, a responsive million-row grid, objective conformance gates, and a signed offline `.app`/`.dmg`.
-- **Goal.** Deliver a useful single-sheet desktop product while proving that many agents can build disjoint features concurrently behind stable interfaces without trading away correctness, reviewability, or reproducibility.
-- **Outcome.** The project produced a strong calculation core and a functioning native application that is ready for a controlled local demo: 148 functions, 1,585 conformance cases, 1,341 Rust tests, 38 frontend tests, and 96.29% measured core coverage. It did not complete the full public-release goal because grid reachability, unsaved-work protection, native CI, signing, and notarization remain unresolved.
+Audited product revision: `4f112c9305930e9c947e5d0a52b558b3af656dc7` (`main`)
 
-## Shareable summary
+Environment: macOS 26.4.1 arm64, Node 22.23.1, npm 10.9.8, Rust/Cargo 1.96.1, Python 3.13.7
 
-Excel Lite has a substantial, unusually well-tested calculation core and is ready for a controlled local demonstration. Current `main` passes 1,585 conformance cases, 1,341 Rust tests, 38 frontend tests, a 96.29% function/evaluator coverage gate, offline verification, a fresh Tauri package build, and DMG integrity verification. The packaged app launches and its native calculation, file-dialog, and offline paths have direct evidence.
+## Project Overview, Motivation, And Requirements
 
-It is **not ready for a public macOS launch or a full v1-complete claim**. The largest product defect is that the virtual sheet's lower half is unreachable: the 1,048,576-row spacer is clamped to 16,777,216 CSS pixels, and the bottom of the live grid starts at row 524,273. There is also no protection against discarding unsaved work. On the release side, the app is ad-hoc signed, fails strict code-sign and Gatekeeper checks, has no notarization, has no proper macOS application icon, and is not built or exercised as a native app in CI. The spec's LibreOffice oracle regeneration is only a scaffold, native e2e and scrolling benchmarks are absent, and the repository has no release/tag/remote workflow or public-facing release documentation.
+Excel Lite was both a product build and a stress test of Kensho's autonomous engineering model. The product had to be immediately legible to a human: type a formula, edit its precedents, save the workbook, reopen it, and see the right result. At the same time, its 148-function calculation surface created a large body of work that could be split across independent agents behind a stable evaluator contract.
 
-The correct next move is a parallel launch-hardening pass: grid scalability and data-loss prevention as product blockers; native e2e and performance gates; signing/notarization and release assets; oracle/security validation; then a clean, tagged release-candidate rehearsal.
+That combination made the project more revealing than a conventional feature demo. A plausible spreadsheet shell is easy to fake; a calculation engine with broad conformance, dependency-aware recalculation, native persistence, history, import/export, and a packaged desktop application is not. The project could therefore test two questions at once:
+
+1. Can Kensho coordinate a large parallel fan-out without losing semantic consistency?
+2. Can it bring the integrated product through the less parallel release tail: native workflows, safety, evidence, packaging, and distribution trust?
+
+The intended product was a fully local macOS spreadsheet with:
+
+- A headless Rust engine implementing 148 documented worksheet functions.
+- Automatic dependency-aware recalculation, range semantics, cycle handling, and Excel-style errors.
+- A responsive single-sheet grid with 1,048,576 rows, 16,384 columns, formula entry, selection, formatting, and structural edits.
+- Lossless native workbook files, CSV interchange, best-effort XLSX import, and undo/redo.
+- A Tauri desktop shell that remains offline and does not require an account, API key, hosted service, or cloud provider.
+- Objective conformance, coverage, native workflow, packaging, signing, and notarization gates.
+
+The human intent was ambitious but simple: exploit safe parallelism aggressively, preserve quality through verification and review, let Kai manage the organization, and surface only real project-level decisions. Excel Lite therefore evaluates Kensho as much as it evaluates the spreadsheet.
 
 ## Verdict
 
-| Release claim | Verdict | Rationale |
+Kensho produced a real, useful local spreadsheet application with an unusually strong calculation core. Current `main` passes 1,585 conformance cases, 1,341 Rust tests, 38 frontend tests, and a 96.29% function/evaluator coverage gate. A fresh Tauri build creates a working arm64 application and DMG; the packaged app launches, recalculates formulas, opens native dialogs, and passes offline scans.
+
+The product is ready for a controlled local demonstration. It is not ready to be presented as a public macOS v1. The lower half of the million-row grid is unreachable, destructive actions can discard unsaved work without warning, the native UI lacks an automated end-to-end lane, and the package is neither Developer ID signed nor notarized. The oracle, security, identity, and release-documentation claims are also incomplete.
+
+As a Kensho experiment, Excel Lite proved that broad implementation fan-out can work: 188 jobs were recorded, 182 completed, and the function epic alone contained 147 jobs. It did not prove hands-off self-sustaining autonomy. Effective concurrency was 1.57 with a peak of 4; almost all jobs ran as direct worker deliveries; the declared verifier/reviewer pipeline was unused; and Kai became the central merge, validation, repair, and progress-reconciliation point. External overseer prompts repeatedly restored parallelism or corrected stale state.
+
+The central lesson is not that Kensho needs more agents. It needs better delegation of integration authority, mandatory machine verification, independently exercised review lanes, and control-plane state that reconciles itself against the repository before asking for more work.
+
+## Evidence Summary
+
+Product commands were run against the audited revision:
+
+| Area | Command or probe | Result |
 | --- | --- | --- |
-| Controlled local demo on this Mac | **Ready with caveats** | Core, UI shell, package build, native recalc, file dialog, and offline behavior have evidence. Avoid the inaccessible lower sheet and explain the browser preview's limitations. |
-| Internal arm64 artifact shared with technical testers | **Conditional** | Works locally, but recipients must bypass normal trust expectations because the artifact is not Developer ID signed or notarized. Use only with explicit instructions and no irreplaceable workbook data. |
-| Public macOS download | **Not ready** | Grid reachability, unsaved-work loss, signing/notarization, native CI/e2e, release provenance, and release assets are incomplete. |
-| `SPEC.md` v1 definition of done | **Not met** | Several Slice 4/5 exit conditions and the mandated CI pipeline are not present or do not pass. |
-| Standalone web application | **Not a product target** | The browser command client is a visual/development preview. It intentionally does not calculate formulas or perform file operations. |
+| Conformance corpus | `python3 scripts/validate_conformance_cases.py` | 1,585 cases across 152 files passed. |
+| Function completeness | `python3 scripts/audit_conformance_coverage.py` | 148/148 registered functions; no missing, duplicate, or orphan implementations; every dedicated file met the five-case count. |
+| CI contracts | `python3 scripts/validate_ci_contracts.py` | Passed. |
+| Rust formatting and lint | `cargo fmt --check` and repository CI-equivalent `cargo clippy` | Passed. |
+| Rust tests | `cargo test --workspace` | 1,341 tests passed. |
+| Core coverage | `cargo llvm-cov` plus repository gate | 96.29% aggregate function/evaluator coverage against a 90% gate. |
+| Frontend checks | `npm run check`, `npm test`, `npm run build` | 0 check errors/warnings; 38 tests across 3 files; production build passed. |
+| Offline verification | `npm run verify:offline` before and after packaging | Passed. No runtime network dependency was found. |
+| Native package | `npm run tauri:build` | Produced `Excel Lite.app` and an arm64 DMG. |
+| DMG integrity | `hdiutil verify` | Passed; image contains the app and Applications link. |
+| Packaged launch | Fresh launch plus native accessibility/status probes | Passed at 1120x760; app reported `Ready`; formula recalculation and native open dialog were exercised. |
+| Responsive layout | Live browser checks at 1120x760 and 880x560 | No clipping, overlap, page overflow, or console errors. |
+| Bottom-of-sheet probe | Scroll/navigation against the live grid | Failed: CSS height clamps at 16,777,216 px, so the final viewport begins around row 524,273. |
+| Distribution trust | `codesign --verify --deep --strict` and `spctl --assess --type execute` | Failed; package is ad-hoc signed with no Team ID and is not notarized. |
 
-## What is already strong
+Checks that remain missing or incomplete:
 
-### Calculation engine and correctness gates
+| Missing check | Impact |
+| --- | --- |
+| Automated packaged-app workflow suite | Manual native evidence does not protect formula entry, save/reopen, import, history, dialogs, or boundary navigation on every change. |
+| Million-row performance benchmark | The specified final row is unreachable and the 60 fps target is not demonstrated. |
+| Reproducible LibreOffice oracle | `scripts/regen_oracle.py` is a non-writing scaffold; committed expectations are not independently regenerated in automation. |
+| Clean-machine signing/notarization test | The artifact cannot yet be trusted as a normal public macOS download. |
+| Automated accessibility audit | Keyboard and screen-reader behavior are not comprehensively measured. |
 
-- **148 registered worksheet functions** are present with no missing or duplicate registry entries.
-- **1,585 conformance cases across 152 TOML files** pass.
-- Every dedicated function file meets the current automated minimum of five cases.
-- **1,341 Rust tests** pass across core and app crates, including conformance, recalc hardening, cycle handling, reference shifting, native round-trip, formatting, resizing, and app adapter tests.
-- The native round-trip property test is configured for **1,000 generated workbooks**.
-- The measured function/evaluator line coverage is **96.29%**, above the 90% gate.
-- Recalc tests cover direct propagation, cascades, diamonds, 1,000-cell fan-out, 10,000-cell incrementality, range dependency, and cycle cases under a one-second timeout.
-- The headless `xlite-core` boundary remains free of Tauri and UI dependencies.
+Kensho process evidence came from the daemon event stream, job ledger, outcome report, manager state, topology, and ten recorded feedback items:
 
-### UI and native product evidence
+| Metric | Value |
+| --- | ---: |
+| Jobs | 188 |
+| Done / failed | 182 / 6 |
+| Worker / reviewer / verifier jobs | 187 / 1 / 0 |
+| Product-job runtime sum | About 21h51m |
+| Job-ledger window | About 43h27m |
+| Effective / peak concurrency | 1.57 / 4 |
+| Recorded input / output / reasoning tokens | 548.8M / 3.84M / 1.35M |
+| Worker cached input | 526.0M of 545.4M worker input |
+| Function-fanout jobs | 147 |
+| Pipeline jobs / PR-backed jobs | 0 / 0 |
+| Daemon events | 840 |
+| Dispatch / exit / manager-idle-wake events | 194 / 247 / 24 |
+| Authority-violation events | 36, under audit mode |
+| Concurrency-ceiling adjustments | 76 |
 
-- Svelte/TypeScript checking passes with **zero errors and zero warnings**.
-- **38 frontend tests** pass across command clients, file operations, and grid logic.
-- The production Vite bundle builds successfully.
-- At 1120x760 and the configured 880x560 minimum, the live UI has no page overflow, no clipped controls, no header/grid/footer overlap, and no browser warning/error logs.
-- The toolbar exposes accessible names and grouped roles; the visible grid exposes row, column, selected-cell, and formula-bar semantics.
-- Browser interaction verified entry, commit, selection movement, toolbar undo/redo, and immediate repaint.
-- The tracked final native verification shows `A1=12`, `A2=8`, and `A3=20` for `=A1+A2`, plus the native Open dialog and packaged-app boot.
-- A fresh build from the audited tree produced an app and arm64 DMG, and the freshly built app opened at the configured 1120x760 size.
+## Scorecard
 
-### Offline and package evidence
+### Delivery
 
-- The bundle verifier passes its Tauri configuration, capability, resource, sample-workbook, frontend URL, and packaged-app URL checks.
-- Runtime permissions are limited to Tauri core plus Open and Save dialogs; updater, HTTP, and shell plugins are absent.
-- The bundled first-run `.xlite` sample is present inside the `.app`.
-- The DMG verifies successfully with `hdiutil` and contains `Excel Lite.app` plus an `/Applications` symlink.
-- Fresh artifact sizes are approximately **10 MB** for the app and **3.6 MB** for the DMG.
-- The current binary is a thin **arm64** Mach-O executable.
-- `npm audit` reports zero known vulnerabilities.
-- A fresh RustSec scan reports zero vulnerability advisories. It does report 17 warnings, primarily unmaintained Linux GTK3 transitive dependencies and one unsound `glib` advisory; the `glib` path is not selected for the arm64 macOS target.
-
-## Launch blockers
-
-### P0 - The lower half of the sheet is unreachable
-
-The UI declares 1,048,576 rows and constructs a virtual spacer of `rows * 32px`, or 33,554,432 pixels. In the live browser surface, the actual scroll height is clamped to **16,777,216 pixels**. At the absolute bottom:
-
-- `scrollTop` is 16,776,708.
-- The first rendered row is **524,273**.
-- Only the normal 20 rows and 200 cells remain mounted, so virtualization itself is active.
-- Rows roughly 524,293 through 1,048,576 cannot be reached.
-
-This fails the million-row product claim and Slice 4 exit intent. A native WKWebView limit must also be measured; a browser-only fix is insufficient.
-
-**Required resolution**
-
-- Replace the single full-height spacer with segmented or normalized scrolling that never relies on a browser element taller than the platform limit.
-- Add deterministic navigation tests for row 1, row 524,288, and row 1,048,576.
-- Add tests for edits, selection, copy/paste, and viewport reads at the final row and final column.
-- Add a native performance harness and enforce the 60 fps target or revise the spec to a measured, defensible threshold.
-
-**Release gate:** the last row is reachable and editable in the packaged app, and the benchmark is repeatable in CI or a recorded release test.
-
-### P0 - Unsaved work can be discarded without warning
-
-The UI has no dirty-workbook state, current-document path, close guard, or confirmation flow. `New workbook` clears an edited workbook immediately; the live browser check observed no confirmation dialog. Open and import operations also replace the current workbook without a save/discard/cancel decision.
-
-For a spreadsheet, this is a direct data-loss path and should block a public release even though the original acceptance list did not spell it out.
-
-**Required resolution**
-
-- Track whether the workbook differs from the last successful new/open/save state.
-- Protect New, Open, Import, window close, and app quit with Save / Discard / Cancel.
-- Track the current `.xlite` path so ordinary Save does not always act as Save As.
-- Define failure behavior for cancelled dialogs and failed saves without clearing dirty state.
-- Add native e2e cases for every destructive transition.
-
-**Release gate:** no destructive transition can silently discard a committed edit.
-
-### P0 - The macOS artifact is not distributable through the normal trust path
-
-The fresh app reports:
-
-- `Signature=adhoc`
-- `TeamIdentifier=not set`
-- `codesign --verify --deep --strict` fails with `code has no resources but signature indicates they must be present`
-- `spctl --assess --type execute` fails with the same error
-- no notarization ticket is stapled
-
-This conflicts directly with goal G5 and Slice 5, both of which require a signed app/DMG.
-
-**Required resolution**
-
-- Build on macOS with a Developer ID Application identity and hardened runtime.
-- Sign all nested code and resources, then verify strictly.
-- Submit for Apple notarization and staple the result.
-- Assess both the app and mounted DMG with Gatekeeper.
-- Test a downloaded, quarantined artifact on a clean user account or clean Mac.
-
-**Release gate:** strict code-sign verification, notarization validation, stapler validation, and Gatekeeper assessment all pass on the exact published artifact.
-
-## High-priority gaps
-
-### P1 - CI does not implement the release pipeline promised by the spec
-
-`SPEC.md` requires the workflow to continue through a Tauri release build and native e2e smoke. The actual workflow ends after the frontend build and offline verifier on Ubuntu. It does not:
-
-- run `npm run tauri:build`;
-- launch the packaged app;
-- execute the six native spreadsheet flows;
-- verify DMG integrity;
-- verify signing/notarization;
-- publish checksums or release artifacts.
-
-The local evidence is useful but cannot prevent regressions on future commits.
-
-**Release gate:** a macOS CI/release workflow builds the same artifact that is published and blocks on native smoke, package integrity, signing, and notarization checks.
-
-### P1 - Slice 4 UI behavior is only partially implemented and verified
-
-The current grid is a virtualized DOM table over a large spacer, not the specified canvas renderer. A DOM renderer is not inherently wrong, but the million-row failure demonstrates that the substitution has not met the original constraint. Additional spec behaviors are absent or incomplete:
-
-- no Ctrl/Cmd+Arrow jump to the current region edge;
-- no drag-to-select range interaction;
-- Delete/Backspace clears only the active cell, not the selected range;
-- the specified `clear_range` IPC command is absent;
-- no date-format toolbar action, despite `dateIso` support in the command type;
-- no automated native UI smoke suite;
-- no recorded virtualization/frame-rate benchmark;
-- no automated screen-reader or accessibility audit.
-
-There is also minor command-contract drift: the spec declares `resize_column` returning no value, while the implementation returns a recalculation delta. The implementation may be the better contract, but the spec and code should agree before claiming completion.
-
-**Release gate:** either implement the Slice 4 contract or explicitly revise and approve the spec, with native tests covering the chosen behavior.
-
-### P1 - The reference-oracle claim is not reproducible
-
-The spec says LibreOffice Calc 24.8 can regenerate expected conformance values and that an advisory CI job performs this validation. In the repository:
-
-- `scripts/regen_oracle.py` is explicitly a dry-run scaffold;
-- `--write` always exits because the LibreOffice adapter is not implemented;
-- LibreOffice is not installed in the audit environment;
-- CI does not run an oracle job;
-- the current validators prove schema, count, registration, deviations, and engine agreement with committed expectations, but not that all expectations came from LibreOffice;
-- the five-case audit counts cases but does not prove every file covers nominal, boundary, error, coercion, and blank categories.
-
-The 1,585 passing cases remain strong implementation evidence, but the stronger public claim that they are independently oracle-validated is not yet supported end to end.
-
-**Release gate:** a pinned LibreOffice version regenerates or compares the corpus in automation, deviations are machine-reconciled, and the required semantic categories/composite/error quotas are reported.
-
-### P1 - Security hardening is incomplete
-
-The runtime is commendably offline and narrowly permissioned, but Tauri's CSP is currently `null`, while the architecture explicitly calls for a strict CSP. There is no dependency audit in CI, SBOM, release threat model, or documented process for responding to advisories.
-
-The fresh scans found no known npm or Rust vulnerability advisory affecting the macOS build. The Rust scan's target-independent warnings should still be triaged and recorded, particularly before claiming cross-platform support.
-
-**Release gate:** a tested restrictive CSP is enabled, npm and Rust advisory scans run in CI with an explicit warning policy, and the release carries an SBOM or dependency inventory.
-
-### P1 - Public release identity and assets are missing
-
-The package currently has development identity and minimal public metadata:
-
-- bundle identifier `dev.kensho.excellite`;
-- version `0.1.0` with no tag or changelog;
-- no Git remote and no tags in this checkout;
-- no release workflow;
-- no project `LICENSE`, `SECURITY.md`, or support policy;
-- a five-line README with no installation, system requirements, screenshots, data-format notes, or limitations;
-- only a 32x32 PNG source icon;
-- no `.icns` in the app, no `CFBundleIconFile`, and no application icon resource;
-- only an arm64 artifact, with no documented Apple Silicon-only support decision.
-
-**Release gate:** approved product identity, complete icon set, public documentation and license posture, a tagged clean source revision, published checksums, and an explicit architecture/support matrix.
-
-## Acceptance matrix
-
-| Area | Evidence | Status |
+| Dimension | Score | Evidence |
 | --- | --- | --- |
-| 148-function registry | Registry audit passes; no missing/duplicate/orphan functions | **Pass** |
-| Conformance execution | 1,585 cases across 152 files pass | **Pass** |
-| Five cases per function | Automated dedicated-file count passes | **Pass, narrow** |
-| Required case categories and quotas | Not fully machine-reported; oracle source is not reproducible | **Evidence gap** |
-| Function/eval coverage | 96.29% aggregate against a 90% gate | **Pass** |
-| Recalc/incrementality | Dedicated direct, cascade, diamond, fan-out, 10k isolation, and range tests pass | **Pass** |
-| Cycle behavior | Dedicated cases pass under one-second guards | **Pass** |
-| Native round-trip | 1,000-case property test plus fixed round-trip tests pass | **Pass** |
-| CSV/XLSX behavior | Core/app fixtures and tests pass | **Pass for scoped v1 behavior** |
-| Engine/UI decoupling | CI contract validation passes | **Pass** |
-| Basic native workflow | Tracked native calculation, dialog, package boot evidence | **Pass, manual** |
-| Native automated e2e | No Tauri driver/WebDriver suite in CI | **Fail** |
-| Million-row navigation | Lower half is unreachable in live browser grid | **Fail** |
-| 60 fps virtualization target | No benchmark found | **Not demonstrated** |
-| Unsaved-work safety | No dirty state or destructive-action confirmation | **Fail** |
-| Offline runtime | Bundle URL scan, no updater/HTTP/shell plugin, local resources | **Pass** |
-| CSP | Tauri config sets `csp` to `null` | **Fail against architecture** |
-| Package creation | Fresh app and arm64 DMG build successfully | **Pass** |
-| DMG integrity/layout | Checksum valid; app and Applications link present | **Pass** |
-| Signing/notarization | Ad-hoc only; strict verification and Gatekeeper fail | **Fail** |
-| Public release provenance | No remote, tag, release workflow, or clean tagged candidate | **Fail** |
-| Release documentation/assets | README and icon set incomplete; no license/security docs | **Fail** |
+| Calculation core | Strong pass | 148 functions, 1,585 conformance cases, 1,341 Rust tests, 96.29% measured coverage. |
+| Recalculation and errors | Pass for tested surface | Direct, cascade, diamond, fan-out, isolation, range, cycle, and error behavior have dedicated tests. |
+| Persistence and history | Pass for scoped behavior | Native round-trip includes a 1,000-case property test; save/load, CSV, best-effort XLSX import, and undo/redo paths exist. |
+| Native application | Partial/pass | Packaged app builds and launches; calculation and file-dialog workflows have direct evidence. Automated native e2e is absent. |
+| Grid scale | Fail against v1 spec | Final row is unreachable because browser layout height clamps before 1,048,576 rows. |
+| Document safety | Fail | No dirty-state model or confirmation before New, Open, close, quit, or other destructive transitions. |
+| UI contract | Partial | Core spreadsheet shell works, but range drag selection, range clear, date-format action, and specified interaction details remain incomplete. |
+| Local-only constraint | Pass | Runtime is offline, locally packaged, and free of cloud/account dependencies. |
+| Distribution | Fail for public release | Ad-hoc signature, no notarization, incomplete icons/identity/docs, no tagged release workflow. |
+| Release evidence | Partial | Core evidence is strong; native automation, oracle provenance, accessibility, security hardening, and clean release provenance are incomplete. |
 
-## Reproduced verification
+### Process Efficiency
 
-The following checks were run against the audited revision. All passed unless explicitly marked otherwise.
+Excel Lite used far more parallelism than the earlier chess project, but much less than its job count suggests. Peak concurrency reached 4 and the function library was decomposed into 147 narrow jobs. Effective concurrency of 1.57 means the organization still spent substantial time with one active delivery or waiting on integration, host load, manager review, or state reconciliation.
 
-| Check | Result |
+The cost profile was also uneven:
+
+| Signal | Interpretation |
 | --- | --- |
-| `python3 scripts/validate_conformance_cases.py` | Pass: 1,585 cases, 152 files |
-| `python3 scripts/audit_conformance_coverage.py` | Pass: 148 functions complete; all dedicated files meet five-case count |
-| `python3 scripts/validate_ci_contracts.py` | Pass |
-| `python3 -m unittest scripts/test_check_rust_coverage.py` | Pass: 6 tests |
-| `cargo fmt --check` | Pass |
-| Repository CI-equivalent `cargo clippy` | Pass |
-| `cargo test --workspace` | Pass: 1,341 tests |
-| `cargo llvm-cov` plus repository gate | Pass: 96.29% |
-| `npm run check` | Pass: 0 errors, 0 warnings |
-| `npm test` | Pass: 38 tests, 3 files |
-| `npm run build` | Pass |
-| `npm run verify:offline` | Pass before and after native packaging |
-| `npm run tauri:build` | Pass: app and arm64 DMG |
-| `hdiutil verify` | Pass |
-| Fresh packaged-app launch | Pass: 1120x760, `Ready` |
-| Live browser layout at 1120x760 and 880x560 | Pass: no clipping, overlap, page overflow, or console warnings/errors |
-| Live bottom-of-sheet probe | **Fail: capped at row 524,273 start** |
-| `npm audit --json` | Pass: zero vulnerabilities |
-| fresh `cargo audit` | Zero vulnerability advisories; 17 warnings to triage |
-| `codesign --verify --deep --strict` | **Fail** |
-| `spctl --assess --type execute` | **Fail** |
-| LibreOffice regeneration | **Unavailable; script is a non-writing scaffold and LibreOffice is absent** |
+| 188 total jobs | Kensho handled a genuinely large work graph rather than a few coarse prompts. |
+| 147 function jobs | The stable evaluator contract supported broad, low-conflict fan-out. |
+| 187 worker jobs, 1 reviewer, 0 verifier | Role capacity did not become an exercised quality pipeline. Kai performed most integration and acceptance work. |
+| 6 failed job records | Failures were recoverable, but four early walking-skeleton failures and two function defects required replacement work. |
+| 548.8M input tokens | Expensive in nominal context volume, though 526.0M worker tokens were cached. Repeated whole-repo context and full gates still deserve optimization. |
+| 21h51m runtime sum over a 43h27m ledger window | Available parallelism was not continuously converted into useful execution. |
+| 76 scheduler ceiling changes | Adaptive host-load protection materially influenced dispatch; at one point the ceiling fell to zero. |
+| 24 manager idle wakes | The daemon frequently had to re-engage the manager rather than progressing through an explicit autonomous queue. |
 
-## Artifact record
+The largest individual jobs were not random: the final UI product pass used 17.6M input tokens; structural commands used 11.3M; XLSX import used 7.4M; and complex formula/reference contracts occupied several of the other top slots. Those are integration-heavy boundaries. Once the leaf functions existed, the bottleneck moved from implementation supply to contract integration and product-level verification.
 
-| Artifact | Value |
+### The Adversarial Gate
+
+The gate caught real defects, but it was not the independent multi-role system described by the topology.
+
+| Job | Finding | Outcome |
+| --- | --- | --- |
+| `xl-fn-db` | Iterated up to unbounded finite `period`/`life`, allowing pathological hangs. | Original rejected; bounded replacement implemented and accepted. |
+| `xl-fn-timevalue` | Accepted arbitrary text prefixes instead of the intended time grammar. | Original rejected; corrected replacement implemented and accepted. |
+| Four Slice 1 jobs | Initial UI/engine/recalc/acceptance attempts failed or were superseded during walking-skeleton integration. | Replacement integration jobs established the working baseline. |
+
+This is meaningful quality evidence: DB and TIMEVALUE would have been user-visible semantic or availability defects. The problem is organizational. Only one job was assigned to the reviewer role, no job went through the verifier role, and none used the declared four-step `ticket_to_pr` pipeline. Most accepted branches were reviewed, merged, gated, and manually closed by Kai. The review function existed, but reviewer independence and pipeline-level reproducibility did not.
+
+No verified evidence shows these rejected defects escaped into the final product. The more important escaped-defect class was at the product boundary: the calculation engine was extensively tested while grid reachability, unsaved-work safety, and distribution trust remained incomplete until the final readiness audit.
+
+## What Worked
+
+1. The evaluator contract enabled real fan-out. Narrow function branches could be implemented in parallel with limited merge overlap, and the registry/coverage audits prevented missing or orphaned work.
+
+2. Objective gates made the core credible. The report does not rely on screenshots alone: exact conformance counts, coverage, property tests, CI-contract checks, and package integrity can all be reproduced locally.
+
+3. Review found defects outside happy-path examples. DB's unbounded work and TIMEVALUE's permissive parsing are precisely the kinds of mistakes a shallow function-count audit would miss.
+
+4. Local-first architecture held. The application works without accounts, API keys, hosted services, telemetry, or a cloud provider. Packaging and offline scans reinforce that claim.
+
+5. The team recovered from a weak walking skeleton. Four failed early jobs did not poison the architecture; replacement integration work established a stable engine/UI contract that supported later fan-out.
+
+6. Kai correctly challenged stale supervisor state. When an external prompt claimed only 87 of 148 functions were complete, Kai checked `main`, found all 148 registered and covered, and declined to dispatch duplicate work.
+
+7. The release audit remained honest. A working application was not promoted to public-v1 status when signing, notarization, document safety, grid scale, and native automation were still missing.
+
+8. Feedback captured reusable framework failures. Cleanup blocks, direct-job bounce limits, stale progress, local-branch handoff errors, and undeclared external-supervisor communication were recorded as durable Kensho feedback rather than treated as one-off operator frustration.
+
+## What Did Not Work
+
+1. Kai became a serialized integration manager. It repeatedly inspected branches, ran aggregate gates, merged, closed jobs, acknowledged daemon messages, and cleaned worktrees. That protected quality but limited throughput and autonomy.
+
+2. The declared pipeline was not the actual process. The topology defined implement, verify, review, and manual approval steps, yet all 188 ledger entries were direct jobs and no verifier job ran. Configuration cannot be credited as a control if execution bypasses it.
+
+3. Review capacity was largely idle. Three reviewer replicas were configured, but one reviewer job was recorded. Most adversarial reasoning happened inside the manager context, weakening independence and increasing context pressure on Kai.
+
+4. The control plane generated stale work. Supervisor prompts twice reported 87/148 functions after repository audits proved 148/148. Numerous manager-action and idle-wake signals referred to already merged or closed work.
+
+5. Parallelism needed external prompting. Overseer messages repeatedly asked Kai to refill capacity or inspect idle state. The organization did not consistently derive the next safe wave from desired state on its own.
+
+6. Adaptive scheduling could stall the queue. Host-load logic temporarily reduced the concurrency ceiling to zero. Protection against overload is necessary, but a zero ceiling with no escalation or slow lane makes a healthy daemon look dead.
+
+7. Cleanup was brittle. Completed worktrees were repeatedly held open by exited Computer Use helper processes; other cleanup attempts failed on `lsof` exit behavior. These were transient, but they consumed manager attention.
+
+8. Direct local-branch delivery had false negatives. Already merged branches could be reported as missing deliverables or failed because their diff against `main` was empty after merge. Kai manually reconciled several records.
+
+9. Function completion obscured the product tail. The system optimized the countable 148-function fan-out while release-critical cross-cutting work such as dirty state, bottom-of-grid navigation, native e2e, signing, and notarization remained late or absent.
+
+10. Visual and native verification remained partly artisanal. Screenshots and accessibility probes were valuable, but they were not a committed deterministic test lane and could not prevent regression automatically.
+
+## Topology Findings
+
+### Used vs. Idle
+
+Used heavily:
+
+- `worker`: 187 jobs, including 147 function-fanout jobs and later persistence, structural, UI, and packaging work.
+- `manager` / Kai: persistent coordination, branch review, merges, aggregate gates, job reconciliation, cleanup, and operator reporting.
+
+Used lightly or not at all:
+
+- `reviewer`: one recorded job despite three configured replicas.
+- `verifier`: zero recorded jobs despite two configured replicas.
+- `ticket_to_pr`: declared with implement, verify, review, and manager approval, but no ledger job used it.
+- PR delivery: intentionally absent in the local-only project, but no pipeline-native local branch equivalent replaced it.
+
+### Binding Bottleneck
+
+Worker supply was not the final bottleneck. The binding constraint was serialized integration authority:
+
+- Kai was the only reliable entity that understood product state, branch state, stale daemon state, and release gates together.
+- Every leaf could be parallel, but registry integration, contract changes, UI wiring, and acceptance evidence converged on shared files and one manager context.
+- The system lacked category-level integrators who could own coherent subsets such as financial functions, date/time semantics, persistence/history, or native product acceptance.
+- Machine verification was not an enforced pipeline stage, so Kai repeatedly reran and interpreted gates before accepting branches.
+
+This is a recursive delegation problem. When global management became too complex, Kensho needed to create bounded units with their own integration managers, verifier capacity, and escalation contracts instead of adding more undifferentiated workers.
+
+### Static Configuration Cost
+
+The topology looked richer than the run it produced: four worker replicas, two verifiers, three reviewers, a persistent manager, and a four-step pipeline. Because direct jobs bypassed the pipeline, the effective organization was closer to four workers reporting to one hands-on manager.
+
+Concrete costs:
+
+- Idle specialized capacity while Kai absorbed verification and review.
+- No uniform evidence bundle for 188 jobs.
+- Manual correction of local-branch delivery and already-merged states.
+- Large manager context carrying details that should have lived in unit-level state.
+- Work queues driven partly by external prompts instead of reconciled desired state.
+
+### Missing Capabilities
+
+- Pipeline-native local branch delivery, including bounce/retry on the rejected commit.
+- A deterministic verifier that emits machine-readable evidence before LLM review.
+- Category or epic managers with bounded authority, independent queues, and explicit merge surfaces.
+- Repository-derived progress reconciliation, so counts come from audits and the job graph rather than stale prose.
+- Role-aware deliverable validation after a branch has already merged.
+- A native visual QA lane that can launch, interact, capture, and compare packaged applications.
+- Scheduler liveness rules that preserve at least a low-rate lane or escalate sustained zero capacity.
+- Release-state modeling that separates demo-ready, feature-complete, release-candidate, and distributable states.
+
+## Product Launch Gaps
+
+The product-tail findings are summarized here so the retrospective remains useful as a release decision.
+
+### P0 Blockers
+
+| Blocker | Current behavior | Required resolution |
+| --- | --- | --- |
+| Million-row grid | CSS height clamps at 16,777,216 px; the final viewport begins around row 524,273. | Segmented/rebased virtualization with final-row and final-column interaction tests plus performance evidence. |
+| Unsaved-work safety | New, Open, close, and quit have no durable dirty-state warning. | Dirty-state model, current-path tracking, Save/Save As semantics, destructive-transition confirmation, and native e2e coverage. |
+| macOS distribution trust | App is ad-hoc signed; strict verification and Gatekeeper assessment fail; notarization/stapling are absent. | Developer ID signing, notarization, stapling, quarantined clean-machine assessment, and final artifact smoke. |
+
+### P1 Evidence And Product Gaps
+
+| Gap | Required resolution |
 | --- | --- |
-| DMG | `target/release/bundle/dmg/Excel Lite_0.1.0_aarch64.dmg` |
-| DMG SHA-256 | `143e31c45b3e83c72e9734109807f53d8d18f2d0020368652278edf229602915` |
-| App executable | `target/release/bundle/macos/Excel Lite.app/Contents/MacOS/xlite-app` |
-| Executable SHA-256 | `7f77af573e6f3353d76474a3e81f0a61e159d9306888a2074794e89e10bf131d` |
-| Architecture | arm64 |
-| Version | 0.1.0 |
-| Bundle identifier | `dev.kensho.excellite` |
-| Signature | ad-hoc, no Team ID |
+| Native CI and e2e | Build and exercise the packaged app automatically; retain logs and screenshots on failure. |
+| UI contract completion | Resolve drag range selection, selected-range clear, date formatting, command-contract drift, accessibility, and virtualization benchmarks. |
+| Reference oracle | Implement a pinned LibreOffice adapter and machine-reconcile regenerated expectations, deviations, and semantic case quotas. |
+| Security posture | Enable a tested restrictive CSP; automate npm/Rust advisory policy; publish an SBOM or dependency inventory. |
+| Public identity and docs | Finalize bundle ID, icons, architecture matrix, license, security/support policy, screenshots, limitations, changelog, and tagged release provenance. |
 
-These hashes identify the locally audited artifacts only. They are not a release endorsement and should not be published as final until the artifact is rebuilt from a clean tag by the release workflow.
+## Hypotheses For Better Bootstrapping
 
-## Recommended parallel workstreams
+These are testable hypotheses for the next broad, locally verifiable application.
 
-These tracks can proceed concurrently. Promotion should be gate-based, not date-based.
+1. **Recursive units outperform a flat worker pool once one manager owns more than one integration domain.**
+   Test a global Kai with bounded function, persistence, UI, and release units. Each unit receives a contract, owns its queue, and escalates only cross-unit decisions. Measure manager interventions, stale-state corrections, merge conflicts, and effective concurrency.
 
-### Track A - Grid scale and performance
+2. **Wave-level verification is more efficient than full-suite repetition on every leaf.**
+   Run narrow per-function tests on leaf jobs, then execute registry, conformance, coverage, and whole-workspace gates once per coherent wave. Measure runtime, cached input, defect escape, and time to feedback.
 
-Own segmented scrolling, final-row/final-column behavior, selection correctness at boundaries, and a native frame-time benchmark. This track closes the million-row blocker and decides whether the DOM-table implementation remains or the canvas architecture is restored.
+3. **A mandatory machine verifier increases reviewer independence.**
+   Require every delivery to produce a structured evidence record before review. Reviewers should inspect semantic gaps and diff risk rather than reconstructing command output. Measure reviewer utilization, review tokens, false accepts, and false rejects.
 
-### Track B - Workbook safety and document lifecycle
+4. **Progress should be computed, not narrated.**
+   Derive function counts, branch state, gate state, and outstanding requirements from repository and daemon records. Treat prose status as commentary only. Recreate the stale 87/148 scenario and verify that duplicate dispatch is impossible.
 
-Own dirty-state semantics, current path, Save versus Save As, destructive-action confirmation, window-close/app-quit handling, and failure recovery. Include native end-to-end coverage for every transition.
+5. **Integration and product-tail tracks should start before leaf fan-out finishes.**
+   Keep function waves running while separate units continuously exercise the packaged app, document lifecycle, boundary navigation, accessibility, and release evidence. Measure how many P0/P1 findings appear only after feature completion.
 
-### Track C - Native acceptance automation
+6. **Low-risk work can auto-merge under policy while cross-cutting work remains gated.**
+   Auto-accept a narrow function only when scope, focused tests, wave verifier, and independent review pass. Keep manual approval for evaluator contracts, file formats, security, UI architecture, and release claims. Measure cycle time and escaped defects.
 
-Own the macOS CI lane and scripted packaged-app flows: formula entry, VLOOKUP, precedent recalc, undo/redo, save/reopen, CSV, XLSX smoke, dialog cancellation, and boundary navigation. The workflow must retain logs and screenshots on failure.
+7. **Scheduler liveness needs an explicit degradation mode.**
+   When host pressure persists, retain one low-rate job or emit a blocking escalation with evidence instead of silently holding a zero ceiling. Measure time spent at zero useful concurrency and unnecessary restart/nudge events.
 
-### Track D - Distribution and release identity
+## Recommended Starter Topology
 
-Own the production bundle identifier, icon set, version/tag policy, arm64 versus universal support decision, Developer ID signing, notarization, DMG presentation, checksums, and clean-machine Gatekeeper test.
+The next Excel-scale project should start with responsibility-shaped capacity rather than a single large pool:
 
-### Track E - Oracle and security evidence
+| Role or unit | Initial shape | Responsibility |
+| --- | --- | --- |
+| Kai / global manager | 1 persistent | Own spec, desired state, cross-unit contracts, promotion gates, and operator communication. Do not perform routine leaf merges. |
+| Domain unit managers | 2-4 bounded units | Own a coherent subsystem, queue, integration branch, wave gates, and escalation boundary. Scale only when independent domains exist. |
+| Workers | 2 per active unit, elastic | Implement narrow slices with focused tests and explicit deliverables. |
+| Deterministic verifiers | 2 shared | Run focused gates per leaf and aggregate gates per wave; publish structured evidence. |
+| Adversarial reviewers | 2 shared | Review semantics, boundary cases, architecture, and claims after verifier success. |
+| Product verifier | 1 persistent or event-driven | Exercise the integrated local application, including screenshots, native workflows, performance boundaries, and offline behavior. |
+| Release unit | Event-driven | Own identity, docs, provenance, signing, notarization, checksums, and distributable-artifact truth. |
 
-Own the LibreOffice adapter, pinned oracle comparison, case-category reporting, deviation reconciliation, CSP, dependency audits, SBOM, and a short release threat model.
+Recommended flow:
 
-### Track F - Public documentation and demonstration package
+1. Kai converts the spec into a machine-readable requirement graph and assigns domains.
+2. Unit managers dispatch narrow leaves up to their conflict-aware work-in-progress limit.
+3. Workers run focused checks and submit a branch plus evidence manifest.
+4. Verifiers reproduce the focused checks; unit managers integrate passing leaves into a wave branch.
+5. Aggregate verification and independent review gate each wave.
+6. Product verification runs continuously against integrated `main`, not only at the end.
+7. Kai reconciles desired state from the requirement graph, repository, and gates, then opens the next waves or promotion gate.
 
-Own README, license decision, security/support policy, installation steps, system requirements, limitations, native-format expectations, screenshots, sample workbook, demo script, changelog, and release notes. The browser preview must be labeled as a preview rather than a web edition.
+The topology should expand when independent work is measurable and contract-stable, then contract when integration or release becomes the bottleneck. Unlimited token budget is useful only when it buys independent evidence or throughput; redundant context and duplicate work are still debt.
 
-## Promotion gates
+## Framework Bug Ledger
 
-### Gate 1 - Product safety
+| Finding | Evidence from this run | Recommended Kensho change |
+| --- | --- | --- |
+| Manager tail stall / insufficient self-refill | External overseer prompts were needed to refill independent work; upstream issue #354 records the 87/148 tail behavior. | Desired-state reconciler that dispatches safe work or records a concrete blocked reason. |
+| Stale supervisor progress | Two prompts reported 87/148 after repository audits proved 148/148. | Generate status from canonical audits/job graph; reject regressive snapshots. |
+| Direct jobs cannot bounce cleanly | `job bounce` could not requeue durable direct jobs without pipeline steps. | Make local direct delivery a first-class pipeline or preserve rejected branch/commit in direct-job retries. |
+| Local-branch deliverable false negatives | Already merged branches appeared empty or missing against `main`; Kai manually closed them with merge evidence. | Validate ancestry and recorded merge commit before diff-based failure. |
+| Cleanup blocked by exited helpers | Several completed worktrees remained held as cwd by `SkyComputerUseClient` helpers; `lsof` handling also failed once. | Reap helper descendants and make no-open-file results non-errors with bounded retry. |
+| External supervisor reply rejected | Kai could not reply to Kan because the daemon rejected an undeclared source instance. | Add a typed external-advisor/supervisor channel with explicit authority and reply routing. |
+| Authority drift visible only in audit | 36 authority-violation events were recorded. | Classify violations, summarize them in outcomes, and graduate stable rules from audit to enforcement. |
+| Adaptive ceiling can reach zero | Host-load adjustment briefly queued all work with ceiling 0. | Add minimum-progress policy or explicit sustained-capacity escalation. |
+| Declared pipeline bypass | 188 direct jobs; zero pipeline jobs; no verifier jobs. | Report topology conformance and warn when specialized lanes are configured but unused. |
+
+## Promotion Gates
+
+Promotion is gate-based, not calendar-based.
+
+### Gate 1 - Product Safety
 
 - Final row and column are reachable and editable.
 - Unsaved work cannot be silently discarded.
-- Required Slice 4 interactions are implemented or the spec revision is approved.
+- Required grid interactions are implemented or an explicit spec revision is approved.
 - Native performance and accessibility evidence is recorded.
 
-### Gate 2 - Reproducible acceptance
+### Gate 2 - Reproducible Acceptance
 
-- All current core and UI gates remain green.
-- LibreOffice comparison is reproducible.
-- Native packaged-app e2e runs automatically.
-- Security scans and CSP checks pass under an explicit policy.
+- All current core and frontend gates remain green.
+- LibreOffice comparison is reproducible and deviations are machine-reconciled.
+- Packaged-app workflows run automatically with retained evidence.
+- CSP and dependency-security checks pass under an explicit policy.
 
-### Gate 3 - Release candidate
+### Gate 3 - Release Candidate
 
 - Candidate is built from a clean, tagged revision.
-- Product identity, icon, architecture matrix, docs, and license posture are complete.
-- Checksums and build provenance are generated by automation.
+- Product identity, icon set, support matrix, documentation, and license posture are complete.
+- Checksums, dependency inventory, and build provenance are generated by automation.
 
-### Gate 4 - Distribution trust
+### Gate 4 - Distribution Trust
 
 - Developer ID signing passes strict verification.
 - Notarization and stapling pass.
-- Gatekeeper accepts the quarantined app and DMG on a clean environment.
-- The exact candidate receives a final native smoke and offline-network check.
+- Gatekeeper accepts the quarantined app and DMG in a clean environment.
+- The exact candidate receives final native workflow and offline-network checks.
 
 Only after all four gates should Excel Lite be described as a public v1 release.
 
-## Existing supporting evidence
+## Existing Supporting Evidence
 
 - [Final UI and native product verification](../verification/el-final-ui-boot-product-pass/verification-report.md)
 - [Native recalculation screenshot](../verification/el-final-ui-boot-product-pass/after-tauri-recalculation-1120x760.png)
-- [Packaged app screenshot](../verification/el-final-ui-boot-product-pass/after-packaged-tauri-boot-1120x760.png)
+- [Packaged application screenshot](../verification/el-final-ui-boot-product-pass/after-packaged-tauri-boot-1120x760.png)
 - [Packaging and offline verification](../packaging-offline.md)
 - [Conformance completeness audit](../conformance-completeness-audit.md)
 - [Build-ready specification](../../SPEC.md)
 
-## Audit constraints
+## Audit Constraints
 
-- The repository had no Git remote or tags, so hosted CI history and published-release state could not be examined.
-- The working tree contained pre-existing Kensho runtime/configuration changes and untracked orchestration state. Product source at the audited commit was not modified for this evaluation, but final release provenance must come from a clean checkout.
-- The tracked native evidence is manual/AX-driven rather than a committed automated e2e suite.
-- Rust advisory results are current as of the audit date and can change as the advisory database evolves.
-- No claim is made that untested Excel semantics exactly match Microsoft Excel beyond the documented LibreOffice-based contract and deviations.
+- The product checkout had no Git remote or tags, so hosted CI history and published-release state could not be examined.
+- The job and daemon metrics describe recorded Kensho activity; runtime sums are not wall-clock duration and token totals include substantial cached input.
+- The working project contained pre-existing orchestration state. The audited product revision itself was not modified during evidence collection.
+- Native evidence is manual/accessibility-driven rather than a committed automated end-to-end suite.
+- Advisory results are current as of the audit date and can change as databases evolve.
+- No claim is made that untested formula semantics exactly match Microsoft Excel beyond the documented conformance contract and deviations.
+
+## Final Assessment
+
+Excel Lite is a successful engineering prototype and a valuable Kensho experiment. The calculation engine is broad, tested, and demonstrably real; the native shell is usable; the application remains local; and the project generated enough objective evidence to support a controlled demonstration.
+
+The product should not yet be distributed as a trusted public v1. The remaining blockers are concentrated in exactly the areas broad feature fan-out does not solve automatically: document safety, extreme-scale UI behavior, native automation, release provenance, and platform trust.
+
+Kensho's strongest result was proving that a stable contract can support a large parallel implementation graph. Its weakest result was allowing the graph to collapse back into one manager at integration time. The next iteration should preserve the fan-out while recursively delegating domain integration, enforcing verifier and reviewer lanes, continuously testing the real packaged product, and computing progress from canonical state. That direction is more important than simply increasing the number of workers.

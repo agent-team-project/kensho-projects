@@ -14,7 +14,7 @@ history are deliberately excluded.
 | Project | Status | What it tests | Primary evidence |
 | --- | --- | --- | --- |
 | [Chess Engine](projects/chess-engine/) | Working local product with documented strength gaps | Correctness-driven systems delivery: legal move generation, perft, UCI, search, and a native board | [Evaluation report](projects/chess-engine/docs/release/kensho-evaluation-report.md) |
-| [Excel Lite](projects/excel-lite/) | Local demo ready; public launch not ready | Broad parallel implementation behind a stable formula engine and native spreadsheet shell | [Launch-readiness report](projects/excel-lite/docs/release/kensho-evaluation-report.md) and [PDF](projects/excel-lite/docs/release/excel-lite-launch-readiness-evaluation.pdf) |
+| [Excel Lite](projects/excel-lite/) | Local demo ready; public launch not ready | Broad parallel implementation behind a stable formula engine and native spreadsheet shell | [Kensho retrospective](projects/excel-lite/docs/release/kensho-evaluation-report.md) and [PDF](projects/excel-lite/docs/release/kensho-excel-lite-retrospective.pdf) |
 | [Workplane](projects/workplane/) | Specified, pre-slice | Agent-native project and portfolio coordination with evidence, permissions, events, and empirical dogfooding | [Specification map](projects/workplane/README.md) |
 
 ## Quick verification

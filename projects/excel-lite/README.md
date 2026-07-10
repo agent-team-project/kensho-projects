@@ -8,9 +8,9 @@ dogfood project around an unusually broad, machine-checkable function library.
 
 The calculation core and controlled local demo are working. The project is not
 yet represented as a publicly distributable v1 application. Read the
-[launch-readiness report](docs/release/kensho-evaluation-report.md) for the
-measured gates and blockers, including sheet reachability, unsaved-work safety,
-native CI, signing, and notarization.
+[Kensho project retrospective](docs/release/kensho-evaluation-report.md) or its
+[shareable PDF](docs/release/kensho-excel-lite-retrospective.pdf) for the
+measured gates, organizational findings, and launch blockers.
 
 Key evidence at the audited revision:
 
@@ -57,6 +57,15 @@ npm run tauri:build
 
 Local artifacts are not automatically Developer ID signed or notarized. See
 [docs/packaging-offline.md](docs/packaging-offline.md) before distributing one.
+
+## Render the retrospective
+
+The shareable PDF is generated from the Markdown report:
+
+```sh
+uv run --with reportlab --with pillow \
+  python scripts/render_retrospective_pdf.py
+```
 
 ## Browser preview
 
