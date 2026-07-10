@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-EXACT-001"
+desc = "EXACT returns TRUE for identical text"
+setup = {}
+formula = '=EXACT("Excel","Excel")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-EXACT-002"
+desc = "EXACT returns FALSE for case differences"
+setup = {}
+formula = '=EXACT("Excel","excel")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-EXACT-003"
+desc = "EXACT returns FALSE for whitespace differences"
+setup = {}
+formula = '=EXACT("Excel","Excel ")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-EXACT-004"
+desc = "EXACT coerces numbers to text before comparing"
+setup = {}
+formula = '=EXACT(123,"123")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-EXACT-005"
+desc = "EXACT coerces booleans to text before comparing"
+setup = {}
+formula = '=EXACT(TRUE,"TRUE")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-EXACT-006"
+desc = "EXACT coerces blanks to empty text before comparing"
+setup = {}
+formula = '=EXACT(A1,"")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-EXACT-007"
+desc = "EXACT propagates errors from the first argument"
+setup = {}
+formula = '=EXACT(1/0,"anything")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-EXACT-008"
+desc = "EXACT propagates errors from the second argument"
+setup = {}
+formula = '=EXACT("anything",1/0)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-EXACT-009"
+desc = "EXACT returns VALUE for too few arguments"
+setup = {}
+formula = '=EXACT("only")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-EXACT-010"
+desc = "EXACT returns VALUE for too many arguments"
+setup = {}
+formula = '=EXACT("same","same","extra")'
+expect = { error = "#VALUE!" }

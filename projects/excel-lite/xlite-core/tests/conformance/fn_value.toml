@@ -1,0 +1,97 @@
+[[case]]
+id = "FN-VALUE-001"
+desc = "VALUE returns Microsoft's documented numeric value for currency text"
+setup = {}
+formula = '=VALUE("$1,000")'
+expect = { number = 1000 }
+
+[[case]]
+id = "FN-VALUE-002"
+desc = "VALUE supports Microsoft's time subtraction example"
+setup = {}
+formula = '=VALUE("16:48:00")-VALUE("12:00:00")'
+expect = { number = 0.2 }
+
+[[case]]
+id = "FN-VALUE-003"
+desc = "VALUE parses plain decimal text with surrounding ASCII whitespace"
+setup = {}
+formula = '=VALUE(" -12.5 ")'
+expect = { number = -12.5 }
+
+[[case]]
+id = "FN-VALUE-004"
+desc = "VALUE parses signed scientific notation"
+setup = {}
+formula = '=VALUE("-1.2E3")'
+expect = { number = -1200 }
+
+[[case]]
+id = "FN-VALUE-005"
+desc = "VALUE parses well-formed comma grouping before the decimal point"
+setup = {}
+formula = '=VALUE("1,234,567.89")'
+expect = { number = 1234567.89 }
+
+[[case]]
+id = "FN-VALUE-006"
+desc = "VALUE returns VALUE for malformed comma grouping"
+setup = {}
+formula = '=VALUE("12,34")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-VALUE-007"
+desc = "VALUE divides by 100 for a percent suffix"
+setup = {}
+formula = '=VALUE("3.5%")'
+expect = { number = 0.035 }
+
+[[case]]
+id = "FN-VALUE-008"
+desc = "VALUE applies multiple percent suffixes cumulatively"
+setup = {}
+formula = '=VALUE("9%%")'
+expect = { number = 0.0009 }
+
+[[case]]
+id = "FN-VALUE-009"
+desc = "VALUE parses DATEVALUE-compatible invariant date text"
+setup = {}
+formula = '=VALUE("2011/02/23")'
+expect = { number = 40597 }
+
+[[case]]
+id = "FN-VALUE-010"
+desc = "VALUE parses TIMEVALUE-compatible AM/PM text"
+setup = {}
+formula = '=VALUE("6:45 PM")'
+expect = { number = 0.78125 }
+
+[[case]]
+id = "FN-VALUE-011"
+desc = "VALUE returns VALUE for empty text"
+setup = {}
+formula = '=VALUE("")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-VALUE-012"
+desc = "VALUE returns VALUE for arbitrary text"
+setup = {}
+formula = '=VALUE("not a number")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-VALUE-013"
+desc = "VALUE returns VALUE for too few arguments"
+setup = {}
+formula = "=VALUE()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-VALUE-014"
+desc = "VALUE returns VALUE for too many arguments"
+setup = {}
+formula = '=VALUE("1","2")'
+expect = { error = "#VALUE!" }

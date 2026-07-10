@@ -1,0 +1,28 @@
+[workspace]
+resolver = "3"
+members = [
+    "apps/local-board",
+    "crates/chess-core",
+    "crates/chess-engine",
+    "crates/chess-eval",
+    "crates/chess-perft",
+    "crates/chess-search",
+    "crates/chess-uci",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+publish = false
+authors = ["Kensho chess-engine contributors"]
+
+[workspace.dependencies]
+chess-core = { path = "crates/chess-core" }
+chess-eval = { path = "crates/chess-eval" }
+chess-perft = { path = "crates/chess-perft" }
+chess-search = { path = "crates/chess-search" }
+chess-uci = { path = "crates/chess-uci" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-STDEV-001"
+desc = "STDEV returns sample standard deviation for the Microsoft example data set"
+setup = { A1 = 1345, A2 = 1301, A3 = 1368, A4 = 1322, A5 = 1310, A6 = 1370, A7 = 1318, A8 = 1350, A9 = 1303, A10 = 1299 }
+formula = "=STDEV(A1:A10)"
+expect = { number = 27.463915719843495 }
+
+[[case]]
+id = "FN-STDEV-002"
+desc = "STDEV combines range values and direct scalar values"
+setup = { A1 = 1, A2 = 2 }
+formula = "=STDEV(A1:A2,3)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-STDEV-003"
+desc = "STDEV coerces direct numeric text booleans and blank references"
+setup = {}
+formula = '=STDEV("3",TRUE,FALSE,A1)'
+expect = { number = 1.4142135623730951 }
+
+[[case]]
+id = "FN-STDEV-004"
+desc = "STDEV ignores range text booleans and blanks while including zero"
+setup = { A1 = 2, A2 = "skip", A3 = true, A4 = 0, A6 = 4 }
+formula = "=STDEV(A1:A6)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-STDEV-005"
+desc = "STDEV returns DIV0 when fewer than two numeric values remain"
+setup = { A1 = "x", A2 = true }
+formula = "=STDEV(A1:A3)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-STDEV-006"
+desc = "STDEV propagates direct non-numeric text"
+setup = {}
+formula = '=STDEV("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-STDEV-007"
+desc = "STDEV propagates direct errors"
+setup = {}
+formula = "=STDEV(1,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-STDEV-008"
+desc = "STDEV returns VALUE for wrong arity"
+setup = {}
+formula = "=STDEV()"
+expect = { error = "#VALUE!" }

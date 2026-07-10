@@ -1,0 +1,41 @@
+[[case]]
+id = "FN-COUNTBLANK-001"
+desc = "COUNTBLANK counts only blank cells in a mixed range"
+setup = { A1 = 1, B1 = "text", C1 = 0, A2 = true, B2 = false }
+formula = "=COUNTBLANK(A1:C2)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-COUNTBLANK-002"
+desc = "COUNTBLANK counts cells whose formula returns empty text as blank"
+setup = { A1 = '=""', A2 = "filled" }
+formula = "=COUNTBLANK(A1:A2)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-COUNTBLANK-003"
+desc = "COUNTBLANK does not count whitespace text as blank"
+setup = { A1 = " ", A2 = '=""' }
+formula = "=COUNTBLANK(A1:A2)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-COUNTBLANK-004"
+desc = "COUNTBLANK returns zero for a range with no blank cells"
+setup = { A1 = 0, B1 = "text", A2 = true, B2 = false }
+formula = "=COUNTBLANK(A1:B2)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-COUNTBLANK-005"
+desc = "COUNTBLANK returns the cell count for a fully blank range"
+setup = {}
+formula = "=COUNTBLANK(A1:C2)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-COUNTBLANK-006"
+desc = "COUNTBLANK returns VALUE for wrong arity"
+setup = {}
+formula = "=COUNTBLANK()"
+expect = { error = "#VALUE!" }

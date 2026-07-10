@@ -1,0 +1,132 @@
+[[case]]
+id = "FN-TIMEVALUE-001"
+desc = "TIMEVALUE returns Microsoft's documented fraction for 2:24 AM"
+setup = {}
+formula = '=TIMEVALUE("2:24 AM")'
+expect = { number = 0.1 }
+
+[[case]]
+id = "FN-TIMEVALUE-002"
+desc = "TIMEVALUE ignores the date prefix in Microsoft's documented date-time example"
+setup = {}
+formula = '=TIMEVALUE("22-Aug-2011 6:35 AM")'
+expect = { number = 0.2743055555555556 }
+
+[[case]]
+id = "FN-TIMEVALUE-003"
+desc = "TIMEVALUE parses PM suffix time"
+setup = {}
+formula = '=TIMEVALUE("6:45 PM")'
+expect = { number = 0.78125 }
+
+[[case]]
+id = "FN-TIMEVALUE-004"
+desc = "TIMEVALUE parses 24-hour time"
+setup = {}
+formula = '=TIMEVALUE("18:45")'
+expect = { number = 0.78125 }
+
+[[case]]
+id = "FN-TIMEVALUE-005"
+desc = "TIMEVALUE maps 12:00 AM to midnight"
+setup = {}
+formula = '=TIMEVALUE("12:00 AM")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-TIMEVALUE-006"
+desc = "TIMEVALUE maps 12:00 PM to noon"
+setup = {}
+formula = '=TIMEVALUE("12:00 PM")'
+expect = { number = 0.5 }
+
+[[case]]
+id = "FN-TIMEVALUE-007"
+desc = "TIMEVALUE includes seconds"
+setup = {}
+formula = '=TIMEVALUE("23:59:59")'
+expect = { number = 0.999988425925926 }
+
+[[case]]
+id = "FN-TIMEVALUE-008"
+desc = "TIMEVALUE ignores a recognized numeric date prefix"
+setup = {}
+formula = '=TIMEVALUE("2024-01-31 18:45")'
+expect = { number = 0.78125 }
+
+[[case]]
+id = "FN-TIMEVALUE-009"
+desc = "TIMEVALUE ignores a recognized full-month date prefix"
+setup = {}
+formula = '=TIMEVALUE("1-August-2024 6:45 PM")'
+expect = { number = 0.78125 }
+
+[[case]]
+id = "FN-TIMEVALUE-010"
+desc = "TIMEVALUE returns VALUE for arbitrary prefix text before a valid time"
+setup = {}
+formula = '=TIMEVALUE("not a date 6:45 PM")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-011"
+desc = "TIMEVALUE returns VALUE for invalid 24-hour hour"
+setup = {}
+formula = '=TIMEVALUE("24:00")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-012"
+desc = "TIMEVALUE returns VALUE for invalid 12-hour hour"
+setup = {}
+formula = '=TIMEVALUE("13:00 PM")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-013"
+desc = "TIMEVALUE returns VALUE for invalid minute"
+setup = {}
+formula = '=TIMEVALUE("12:60")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-014"
+desc = "TIMEVALUE returns VALUE for invalid second"
+setup = {}
+formula = '=TIMEVALUE("12:00:60")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-015"
+desc = "TIMEVALUE returns VALUE for invalid date prefix values"
+setup = {}
+formula = '=TIMEVALUE("2024-02-30 18:45")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-016"
+desc = "TIMEVALUE returns VALUE for numeric-only text"
+setup = {}
+formula = '=TIMEVALUE("0.5")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-017"
+desc = "TIMEVALUE propagates text coercion errors"
+setup = {}
+formula = "=TIMEVALUE(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-TIMEVALUE-018"
+desc = "TIMEVALUE returns VALUE for too few arguments"
+setup = {}
+formula = "=TIMEVALUE()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIMEVALUE-019"
+desc = "TIMEVALUE returns VALUE for too many arguments"
+setup = {}
+formula = '=TIMEVALUE("18:45","extra")'
+expect = { error = "#VALUE!" }

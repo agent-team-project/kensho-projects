@@ -1,0 +1,59 @@
+[[case]]
+id = "FN-SQRTPI-001"
+desc = "SQRTPI of one equals SQRT of PI"
+setup = {}
+formula = "=SQRTPI(1)-SQRT(PI())"
+expect = { number = 0 }
+tol = 1e-12
+
+[[case]]
+id = "FN-SQRTPI-002"
+desc = "SQRTPI returns the root of a nontrivial positive input times pi"
+setup = {}
+formula = "=SQRTPI(2)"
+expect = { number = 2.5066282746310002 }
+tol = 1e-12
+
+[[case]]
+id = "FN-SQRTPI-003"
+desc = "SQRTPI returns zero for zero"
+setup = {}
+formula = "=SQRTPI(0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SQRTPI-004"
+desc = "SQRTPI returns NUM for negative input"
+setup = {}
+formula = "=SQRTPI(-1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-SQRTPI-005"
+desc = "SQRTPI coerces direct scalar numeric text"
+setup = {}
+formula = '=SQRTPI("4")'
+expect = { number = 3.5449077018110318 }
+tol = 1e-12
+
+[[case]]
+id = "FN-SQRTPI-006"
+desc = "SQRTPI coerces direct scalar booleans"
+setup = {}
+formula = "=SQRTPI(TRUE)"
+expect = { number = 1.7724538509055159 }
+tol = 1e-12
+
+[[case]]
+id = "FN-SQRTPI-007"
+desc = "SQRTPI treats a blank cell reference as zero"
+setup = {}
+formula = "=SQRTPI(A1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SQRTPI-008"
+desc = "SQRTPI propagates an error input"
+setup = {}
+formula = "=SQRTPI(1/0)"
+expect = { error = "#DIV/0!" }

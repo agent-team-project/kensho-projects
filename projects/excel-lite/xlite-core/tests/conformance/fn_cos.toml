@@ -1,0 +1,77 @@
+[[case]]
+id = "FN-COS-001"
+desc = "COS of zero returns one"
+setup = {}
+formula = "=COS(0)"
+expect = { number = 1 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-002"
+desc = "COS returns negative one for pi radians"
+setup = {}
+formula = "=COS(PI())"
+expect = { number = -1 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-003"
+desc = "COS returns zero for pi over two radians"
+setup = {}
+formula = "=COS(PI()/2)"
+expect = { number = 0 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-004"
+desc = "COS preserves even-function behavior for negative input"
+setup = {}
+formula = "=COS(-0.5)"
+expect = { number = 0.8775825618903728 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-005"
+desc = "COS returns the cosine of a nontrivial decimal radian input"
+setup = {}
+formula = "=COS(1.047)"
+expect = { number = 0.5001710745970701 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-006"
+desc = "COS coerces direct scalar numeric text"
+setup = {}
+formula = '=COS("0.5")'
+expect = { number = 0.8775825618903728 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-007"
+desc = "COS coerces direct scalar booleans"
+setup = {}
+formula = "=COS(TRUE)"
+expect = { number = 0.5403023058681398 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-008"
+desc = "COS treats a blank cell reference as zero"
+setup = {}
+formula = "=COS(A1)"
+expect = { number = 1 }
+tol = 1e-12
+
+[[case]]
+id = "FN-COS-009"
+desc = "COS propagates an error input"
+setup = {}
+formula = "=COS(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-COS-010"
+desc = "COS propagates scalar coercion errors"
+setup = {}
+formula = '=COS("not numeric")'
+expect = { error = "#VALUE!" }

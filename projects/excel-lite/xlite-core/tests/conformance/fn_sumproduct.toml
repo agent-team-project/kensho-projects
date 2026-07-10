@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-SUMPRODUCT-001"
+desc = "SUMPRODUCT returns the dot product of two equal-sized ranges"
+setup = { A1 = 1, A2 = 2, A3 = 3, B1 = 4, B2 = 5, B3 = 6 }
+formula = "=SUMPRODUCT(A1:A3,B1:B3)"
+expect = { number = 32 }
+
+[[case]]
+id = "FN-SUMPRODUCT-002"
+desc = "SUMPRODUCT with one array sums numeric range entries"
+setup = { A1 = 2, A2 = 3, A3 = 4 }
+formula = "=SUMPRODUCT(A1:A3)"
+expect = { number = 9 }
+
+[[case]]
+id = "FN-SUMPRODUCT-003"
+desc = "SUMPRODUCT returns the dot product of three equal-sized ranges"
+setup = { A1 = 1, A2 = 2, B1 = 3, B2 = 4, C1 = 5, C2 = 6 }
+formula = "=SUMPRODUCT(A1:A2,B1:B2,C1:C2)"
+expect = { number = 63 }
+
+[[case]]
+id = "FN-SUMPRODUCT-004"
+desc = "SUMPRODUCT returns VALUE for mismatched range dimensions"
+setup = { A1 = 1, A2 = 2, B1 = 3 }
+formula = "=SUMPRODUCT(A1:A2,B1:B1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SUMPRODUCT-005"
+desc = "SUMPRODUCT treats range text, booleans, and blanks as zero"
+setup = { A1 = 2, A2 = "skip", A3 = true, B1 = 10, B2 = 10, B3 = 10, B4 = 10 }
+formula = "=SUMPRODUCT(A1:A4,B1:B4)"
+expect = { number = 20 }
+
+[[case]]
+id = "FN-SUMPRODUCT-006"
+desc = "SUMPRODUCT multiplies direct scalar arguments with arithmetic coercion"
+setup = {}
+formula = '=SUMPRODUCT(2,"3",TRUE)'
+expect = { number = 6 }
+
+[[case]]
+id = "FN-SUMPRODUCT-007"
+desc = "SUMPRODUCT propagates an error from a direct argument"
+setup = {}
+formula = "=SUMPRODUCT(2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SUMPRODUCT-008"
+desc = "SUMPRODUCT returns VALUE for wrong arity"
+setup = {}
+formula = "=SUMPRODUCT()"
+expect = { error = "#VALUE!" }

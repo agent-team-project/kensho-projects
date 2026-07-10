@@ -1,0 +1,85 @@
+[[case]]
+id = "FN-LOOKUP-EL254-001"
+desc = "LOOKUP vector exact sorted numeric lookup returns the corresponding result vector value"
+setup = { A1 = 4.14, A2 = 4.19, A3 = 5.17, A4 = 5.77, A5 = 6.39, B1 = "red", B2 = "blue", B3 = "green", B4 = "yellow", B5 = "purple" }
+formula = "=LOOKUP(4.19,A1:A5,B1:B5)"
+expect = { text = "blue" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-002"
+desc = "LOOKUP vector approximate lookup returns the nearest smaller key result"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "ten", B2 = "twenty", B3 = "thirty" }
+formula = "=LOOKUP(25,A1:A3,B1:B3)"
+expect = { text = "twenty" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-003"
+desc = "LOOKUP returns NA when the lookup value is smaller than the first comparable key"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "ten", B2 = "twenty", B3 = "thirty" }
+formula = "=LOOKUP(5,A1:A3,B1:B3)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-004"
+desc = "LOOKUP with omitted result vector returns the matched lookup-vector value"
+setup = { A1 = 10, A2 = 20, A3 = 30 }
+formula = "=LOOKUP(25,A1:A3)"
+expect = { number = 20 }
+
+[[case]]
+id = "FN-LOOKUP-EL254-005"
+desc = "LOOKUP supports horizontal one-row lookup and result vectors"
+setup = { A1 = "alpha", B1 = "beta", C1 = "delta", A2 = 1, B2 = 2, C2 = 3 }
+formula = '=LOOKUP("charlie",A1:C1,A2:C2)'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-LOOKUP-EL254-006"
+desc = "LOOKUP returns VALUE when result vector length does not match lookup vector length"
+setup = { A1 = 1, A2 = 2, B1 = "one" }
+formula = "=LOOKUP(2,A1:A2,B1:B1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-007"
+desc = "LOOKUP does not coerce numeric text to numeric keys but can match text keys"
+setup = { A1 = 40, A2 = '="42"', A3 = 50, B1 = "num40", B2 = "text42", B3 = "num50" }
+formula = '=CONCAT(LOOKUP(42,A1:A3,B1:B3),":",LOOKUP("42",A1:A3,B1:B3))'
+expect = { text = "num40:text42" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-008"
+desc = "LOOKUP text comparisons are case-insensitive"
+setup = { A1 = "Alpha", A2 = "beta", B1 = "first", B2 = "second" }
+formula = '=LOOKUP("BETA",A1:A2,B1:B2)'
+expect = { text = "second" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-009"
+desc = "LOOKUP array form wider-than-tall searches the first row and returns from the last row"
+setup = { A1 = 1, B1 = 2, C1 = 3, A2 = "one", B2 = "two", C2 = "three" }
+formula = "=LOOKUP(2.5,A1:C2)"
+expect = { text = "two" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-010"
+desc = "LOOKUP array form square searches the first column and returns from the last column"
+setup = { A1 = 1, A2 = 2, A3 = 3, C1 = "one", C2 = "two", C3 = "three" }
+formula = "=LOOKUP(2.5,A1:C3)"
+expect = { text = "two" }
+
+[[case]]
+id = "FN-LOOKUP-EL254-011"
+desc = "LOOKUP blank selected result returns numeric zero"
+deviation = "EL-254 follows the existing lookup blank-result convention used by VLOOKUP"
+setup = { A1 = 1, A2 = 2, B2 = "two" }
+formula = "=LOOKUP(1,A1:A2,B1:B2)"
+expect = { number = 0 }
+tol = 0
+
+[[case]]
+id = "FN-LOOKUP-EL254-012"
+desc = "LOOKUP wrong arity returns VALUE"
+setup = {}
+formula = "=LOOKUP(1)"
+expect = { error = "#VALUE!" }

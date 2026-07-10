@@ -1,0 +1,111 @@
+[[case]]
+id = "FN-ADDRESS-001"
+desc = "ADDRESS defaults to absolute A1 style"
+setup = {}
+formula = "=ADDRESS(2,3)"
+expect = { text = "$C$2" }
+
+[[case]]
+id = "FN-ADDRESS-002"
+desc = "ADDRESS abs_num 2 returns relative column and absolute row"
+setup = {}
+formula = "=ADDRESS(2,3,2)"
+expect = { text = "C$2" }
+
+[[case]]
+id = "FN-ADDRESS-003"
+desc = "ADDRESS abs_num 3 returns absolute column and relative row"
+setup = {}
+formula = "=ADDRESS(2,3,3)"
+expect = { text = "$C2" }
+
+[[case]]
+id = "FN-ADDRESS-004"
+desc = "ADDRESS abs_num 4 returns relative A1 style"
+setup = {}
+formula = "=ADDRESS(2,3,4)"
+expect = { text = "C2" }
+
+[[case]]
+id = "FN-ADDRESS-005"
+desc = "ADDRESS emits absolute R1C1 style"
+setup = {}
+formula = "=ADDRESS(2,3,1,FALSE)"
+expect = { text = "R2C3" }
+
+[[case]]
+id = "FN-ADDRESS-006"
+desc = "ADDRESS emits relative-column R1C1 style"
+setup = {}
+formula = "=ADDRESS(2,3,2,FALSE)"
+expect = { text = "R2C[3]" }
+
+[[case]]
+id = "FN-ADDRESS-007"
+desc = "ADDRESS prefixes a simple sheet name"
+setup = {}
+formula = '=ADDRESS(1,1,1,TRUE,"Sheet2")'
+expect = { text = "Sheet2!$A$1" }
+
+[[case]]
+id = "FN-ADDRESS-008"
+desc = "ADDRESS quotes a sheet name with spaces"
+setup = {}
+formula = '=ADDRESS(2,3,1,FALSE,"EXCEL SHEET")'
+expect = { text = "'EXCEL SHEET'!R2C3" }
+
+[[case]]
+id = "FN-ADDRESS-009"
+desc = "ADDRESS truncates fractional row column and abs_num values toward zero"
+setup = {}
+formula = "=ADDRESS(2.9,3.9,4.8)"
+expect = { text = "C2" }
+
+[[case]]
+id = "FN-ADDRESS-010"
+desc = "ADDRESS returns VALUE for an invalid row"
+setup = {}
+formula = "=ADDRESS(0,1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ADDRESS-011"
+desc = "ADDRESS returns VALUE for an invalid column"
+setup = {}
+formula = "=ADDRESS(1,0)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ADDRESS-012"
+desc = "ADDRESS returns VALUE for an invalid abs_num"
+setup = {}
+formula = "=ADDRESS(1,1,5)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ADDRESS-013"
+desc = "ADDRESS returns VALUE when row coercion fails"
+setup = {}
+formula = '=ADDRESS("x",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ADDRESS-014"
+desc = "ADDRESS propagates an error from the a1 argument"
+setup = {}
+formula = "=ADDRESS(1,1,1,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-ADDRESS-015"
+desc = "ADDRESS returns VALUE for too few arguments"
+setup = {}
+formula = "=ADDRESS(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ADDRESS-016"
+desc = "ADDRESS returns VALUE for too many arguments"
+setup = {}
+formula = '=ADDRESS(1,1,1,TRUE,"Sheet",6)'
+expect = { error = "#VALUE!" }

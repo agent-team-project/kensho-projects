@@ -1,0 +1,41 @@
+[[case]]
+id = "FN-MOD-001"
+desc = "MOD returns the remainder for positive numeric inputs"
+setup = {}
+formula = "=MOD(10,3)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-MOD-002"
+desc = "MOD returns a remainder with a positive divisor sign"
+setup = {}
+formula = "=MOD(-3,2)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-MOD-003"
+desc = "MOD returns a remainder with a negative divisor sign"
+setup = {}
+formula = "=MOD(3,-2)"
+expect = { number = -1 }
+
+[[case]]
+id = "FN-MOD-004"
+desc = "MOD returns DIV/0 for a zero divisor"
+setup = {}
+formula = "=MOD(3,0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MOD-005"
+desc = "MOD coerces scalar numeric text"
+setup = {}
+formula = '=MOD("10","4")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-MOD-006"
+desc = "MOD coerces a blank cell reference to zero"
+setup = {}
+formula = "=MOD(A1,3)"
+expect = { number = 0 }

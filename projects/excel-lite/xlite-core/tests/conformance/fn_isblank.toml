@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-ISBLANK-EL290-001"
+desc = "ISBLANK returns TRUE for a blank cell reference"
+setup = {}
+formula = "=ISBLANK(A1)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISBLANK-EL290-002"
+desc = "ISBLANK returns FALSE for empty text"
+setup = {}
+formula = '=ISBLANK("")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISBLANK-EL290-003"
+desc = "ISBLANK returns FALSE for zero"
+setup = {}
+formula = "=ISBLANK(0)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISBLANK-EL290-004"
+desc = "ISBLANK returns FALSE for FALSE"
+setup = {}
+formula = "=ISBLANK(FALSE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISBLANK-EL290-005"
+desc = "ISBLANK returns FALSE for an error value"
+setup = {}
+formula = "=ISBLANK(1/0)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISBLANK-EL290-006"
+desc = "ISBLANK range scalar convention returns TRUE when the top-left cell is blank"
+setup = { B1 = 1, A2 = "filled", B2 = false }
+formula = "=ISBLANK(A1:B2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISBLANK-EL290-007"
+desc = "ISBLANK range scalar convention ignores later blanks when top-left is nonblank"
+setup = { A1 = 1, B1 = "filled", A2 = true }
+formula = "=ISBLANK(A1:B2)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISBLANK-EL290-008"
+desc = "ISBLANK returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ISBLANK()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ISBLANK-EL290-009"
+desc = "ISBLANK returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ISBLANK(1,2)"
+expect = { error = "#VALUE!" }

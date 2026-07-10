@@ -1,0 +1,90 @@
+[[case]]
+id = "FN-DATEVALUE-001"
+desc = "DATEVALUE returns Microsoft's documented serial for 1/1/2008"
+setup = {}
+formula = '=DATEVALUE("1/1/2008")'
+expect = { number = 39448 }
+
+[[case]]
+id = "FN-DATEVALUE-002"
+desc = "DATEVALUE returns Microsoft's documented serial for 8/22/2011"
+setup = {}
+formula = '=DATEVALUE("8/22/2011")'
+expect = { number = 40777 }
+
+[[case]]
+id = "FN-DATEVALUE-003"
+desc = "DATEVALUE returns Microsoft's documented serial for 22-MAY-2011"
+setup = {}
+formula = '=DATEVALUE("22-MAY-2011")'
+expect = { number = 40685 }
+
+[[case]]
+id = "FN-DATEVALUE-004"
+desc = "DATEVALUE returns Microsoft's documented serial for 2011/02/23"
+setup = {}
+formula = '=DATEVALUE("2011/02/23")'
+expect = { number = 40597 }
+
+[[case]]
+id = "FN-DATEVALUE-005"
+desc = "DATEVALUE accepts full English month names case-insensitively"
+setup = {}
+formula = '=DATEVALUE("15-feBRuary-2020")'
+expect = { number = 43876 }
+
+[[case]]
+id = "FN-DATEVALUE-006"
+desc = "DATEVALUE ignores a time portion after recognized date text"
+setup = {}
+formula = '=DATEVALUE("1/1/2008 10:45 PM")'
+expect = { number = 39448 }
+
+[[case]]
+id = "FN-DATEVALUE-007"
+desc = "DATEVALUE returns VALUE for invalid calendar dates"
+setup = {}
+formula = '=DATEVALUE("2/30/2020")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATEVALUE-008"
+desc = "DATEVALUE returns VALUE for dates before the supported range"
+setup = {}
+formula = '=DATEVALUE("12/31/1899")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATEVALUE-009"
+desc = "DATEVALUE returns VALUE for two-digit years"
+setup = {}
+formula = '=DATEVALUE("1/1/08")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATEVALUE-010"
+desc = "DATEVALUE treats ambiguous numeric day-month-year forms as VALUE"
+setup = {}
+formula = '=DATEVALUE("30/1/2008")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATEVALUE-011"
+desc = "DATEVALUE propagates scalar text-coercion errors"
+setup = {}
+formula = "=DATEVALUE(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-DATEVALUE-012"
+desc = "DATEVALUE returns VALUE for too few arguments"
+setup = {}
+formula = "=DATEVALUE()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATEVALUE-013"
+desc = "DATEVALUE returns VALUE for too many arguments"
+setup = {}
+formula = '=DATEVALUE("1/1/2008","1/2/2008")'
+expect = { error = "#VALUE!" }

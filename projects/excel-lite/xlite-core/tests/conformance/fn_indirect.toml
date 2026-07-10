@@ -1,0 +1,219 @@
+[[case]]
+id = "FN-INDIRECT-EL257-001"
+desc = "INDIRECT of local A1 text displays the target value"
+setup = { A1 = "alpha" }
+formula = '=INDIRECT("A1")'
+expect = { text = "alpha" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-002"
+desc = "INDIRECT accepts absolute A1 text"
+setup = { A1 = 42 }
+formula = '=INDIRECT("$A$1")'
+expect = { number = 42 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-003"
+desc = "INDIRECT accepts Sheet1-qualified local references"
+setup = { A1 = "sheet-local" }
+formula = '=INDIRECT("Sheet1!A1")'
+expect = { text = "sheet-local" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-004"
+desc = "SUM receives the range returned by INDIRECT"
+setup = { A1 = 1, A2 = 2 }
+formula = '=SUM(INDIRECT("A1:A2"))'
+expect = { number = 3 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-005"
+desc = "ROWS receives the range returned by INDIRECT"
+setup = {}
+formula = '=ROWS(INDIRECT("B2:D4"))'
+expect = { number = 3 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-006"
+desc = "COLUMNS receives the range returned by INDIRECT"
+setup = {}
+formula = '=COLUMNS(INDIRECT("B2:D4"))'
+expect = { number = 3 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-007"
+desc = "INDEX receives the range returned by INDIRECT"
+setup = { B2 = "target" }
+formula = '=INDEX(INDIRECT("A1:C3"),2,2)'
+expect = { text = "target" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-008"
+desc = "INDIRECT reads reference text from a cell"
+setup = { A1 = "B1", B1 = "dynamic" }
+formula = "=INDIRECT(A1)"
+expect = { text = "dynamic" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-009"
+desc = "INDIRECT returns REF for unsupported R1C1 mode"
+setup = {}
+formula = '=INDIRECT("R1C1",FALSE)'
+expect = { error = "#REF!" }
+deviation = "EL-257: EXCEL-LITE v1 does not support R1C1 reference text"
+
+[[case]]
+id = "FN-INDIRECT-EL257-010"
+desc = "INDIRECT returns REF for unsupported R1C1 text in A1 mode"
+setup = {}
+formula = '=INDIRECT("R1C1")'
+expect = { error = "#REF!" }
+deviation = "EL-257: EXCEL-LITE v1 does not support R1C1 reference text"
+
+[[case]]
+id = "FN-INDIRECT-EL257-011"
+desc = "INDIRECT returns REF for invalid local reference text"
+setup = {}
+formula = '=INDIRECT("not-a-reference")'
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-012"
+desc = "INDIRECT returns REF for unsupported sheets"
+setup = {}
+formula = '=INDIRECT("Sheet2!A1")'
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-013"
+desc = "INDIRECT returns REF for external workbook references"
+setup = {}
+formula = '=INDIRECT("[Book1]Sheet1!A1")'
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-014"
+desc = "INDIRECT returns REF for empty text"
+setup = {}
+formula = '=INDIRECT("")'
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-015"
+desc = "INDIRECT returns REF when a non-text value coerces to invalid reference text"
+setup = {}
+formula = "=INDIRECT(123)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-016"
+desc = "INDIRECT propagates an error ref_text argument"
+setup = {}
+formula = "=INDIRECT(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-017"
+desc = "INDIRECT propagates an error a1 argument"
+setup = {}
+formula = '=INDIRECT("A1",1/0)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-018"
+desc = "INDIRECT returns VALUE when a1 coercion fails"
+setup = {}
+formula = '=INDIRECT("A1","not bool")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-019"
+desc = "INDIRECT returns VALUE for too few arguments"
+setup = {}
+formula = "=INDIRECT()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-020"
+desc = "INDIRECT returns VALUE for too many arguments"
+setup = {}
+formula = '=INDIRECT("A1",TRUE,TRUE)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-INDIRECT-EL257-021"
+kind = "recalc"
+desc = "Editing the current INDIRECT target updates the consumer"
+setup = { A1 = 1, B1 = '=INDIRECT("A1")' }
+formula = "=B1"
+expect = { number = 1 }
+
+[[case.steps]]
+set = { A1 = 5 }
+formula = "=B1"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-022"
+kind = "recalc"
+desc = "Editing reference text rewires the dynamic dependency"
+setup = { A1 = "B1", B1 = 10, B2 = 20, C1 = "=INDIRECT(A1)" }
+formula = "=C1"
+expect = { number = 10 }
+
+[[case.steps]]
+set = { A1 = "B2" }
+formula = "=C1"
+expect = { number = 20 }
+
+[[case.steps]]
+set = { B1 = 99 }
+formula = "=C1"
+expect = { number = 20 }
+
+[[case.steps]]
+set = { B2 = 30 }
+formula = "=C1"
+expect = { number = 30 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-023"
+kind = "recalc"
+desc = "Editing a formula target orders the INDIRECT consumer after the target"
+setup = { A1 = "B1", B1 = "=D1+1", C1 = "=INDIRECT(A1)+1", D1 = 1 }
+formula = "=C1"
+expect = { number = 3 }
+
+[[case.steps]]
+set = { D1 = 5 }
+formula = "=C1"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-024"
+kind = "recalc"
+desc = "Edits inside an INDIRECT range recompute the consumer but outside edits do not"
+setup = { A1 = "B1:B2", B1 = 1, B2 = 2, B3 = 100, C1 = "=SUM(INDIRECT(A1))" }
+formula = "=C1"
+expect = { number = 3 }
+
+[[case.steps]]
+set = { B2 = 5 }
+formula = "=C1"
+expect = { number = 6 }
+
+[[case.steps]]
+set = { B3 = 200 }
+formula = "=C1"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-INDIRECT-EL257-025"
+kind = "cycle"
+desc = "A self-reference through INDIRECT returns CIRC without hanging"
+setup = {}
+formula = '=INDIRECT("A1")'
+target = "A1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000
+deviation = "EL-257: dynamic self-cycle detection"

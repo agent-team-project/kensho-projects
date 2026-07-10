@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-ISNONTEXT-EL293-001"
+desc = "ISNONTEXT returns FALSE for text"
+setup = {}
+formula = '=ISNONTEXT("text")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-002"
+desc = "ISNONTEXT returns FALSE for empty text"
+setup = {}
+formula = '=ISNONTEXT("")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-003"
+desc = "ISNONTEXT returns TRUE for numbers"
+setup = {}
+formula = "=ISNONTEXT(42)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-004"
+desc = "ISNONTEXT returns TRUE for booleans"
+setup = {}
+formula = "=ISNONTEXT(TRUE)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-005"
+desc = "ISNONTEXT returns TRUE for a blank cell reference"
+setup = {}
+formula = "=ISNONTEXT(A1)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-006"
+desc = "ISNONTEXT receives error values and returns TRUE"
+setup = {}
+formula = "=ISNONTEXT(1/0)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-007"
+desc = "ISNONTEXT range scalar convention returns FALSE when top-left is text"
+setup = { A1 = "text", A2 = 42 }
+formula = "=ISNONTEXT(A1:A2)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-008"
+desc = "ISNONTEXT range scalar convention ignores later text when top-left is nontext"
+setup = { A1 = 42, A2 = "text" }
+formula = "=ISNONTEXT(A1:A2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-009"
+desc = "ISNONTEXT returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ISNONTEXT()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ISNONTEXT-EL293-010"
+desc = "ISNONTEXT returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ISNONTEXT(1,2)"
+expect = { error = "#VALUE!" }

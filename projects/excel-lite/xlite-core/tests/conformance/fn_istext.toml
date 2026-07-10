@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-ISTEXT-EL292-001"
+desc = "ISTEXT returns TRUE for text"
+setup = {}
+formula = '=ISTEXT("text")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISTEXT-EL292-002"
+desc = "ISTEXT returns TRUE for empty text"
+setup = {}
+formula = '=ISTEXT("")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISTEXT-EL292-003"
+desc = "ISTEXT returns FALSE for numbers"
+setup = {}
+formula = "=ISTEXT(42)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISTEXT-EL292-004"
+desc = "ISTEXT returns FALSE for booleans"
+setup = {}
+formula = "=ISTEXT(TRUE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISTEXT-EL292-005"
+desc = "ISTEXT returns FALSE for a blank cell reference"
+setup = {}
+formula = "=ISTEXT(A1)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISTEXT-EL292-006"
+desc = "ISTEXT receives error values and returns FALSE"
+setup = {}
+formula = "=ISTEXT(1/0)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISTEXT-EL292-007"
+desc = "ISTEXT range scalar convention returns TRUE when top-left is text"
+setup = { A1 = "text", A2 = 42 }
+formula = "=ISTEXT(A1:A2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISTEXT-EL292-008"
+desc = "ISTEXT range scalar convention ignores later text when top-left is nontext"
+setup = { A1 = 42, A2 = "text" }
+formula = "=ISTEXT(A1:A2)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISTEXT-EL292-009"
+desc = "ISTEXT returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ISTEXT()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ISTEXT-EL292-010"
+desc = "ISTEXT returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ISTEXT(1,2)"
+expect = { error = "#VALUE!" }

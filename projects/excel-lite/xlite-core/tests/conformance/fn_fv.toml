@@ -1,0 +1,97 @@
+[[case]]
+id = "FN-FV-001"
+desc = "FV matches the Microsoft monthly savings example with beginning-of-period payments"
+setup = {}
+formula = "=FV(6%/12, 10, -200, -500, 1)"
+expect = { number = 2581.4033740601362 }
+tol = 1e-12
+
+[[case]]
+id = "FN-FV-002"
+desc = "FV matches the Microsoft twelve-month savings example with default pv and type"
+setup = {}
+formula = "=FV(12%/12, 12, -1000)"
+expect = { number = 12682.503013196976 }
+tol = 1e-12
+
+[[case]]
+id = "FN-FV-003"
+desc = "FV matches the Microsoft college savings example"
+setup = {}
+formula = "=FV(11%/12, 35, -2000, 0, 1)"
+expect = { number = 82846.24637190053 }
+tol = 1e-12
+
+[[case]]
+id = "FN-FV-004"
+desc = "FV matches the Microsoft savings example with present value and beginning payments"
+setup = {}
+formula = "=FV(6%/12, 12, -100, -1000, 1)"
+expect = { number = 2301.401830340914 }
+tol = 1e-12
+
+[[case]]
+id = "FN-FV-005"
+desc = "FV uses the zero-rate linear formula"
+setup = {}
+formula = "=FV(0, 10, -100, -1000)"
+expect = { number = 2000 }
+
+[[case]]
+id = "FN-FV-006"
+desc = "FV defaults omitted pv and type arguments to zero"
+setup = {}
+formula = "=FV(1%, 2, -100)"
+expect = { number = 201 }
+tol = 1e-12
+
+[[case]]
+id = "FN-FV-007"
+desc = "FV truncates a fractional type argument toward one"
+setup = {}
+formula = "=FV(1%, 2, -100, 0, 1.9)"
+expect = { number = 203.01 }
+tol = 1e-12
+
+[[case]]
+id = "FN-FV-008"
+desc = "FV truncates a negative fractional type argument toward zero"
+setup = {}
+formula = "=FV(1%, 2, -100, 0, -0.9)"
+expect = { number = 201 }
+tol = 1e-12
+
+[[case]]
+id = "FN-FV-009"
+desc = "FV rejects invalid payment timing type values"
+setup = {}
+formula = "=FV(1%, 2, -100, 0, 2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-FV-010"
+desc = "FV rejects non-finite coerced arguments"
+setup = {}
+formula = "=FV(1E309, 2, -100)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-FV-011"
+desc = "FV propagates the first numeric coercion error"
+setup = {}
+formula = '=FV(1%, 1/0, "not numeric")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-FV-012"
+desc = "FV returns VALUE for text that cannot be coerced to a number"
+setup = {}
+formula = '=FV("not numeric", 2, -100)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-FV-013"
+desc = "FV returns VALUE for too few arguments"
+setup = {}
+formula = "=FV(1%, 2)"
+expect = { error = "#VALUE!" }

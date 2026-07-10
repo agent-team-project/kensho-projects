@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-SECOND-001"
+desc = "SECOND returns zero at midnight"
+setup = {}
+formula = "=SECOND(0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SECOND-002"
+desc = "SECOND returns zero at noon"
+setup = {}
+formula = "=SECOND(0.5)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SECOND-003"
+desc = "SECOND uses the time portion of a date serial"
+setup = {}
+formula = "=SECOND(1.7002083333333333)"
+expect = { number = 18 }
+
+[[case]]
+id = "FN-SECOND-004"
+desc = "SECOND accepts a value produced by TIME"
+setup = {}
+formula = "=SECOND(TIME(16,48,18))"
+expect = { number = 18 }
+
+[[case]]
+id = "FN-SECOND-005"
+desc = "SECOND coerces scalar numeric text"
+setup = {}
+formula = '=SECOND("1.7002083333333333")'
+expect = { number = 18 }
+
+[[case]]
+id = "FN-SECOND-006"
+desc = "SECOND returns NUM for negative serials"
+setup = {}
+formula = "=SECOND(-0.1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-SECOND-007"
+desc = "SECOND returns VALUE for time text strings in v1"
+setup = {}
+formula = '=SECOND("6:45 PM")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SECOND-008"
+desc = "SECOND returns VALUE for too few arguments"
+setup = {}
+formula = "=SECOND()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SECOND-009"
+desc = "SECOND returns VALUE for too many arguments"
+setup = {}
+formula = "=SECOND(0.5,0)"
+expect = { error = "#VALUE!" }

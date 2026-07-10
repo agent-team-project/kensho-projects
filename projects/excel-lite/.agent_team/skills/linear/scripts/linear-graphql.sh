@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+#
+# Send a GraphQL call to Linear.
+#
+# Bundled with the `linear` skill in agent-team. Invoked as
+#   ${AGENT_TEAM_ROOT}/skills/linear/scripts/linear-graphql.sh
+#
+# Loads a Linear API key from env or $PWD/.env. Prefers LINEAR_API_KEY,
+# falls back to LINEAR_USER_API_KEY. Builds the request body with jq,
+# POSTs to https://api.linear.app/graphql. Raw response is streamed to
+# stdout so callers can pipe through `jq` to pretty-print or filter.
+#
+# Usage:
+#   linear-graphql.sh '<query-string>' [--variables '<json>']
+#   linear-graphql.sh --query-file <path> [--variables '<json>']
+#
+# Examples:
+#   linear-graphql.sh 'query { viewer { id name } }' | jq .
+#
+#   linear-graphql.sh \
+#     'query($id: String!) { issue(id: $id) { identifier title } }' \
+#     --variables '{"id":"BENCH-166"}' | jq .
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PYTHON_HELPER="$SCRIPT_DIR/../../../scripts/skills/python.sh"
+if [[ ! -f "$PYTHON_HELPER" && -n "${AGENT_TEAM_ROOT:-}" ]]; then
+    PYTHON_HELPER="$AGENT_TEAM_ROOT/scripts/skills/python.sh"
+fi
+if [[ ! -f "$PYTHON_HELPER" ]]; then
+    echo "linear-graphql.sh: missing Python helper: $PYTHON_HELPER" >&2
+    exit 1
+fi
+# shellcheck source=../../../scripts/skills/python.sh
+# shellcheck disable=SC1091
+source "$PYTHON_HELPER"
+
+usage() {
+    sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'
+    exit "${1:-1}"
+}
+
+QUERY=""
+QUERY_FILE=""
+VARIABLES="{}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --query-file)
+            if [ $# -lt 2 ]; then
+                echo "linear-graphql.sh: --query-file requires a path argument" >&2
+                usage 1
+            fi
+            QUERY_FILE="$2"
+            shift 2
+            ;;
+        --variables)
+            if [ $# -lt 2 ]; then
+                echo "linear-graphql.sh: --variables requires a JSON argument" >&2
+                usage 1
+            fi
+            VARIABLES="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "linear-graphql.sh: unknown flag: $1" >&2
+            usage 1
+            ;;
+        *)
+            if [ -n "$QUERY" ]; then
+                echo "linear-graphql.sh: multiple positional query arguments" >&2
+                usage 1
+            fi
+            QUERY="$1"
+            shift
+            ;;
+    esac
+done
+
+if [ -n "$QUERY" ] && [ -n "$QUERY_FILE" ]; then
+    echo "linear-graphql.sh: pass either an inline query OR --query-file, not both" >&2
+    exit 1
+fi
+
+if [ -z "$QUERY" ] && [ -z "$QUERY_FILE" ]; then
+    echo "linear-graphql.sh: missing query (inline arg or --query-file)" >&2
+    usage 1
+fi
+
+if [ -n "$QUERY_FILE" ] && [ ! -f "$QUERY_FILE" ]; then
+    echo "linear-graphql.sh: --query-file not found: $QUERY_FILE" >&2
+    exit 1
+fi
+
+AGENT_TEAM_PYTHON_BIN="$(agent_team_python311 "linear-graphql.sh")"
+
+check_linear_config() {
+    "$AGENT_TEAM_PYTHON_BIN" - <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+cfg_path = Path(".agent_team/config.toml")
+if not cfg_path.exists():
+    sys.exit(
+        "linear-graphql.sh: Linear not configured; .agent_team/config.toml was not found. "
+        "Run `agent-team init` first, then set [pm].provider = \"linear\" with "
+        "[linear].team_id and [linear].ticket_prefix."
+    )
+
+cfg = tomllib.loads(cfg_path.read_text())
+pm_provider = cfg.get("pm", {}).get("provider") or cfg.get("team", {}).get("pm_tool", "none")
+if pm_provider != "linear":
+    sys.exit(
+        "linear-graphql.sh: Linear not configured for this repo. "
+        "Set [pm].provider = \"linear\" plus [linear].team_id and "
+        "[linear].ticket_prefix in .agent_team/config.toml, or use "
+        "`agent-team job create \"<kickoff>\" --dispatch --workspace worktree` "
+        "for ticketless work."
+    )
+
+linear = cfg.get("linear", {})
+missing = [key for key in ("team_id", "ticket_prefix") if not linear.get(key)]
+if missing:
+    sys.exit(
+        "linear-graphql.sh: Linear is enabled but missing config: "
+        + ", ".join(f"[linear].{key}" for key in missing)
+        + ". Set them in .agent_team/config.toml or re-run init with "
+        "`--set pm.provider=linear --set linear.team_id=<uuid> "
+        "--set linear.ticket_prefix=<PREFIX>`."
+    )
+PY
+}
+
+check_linear_config
+
+# Resolve an API key. Prefer LINEAR_API_KEY; fall back to LINEAR_USER_API_KEY.
+# If neither is set in the shell, read those keys from $PWD/.env (consumer repo convention)
+# or the main working tree's .env if inside a git tree. `git worktree list
+# --porcelain` is used instead of `git rev-parse --show-toplevel` so that calls
+# from inside a linked worktree still find the primary repo's .env.
+read_env_value() {
+    "$AGENT_TEAM_PYTHON_BIN" - "$@" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+names = sys.argv[2:]
+wanted = set(names)
+values = {}
+
+try:
+    lines = path.read_text().splitlines()
+except OSError:
+    sys.exit(1)
+
+for raw in lines:
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        continue
+    if line.startswith("export "):
+        line = line[len("export "):].lstrip()
+    key, sep, value = line.partition("=")
+    if not sep:
+        continue
+    key = key.strip()
+    if key not in wanted:
+        continue
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1]
+    values[key] = value
+
+for name in names:
+    value = values.get(name, "").strip()
+    if value:
+        print(value)
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+resolve_api_key() {
+    if [ -n "${LINEAR_API_KEY:-}" ]; then
+        return 0
+    fi
+    if [ -n "${LINEAR_USER_API_KEY:-}" ]; then
+        LINEAR_API_KEY="$LINEAR_USER_API_KEY"
+        return 0
+    fi
+
+    local env_files=()
+    [ -f "$PWD/.env" ] && env_files+=("$PWD/.env")
+    if command -v git >/dev/null 2>&1; then
+        local repo_root
+        repo_root="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree/ {print $2; exit}')"
+        if [ -n "$repo_root" ] && [ "$repo_root" != "$PWD" ] && [ -f "$repo_root/.env" ]; then
+            env_files+=("$repo_root/.env")
+        fi
+    fi
+
+    for env_file in "${env_files[@]:-}"; do
+        [ -z "$env_file" ] && continue
+        local key
+        if key="$(read_env_value "$env_file" LINEAR_API_KEY LINEAR_USER_API_KEY)"; then
+            LINEAR_API_KEY="$key"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if ! resolve_api_key; then
+    echo "linear-graphql.sh: no Linear API key found (tried LINEAR_API_KEY, LINEAR_USER_API_KEY in env and \$PWD/.env)" >&2
+    exit 1
+fi
+
+if [ -n "$QUERY_FILE" ]; then
+    PAYLOAD="$(jq -n \
+        --rawfile q "$QUERY_FILE" \
+        --argjson v "$VARIABLES" \
+        '{query: $q, variables: $v}')"
+else
+    PAYLOAD="$(jq -n \
+        --arg q "$QUERY" \
+        --argjson v "$VARIABLES" \
+        '{query: $q, variables: $v}')"
+fi
+
+origin_footer() {
+    "$AGENT_TEAM_PYTHON_BIN" - <<'PY'
+import os
+import shlex
+import tomllib
+from pathlib import Path
+
+team_root = Path(os.environ.get("AGENT_TEAM_ROOT") or ".agent_team")
+cfg_path = team_root / "config.toml"
+project = ""
+if cfg_path.exists():
+    try:
+        project = tomllib.loads(cfg_path.read_text()).get("project", {}).get("id", "")
+    except Exception:
+        project = ""
+
+fields = [
+    ("project", project),
+    ("team", os.environ.get("AGENT_TEAM_TEAM", "")),
+    ("instance", os.environ.get("AGENT_TEAM_INSTANCE", "")),
+    ("agent", os.environ.get("AGENT_TEAM_ORIGIN_AGENT", "")),
+    ("job", os.environ.get("AGENT_TEAM_ORIGIN_JOB") or os.environ.get("AGENT_TEAM_JOB_ID", "")),
+    ("trigger", os.environ.get("AGENT_TEAM_ORIGIN_TRIGGER", "")),
+    ("build", os.environ.get("AGENT_TEAM_ORIGIN_BUILD", "")),
+]
+parts = []
+for key, value in fields:
+    value = str(value or "").strip()
+    if not value:
+        continue
+    if any(ch.isspace() for ch in value):
+        value = shlex.quote(value)
+    parts.append(f"{key}={value}")
+if parts:
+    print("agent-team-origin: " + " ".join(parts))
+PY
+}
+
+FOOTER="$(origin_footer || true)"
+if [ -n "$FOOTER" ]; then
+    PAYLOAD="$(jq --arg footer "$FOOTER" '
+        def stamp_origin:
+            if type == "string" and length > 0 and (contains("agent-team-origin:") | not)
+            then . + "\n\n---\n" + $footer
+            else .
+            end;
+        if ((.query // "") | test("commentCreate|issueCreate")) and ((.variables.input? | type) == "object") then
+            (if (.variables.input.body? | type) == "string" then .variables.input.body |= stamp_origin else . end)
+            | (if (.variables.input.description? | type) == "string" then .variables.input.description |= stamp_origin else . end)
+        else
+            .
+        end
+    ' <<<"$PAYLOAD")"
+fi
+
+curl -sS --fail-with-body https://api.linear.app/graphql \
+    -H "Authorization: $LINEAR_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD"

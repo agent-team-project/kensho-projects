@@ -1,0 +1,71 @@
+# Slice 0 cycle detection cases.
+
+[[case]]
+id = "CYCLE-001"
+kind = "cycle"
+desc = "A self-reference returns #CIRC! without hanging"
+setup = {}
+formula = "=A1"
+target = "A1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000
+deviation = "A.1"
+
+[[case]]
+id = "CYCLE-002"
+kind = "cycle"
+desc = "A two-cell cycle returns #CIRC! without hanging"
+setup = { B1 = "=A1" }
+formula = "=B1"
+target = "A1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000
+deviation = "A.1"
+
+[[case]]
+id = "CYCLE-003"
+kind = "cycle"
+desc = "A three-cell cycle returns #CIRC! without hanging"
+setup = { B1 = "=C1", C1 = "=A1" }
+formula = "=B1"
+target = "A1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000
+deviation = "A.1"
+
+[[case]]
+id = "CYCLE-004"
+kind = "recalc"
+desc = "Breaking a cycle lets dependent cells recover"
+setup = { A1 = "=B1", B1 = "=A1" }
+formula = "=A1"
+target = "Z1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000
+deviation = "A.1"
+
+[[case.steps]]
+set = { B1 = 5 }
+formula = "=A1"
+expect = { number = 5 }
+
+[[case]]
+id = "CYCLE-005"
+kind = "cycle"
+desc = "A dependent of a circular cell propagates #CIRC!"
+setup = { A1 = "=B1", B1 = "=A1", C1 = "=A1" }
+formula = "=C1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000
+deviation = "A.1"
+
+[[case]]
+id = "CYCLE-RANGE-SELF"
+kind = "cycle"
+desc = "A self-reference through a range returns #CIRC! without hanging"
+setup = {}
+formula = "=SUM(A1:A2)"
+target = "A1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000
+deviation = "A.1"

@@ -1,0 +1,76 @@
+[[case]]
+id = "FN-SUBSTITUTE-001"
+desc = "SUBSTITUTE replaces all occurrences when instance_num is omitted"
+setup = {}
+formula = '=SUBSTITUTE("one fish, two fish", "fish", "cat")'
+expect = { text = "one cat, two cat" }
+
+[[case]]
+id = "FN-SUBSTITUTE-002"
+desc = "SUBSTITUTE replaces only the requested occurrence when instance_num is provided"
+setup = {}
+formula = '=SUBSTITUTE("Quarter 1, 2011", "1", "2", 3)'
+expect = { text = "Quarter 1, 2012" }
+
+[[case]]
+id = "FN-SUBSTITUTE-003"
+desc = "SUBSTITUTE matching is case-sensitive"
+setup = {}
+formula = '=SUBSTITUTE("Cat cat CAT", "cat", "dog")'
+expect = { text = "Cat dog CAT" }
+
+[[case]]
+id = "FN-SUBSTITUTE-004"
+desc = "SUBSTITUTE returns original text when old_text is missing"
+setup = {}
+formula = '=SUBSTITUTE("abcdef", "z", "x")'
+expect = { text = "abcdef" }
+
+[[case]]
+id = "FN-SUBSTITUTE-005"
+desc = "SUBSTITUTE removes matched text when new_text is empty"
+setup = {}
+formula = '=SUBSTITUTE("1-2-3", "-", "")'
+expect = { text = "123" }
+
+[[case]]
+id = "FN-SUBSTITUTE-006"
+desc = "SUBSTITUTE coerces scalar text inputs and text instance_num"
+setup = {}
+formula = '=SUBSTITUTE(12321, 2, TRUE, "2.9")'
+expect = { text = "123TRUE1" }
+
+[[case]]
+id = "FN-SUBSTITUTE-007"
+desc = "SUBSTITUTE returns VALUE when instance_num truncates below one"
+setup = {}
+formula = '=SUBSTITUTE("abab", "a", "x", 0.9)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SUBSTITUTE-008"
+desc = "SUBSTITUTE returns VALUE for instance_num coercion errors"
+setup = {}
+formula = '=SUBSTITUTE("abab", "a", "x", "apple")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SUBSTITUTE-009"
+desc = "SUBSTITUTE propagates error values"
+setup = {}
+formula = '=SUBSTITUTE(1/0, "a", "x")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SUBSTITUTE-010"
+desc = "SUBSTITUTE returns VALUE for too few arguments"
+setup = {}
+formula = '=SUBSTITUTE("abc", "a")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SUBSTITUTE-011"
+desc = "SUBSTITUTE returns VALUE for too many arguments"
+setup = {}
+formula = '=SUBSTITUTE("abc", "a", "x", 1, 2)'
+expect = { error = "#VALUE!" }

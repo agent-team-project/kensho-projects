@@ -1,0 +1,121 @@
+[[case]]
+id = "FN-DDB-001"
+desc = "DDB returns the Microsoft first-day depreciation example with default factor"
+setup = {}
+formula = "=DDB(2400, 300, 10*365, 1)"
+expect = { number = 1.3150684931506849 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DDB-002"
+desc = "DDB returns the Microsoft first-month depreciation example"
+setup = {}
+formula = "=DDB(2400, 300, 10*12, 1, 2)"
+expect = { number = 40 }
+
+[[case]]
+id = "FN-DDB-003"
+desc = "DDB returns the Microsoft first-year depreciation example"
+setup = {}
+formula = "=DDB(2400, 300, 10, 1, 2)"
+expect = { number = 480 }
+
+[[case]]
+id = "FN-DDB-004"
+desc = "DDB returns the Microsoft second-year depreciation example with factor 1.5"
+setup = {}
+formula = "=DDB(2400, 300, 10, 2, 1.5)"
+expect = { number = 306 }
+
+[[case]]
+id = "FN-DDB-005"
+desc = "DDB returns the Microsoft tenth-year depreciation example with default factor"
+setup = {}
+formula = "=DDB(2400, 300, 10, 10)"
+expect = { number = 22.1225472000001 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DDB-006"
+desc = "DDB omitted factor defaults to 2"
+setup = {}
+formula = "=DDB(2400, 300, 10, 2)"
+expect = { number = 384 }
+
+[[case]]
+id = "FN-DDB-007"
+desc = "DDB truncates period toward zero"
+setup = {}
+formula = "=DDB(2400, 300, 10, 2.9)"
+expect = { number = 384 }
+
+[[case]]
+id = "FN-DDB-008"
+desc = "DDB returns NUM for negative salvage"
+setup = {}
+formula = "=DDB(2400, -1, 10, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DDB-009"
+desc = "DDB returns NUM when salvage is greater than cost"
+setup = {}
+formula = "=DDB(2400, 3000, 10, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DDB-010"
+desc = "DDB returns NUM when life is not positive"
+setup = {}
+formula = "=DDB(2400, 300, 0, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DDB-011"
+desc = "DDB returns NUM when truncated period is less than 1"
+setup = {}
+formula = "=DDB(2400, 300, 10, 0.9)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DDB-012"
+desc = "DDB returns NUM when period is greater than life"
+setup = {}
+formula = "=DDB(2400, 300, 10, 11)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DDB-013"
+desc = "DDB returns NUM when factor is not positive"
+setup = {}
+formula = "=DDB(2400, 300, 10, 1, 0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DDB-014"
+desc = "DDB returns NUM for a non-finite numeric argument"
+setup = {}
+formula = "=DDB(1E309, 0, 1, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DDB-015"
+desc = "DDB propagates the first numeric coercion error"
+setup = {}
+formula = '=DDB(2400, 1/0, "not numeric", 1)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-DDB-016"
+desc = "DDB returns VALUE for too few arguments"
+setup = {}
+formula = "=DDB(2400, 300, 10)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DDB-017"
+desc = "DDB handles a large finite period and life without iterating"
+setup = {}
+formula = "=DDB(1000, 100, 1000000000000, 1000000000000)"
+expect = { number = 2.70682542135179e-10 }
+tol = 1e-12

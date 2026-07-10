@@ -1,0 +1,76 @@
+[[case]]
+id = "FN-XOR-001"
+desc = "XOR returns TRUE for one TRUE value"
+setup = {}
+formula = "=XOR(TRUE)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-XOR-002"
+desc = "XOR returns FALSE for two TRUE values"
+setup = {}
+formula = "=XOR(TRUE,TRUE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-XOR-003"
+desc = "XOR returns FALSE when all values are FALSE"
+setup = {}
+formula = "=XOR(FALSE,FALSE,FALSE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-XOR-004"
+desc = "XOR returns TRUE for three TRUE values"
+setup = {}
+formula = "=XOR(TRUE,TRUE,TRUE)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-XOR-005"
+desc = "XOR coerces numeric scalars with zero as FALSE and nonzero as TRUE"
+setup = {}
+formula = "=XOR(0,2,3)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-XOR-006"
+desc = "XOR coerces direct TRUE and FALSE text scalars"
+setup = {}
+formula = '=XOR("TRUE","FALSE")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-XOR-007"
+desc = "XOR returns VALUE for invalid direct text"
+setup = {}
+formula = '=XOR("maybe")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-XOR-008"
+desc = "XOR includes range booleans and numbers while ignoring range text and blanks"
+setup = { A1 = true, B1 = "ignored", C1 = 0, A2 = 2, C2 = false }
+formula = "=XOR(A1:C2)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-XOR-009"
+desc = "XOR returns VALUE for a range with only text and blanks"
+setup = { A1 = "ignored", B1 = "also ignored" }
+formula = "=XOR(A1:B2)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-XOR-010"
+desc = "XOR propagates errors from range arguments"
+setup = { A1 = false, A2 = "=1/0" }
+formula = "=XOR(A1:A2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-XOR-011"
+desc = "XOR returns VALUE for wrong arity"
+setup = {}
+formula = "=XOR()"
+expect = { error = "#VALUE!" }

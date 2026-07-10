@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-TRIM-001"
+desc = "TRIM removes leading and trailing ASCII spaces"
+setup = {}
+formula = '=TRIM("   Excel Lite   ")'
+expect = { text = "Excel Lite" }
+
+[[case]]
+id = "FN-TRIM-002"
+desc = "TRIM collapses multiple interior ASCII spaces to one space"
+setup = {}
+formula = '=TRIM("Excel   Lite    Workbook")'
+expect = { text = "Excel Lite Workbook" }
+
+[[case]]
+id = "FN-TRIM-003"
+desc = "TRIM leaves text with no extra ASCII spaces unchanged"
+setup = {}
+formula = '=TRIM("Excel Lite")'
+expect = { text = "Excel Lite" }
+
+[[case]]
+id = "FN-TRIM-004"
+desc = "TRIM returns empty text for all ASCII spaces"
+setup = {}
+formula = '=TRIM("     ")'
+expect = { text = "" }
+
+[[case]]
+id = "FN-TRIM-005"
+desc = "TRIM coerces number boolean and blank scalar values before trimming"
+setup = {}
+formula = '=CONCAT(TRIM(123), ":", TRIM(FALSE), ":", TRIM(A1))'
+expect = { text = "123:FALSE:" }
+
+[[case]]
+id = "FN-TRIM-006"
+desc = "TRIM propagates error values"
+setup = {}
+formula = "=TRIM(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-TRIM-007"
+desc = "TRIM returns VALUE for too few arguments"
+setup = {}
+formula = "=TRIM()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TRIM-008"
+desc = "TRIM returns VALUE for too many arguments"
+setup = {}
+formula = '=TRIM("abc", "extra")'
+expect = { error = "#VALUE!" }

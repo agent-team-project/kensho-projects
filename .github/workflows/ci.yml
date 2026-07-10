@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  publication:
+    name: Public repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyyaml
+      - run: python scripts/check_publication.py
+
+  chess:
+    name: Chess acceptance
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/chess-engine
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libudev-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95.0"
+          components: rustfmt, clippy
+      - run: scripts/acceptance.sh
+
+  excel:
+    name: Excel Lite acceptance
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/excel-lite
+    env:
+      CARGO_LLVM_COV_VERSION: "0.8.7"
+      XLITE_CORE_COVERAGE_THRESHOLD: "90.0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: projects/excel-lite/package-lock.json
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev
+      - run: python3 scripts/validate_conformance_cases.py
+      - run: python3 scripts/audit_conformance_coverage.py
+      - run: python3 scripts/validate_ci_contracts.py
+      - run: python3 -m unittest scripts/test_check_rust_coverage.py
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
+      - run: cargo install cargo-llvm-cov --version "$CARGO_LLVM_COV_VERSION" --locked
+      - run: cargo fmt --check
+      - name: Run Rust lints
+        run: >
+          cargo clippy --workspace --all-targets --
+          -D warnings
+          -A clippy::trim_split_whitespace
+          -A clippy::manual_is_multiple_of
+          -A clippy::manual_range_contains
+          -A clippy::manual_contains
+          -A clippy::manual_saturating_arithmetic
+          -A clippy::derivable_impls
+          -A clippy::approx_constant
+      - run: cargo test --workspace
+      - name: Run function/evaluator coverage gate
+        run: |
+          mkdir -p target/llvm-cov
+          cargo llvm-cov -p xlite-core --lcov --output-path target/llvm-cov/lcov.info
+          python3 scripts/check_rust_coverage.py \
+            --lcov target/llvm-cov/lcov.info \
+            --threshold "$XLITE_CORE_COVERAGE_THRESHOLD" \
+            --include xlite-core/src/functions/ \
+            --include xlite-core/src/eval.rs
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: npm run verify:offline

@@ -1,0 +1,139 @@
+[[case]]
+id = "FN-QUARTILE-001"
+desc = "QUARTILE quart zero returns the minimum"
+setup = { A1 = 9, A2 = 1, A3 = 5 }
+formula = "=QUARTILE(A1:A3,0)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-QUARTILE-002"
+desc = "QUARTILE quart two returns the median"
+setup = { A1 = 9, A2 = 1, A3 = 5 }
+formula = "=QUARTILE(A1:A3,2)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-QUARTILE-003"
+desc = "QUARTILE quart four returns the maximum"
+setup = { A1 = 9, A2 = 1, A3 = 5 }
+formula = "=QUARTILE(A1:A3,4)"
+expect = { number = 9 }
+
+[[case]]
+id = "FN-QUARTILE-004"
+desc = "QUARTILE quart one interpolates on an even-sized data set"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4 }
+formula = "=QUARTILE(A1:A4,1)"
+expect = { number = 1.75 }
+
+[[case]]
+id = "FN-QUARTILE-005"
+desc = "QUARTILE quart three interpolates on an even-sized data set"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4 }
+formula = "=QUARTILE(A1:A4,3)"
+expect = { number = 3.25 }
+
+[[case]]
+id = "FN-QUARTILE-006"
+desc = "QUARTILE truncates non-integer quart before selecting the quartile"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4 }
+formula = "=QUARTILE(A1:A4,1.9)"
+expect = { number = 1.75 }
+
+[[case]]
+id = "FN-QUARTILE-007"
+desc = "QUARTILE returns a single direct numeric value for every valid quart"
+setup = {}
+formula = "=QUARTILE(7,0)+QUARTILE(7,1)+QUARTILE(7,2)+QUARTILE(7,3)+QUARTILE(7,4)"
+expect = { number = 35 }
+
+[[case]]
+id = "FN-QUARTILE-008"
+desc = "QUARTILE treats direct scalar array input as a one item data set"
+setup = {}
+formula = '=QUARTILE("7.5",3)'
+expect = { number = 7.5 }
+
+[[case]]
+id = "FN-QUARTILE-009"
+desc = "QUARTILE ignores range text booleans and blanks while including zero"
+setup = { A1 = "skip", A2 = true, A3 = 0, A5 = 10 }
+formula = "=QUARTILE(A1:A5,2)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-QUARTILE-010"
+desc = "QUARTILE returns NUM when a range has no numeric values"
+setup = { A1 = "x", A2 = true }
+formula = "=QUARTILE(A1:A3,1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-QUARTILE-011"
+desc = "QUARTILE returns NUM when quart is below zero"
+setup = {}
+formula = "=QUARTILE(1,-0.1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-QUARTILE-012"
+desc = "QUARTILE returns NUM when quart is above four"
+setup = {}
+formula = "=QUARTILE(1,4.1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-QUARTILE-013"
+desc = "QUARTILE returns NUM when quart is nonfinite"
+setup = {}
+formula = "=QUARTILE(1,1E309)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-QUARTILE-014"
+desc = "QUARTILE returns VALUE for direct array text that cannot be coerced"
+setup = {}
+formula = '=QUARTILE("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-QUARTILE-015"
+desc = "QUARTILE returns VALUE for quart text that cannot be coerced"
+setup = {}
+formula = '=QUARTILE(1,"apple")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-QUARTILE-016"
+desc = "QUARTILE propagates direct array errors before aggregation"
+setup = {}
+formula = "=QUARTILE(1/0,1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-QUARTILE-017"
+desc = "QUARTILE propagates direct quart errors before coercion in formulas"
+setup = {}
+formula = "=QUARTILE(1,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-QUARTILE-018"
+desc = "QUARTILE propagates selected range errors"
+setup = { A1 = 1, A2 = "=1/0" }
+formula = "=QUARTILE(A1:A2,1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-QUARTILE-019"
+desc = "QUARTILE returns VALUE for too few arguments"
+setup = {}
+formula = "=QUARTILE(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-QUARTILE-020"
+desc = "QUARTILE returns VALUE for too many arguments"
+setup = {}
+formula = "=QUARTILE(1,1,1)"
+expect = { error = "#VALUE!" }

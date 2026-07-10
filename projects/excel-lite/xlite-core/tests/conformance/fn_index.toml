@@ -1,0 +1,108 @@
+[[case]]
+id = "FN-INDEX-EL252-001"
+desc = "INDEX returns the value at the 1-based row and column intersection"
+setup = { C2 = 23 }
+formula = "=INDEX(A1:C3,2,3)"
+expect = { number = 23 }
+
+[[case]]
+id = "FN-INDEX-EL252-002"
+desc = "INDEX single-column shorthand treats the second argument as a row index"
+setup = { A2 = "middle" }
+formula = "=INDEX(A1:A3,2)"
+expect = { text = "middle" }
+
+[[case]]
+id = "FN-INDEX-EL252-003"
+desc = "INDEX single-row shorthand treats the second argument as a column index"
+setup = { B1 = "middle" }
+formula = "=INDEX(A1:C1,2)"
+expect = { text = "middle" }
+
+[[case]]
+id = "FN-INDEX-EL252-004"
+desc = "INDEX treats a direct scalar as a one-cell array"
+setup = {}
+formula = "=INDEX(99,1)"
+expect = { number = 99 }
+deviation = "EL-252: EXCEL-LITE v1 scalar-as-1x1-array convention"
+
+[[case]]
+id = "FN-INDEX-EL252-005"
+desc = "INDEX returns blank when the selected cell is blank"
+setup = { A1 = 1 }
+formula = "=INDEX(A1:C3,3,2)"
+expect = { blank = true }
+
+[[case]]
+id = "FN-INDEX-EL252-006"
+desc = "INDEX returns REF when the selected row is outside the array"
+setup = {}
+formula = "=INDEX(A1:C3,4,1)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-INDEX-EL252-007"
+desc = "INDEX returns REF when the selected column is outside the array"
+setup = {}
+formula = "=INDEX(A1:C3,1,4)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-INDEX-EL252-008"
+desc = "INDEX returns VALUE for zero row_num because v1 does not return array columns"
+setup = {}
+formula = "=INDEX(A1:C3,0,2)"
+expect = { error = "#VALUE!" }
+deviation = "EL-252: Microsoft INDEX can return an entire column for row_num 0; EXCEL-LITE v1 returns scalars only"
+
+[[case]]
+id = "FN-INDEX-EL252-009"
+desc = "INDEX returns VALUE for zero column_num because v1 does not return array rows"
+setup = {}
+formula = "=INDEX(A1:C3,2,0)"
+expect = { error = "#VALUE!" }
+deviation = "EL-252: Microsoft INDEX can return an entire row for column_num 0; EXCEL-LITE v1 returns scalars only"
+
+[[case]]
+id = "FN-INDEX-EL252-010"
+desc = "INDEX returns VALUE when omitted column_num would produce an array row"
+setup = {}
+formula = "=INDEX(A1:C3,2)"
+expect = { error = "#VALUE!" }
+deviation = "EL-252: Microsoft INDEX can return an array row here; EXCEL-LITE v1 returns scalars only"
+
+[[case]]
+id = "FN-INDEX-EL252-011"
+desc = "INDEX truncates numeric row and column indexes toward zero"
+setup = { B2 = 88 }
+formula = "=INDEX(A1:C3,2.9,2.1)"
+expect = { number = 88 }
+
+[[case]]
+id = "FN-INDEX-EL252-012"
+desc = "INDEX returns VALUE when row_num coercion fails"
+setup = {}
+formula = '=INDEX(A1:C3,"row",2)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-INDEX-EL252-013"
+desc = "INDEX returns VALUE when column_num coercion fails after a valid row_num"
+setup = {}
+formula = '=INDEX(A1:C3,2,"column")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-INDEX-EL252-014"
+desc = "INDEX returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=INDEX(A1:C3)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-INDEX-EL252-015"
+desc = "INDEX returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=INDEX(A1:C3,1,1,1)"
+expect = { error = "#VALUE!" }

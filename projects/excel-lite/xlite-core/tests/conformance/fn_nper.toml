@@ -1,0 +1,124 @@
+[[case]]
+id = "FN-NPER-001"
+desc = "NPER matches the Microsoft savings example with beginning-of-period payments"
+setup = {}
+formula = "=NPER(12%/12, -100, -1000, 10000, 1)"
+expect = { number = 59.67386567429457 }
+tol = 1e-12
+
+[[case]]
+id = "FN-NPER-002"
+desc = "NPER matches the Microsoft savings example with default payment timing"
+setup = {}
+formula = "=NPER(12%/12, -100, -1000, 10000)"
+expect = { number = 60.08212285376166 }
+tol = 1e-12
+
+[[case]]
+id = "FN-NPER-003"
+desc = "NPER matches the Microsoft example with omitted future value and type"
+setup = {}
+formula = "=NPER(12%/12, -100, -1000)"
+expect = { number = -9.578594039813161 }
+tol = 1e-12
+
+[[case]]
+id = "FN-NPER-004"
+desc = "NPER uses the zero-rate linear formula"
+setup = {}
+formula = "=NPER(0, -100, -1000, 10000)"
+expect = { number = 90 }
+
+[[case]]
+id = "FN-NPER-005"
+desc = "NPER explicit zero future value and type match omitted defaults"
+setup = {}
+formula = "=NPER(12%/12, -100, -1000, 0, 0)"
+expect = { number = -9.578594039813161 }
+tol = 1e-12
+
+[[case]]
+id = "FN-NPER-006"
+desc = "NPER truncates fractional payment type toward one"
+setup = {}
+formula = "=NPER(12%/12, -100, -1000, 10000, 1.9)"
+expect = { number = 59.67386567429457 }
+tol = 1e-12
+
+[[case]]
+id = "FN-NPER-007"
+desc = "NPER truncates negative fractional payment type toward zero"
+setup = {}
+formula = "=NPER(12%/12, -100, -1000, 10000, -0.9)"
+expect = { number = 60.08212285376166 }
+tol = 1e-12
+
+[[case]]
+id = "FN-NPER-008"
+desc = "NPER rejects invalid payment timing type values"
+setup = {}
+formula = "=NPER(1%, -100, -1000, 0, 2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-NPER-009"
+desc = "NPER returns NUM when pmt is zero in the zero-rate path"
+setup = {}
+formula = "=NPER(0, 0, -1000, 10000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-NPER-010"
+desc = "NPER returns NUM when the logarithm base is outside its domain"
+setup = {}
+formula = "=NPER(-1, -100, -1000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-NPER-011"
+desc = "NPER returns NUM when the annuity denominator is zero"
+setup = {}
+formula = "=NPER(10%, -100, 1000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-NPER-012"
+desc = "NPER returns NUM when the logarithm ratio is not positive"
+setup = {}
+formula = "=NPER(1%, -5, 1000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-NPER-013"
+desc = "NPER returns NUM for a non-finite coerced argument"
+setup = {}
+formula = "=NPER(1E309, -100, -1000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-NPER-014"
+desc = "NPER returns VALUE for text that cannot be coerced to a number"
+setup = {}
+formula = '=NPER("not numeric", -100, -1000)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NPER-015"
+desc = "NPER propagates numeric argument errors"
+setup = {}
+formula = '=NPER(1%, 1/0, "not numeric")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-NPER-016"
+desc = "NPER returns VALUE for too few arguments"
+setup = {}
+formula = "=NPER(1%, -100)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NPER-017"
+desc = "NPER returns VALUE for too many arguments"
+setup = {}
+formula = "=NPER(1%, -100, -1000, 0, 0, 0)"
+expect = { error = "#VALUE!" }

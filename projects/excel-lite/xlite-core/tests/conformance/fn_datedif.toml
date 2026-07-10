@@ -1,0 +1,118 @@
+[[case]]
+id = "FN-DATEDIF-001"
+desc = "DATEDIF returns complete years for the Microsoft documented example"
+setup = {}
+formula = '=DATEDIF(DATE(2001,1,1), DATE(2003,1,1), "Y")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-DATEDIF-002"
+desc = "DATEDIF returns whole days for the Microsoft documented example"
+setup = {}
+formula = '=DATEDIF(DATE(2001,6,1), DATE(2002,8,15), "D")'
+expect = { number = 440 }
+
+[[case]]
+id = "FN-DATEDIF-003"
+desc = "DATEDIF complete months excludes an incomplete shorter target month"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,31), DATE(2020,2,29), "M")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-DATEDIF-004"
+desc = "DATEDIF complete months includes a matching month-end anniversary"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,31), DATE(2020,3,31), "M")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-DATEDIF-005"
+desc = "DATEDIF complete years excludes a date before the anniversary"
+setup = {}
+formula = '=DATEDIF(DATE(2020,6,15), DATE(2023,6,14), "Y")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-DATEDIF-006"
+desc = "DATEDIF complete years includes the anniversary date"
+setup = {}
+formula = '=DATEDIF(DATE(2020,6,15), DATE(2023,6,15), "Y")'
+expect = { number = 3 }
+
+[[case]]
+id = "FN-DATEDIF-007"
+desc = "DATEDIF returns zero years for identical start and end dates"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,31), DATE(2020,1,31), "Y")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-DATEDIF-008"
+desc = "DATEDIF returns zero months for identical start and end dates"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,31), DATE(2020,1,31), "M")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-DATEDIF-009"
+desc = "DATEDIF returns zero days for identical start and end dates"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,31), DATE(2020,1,31), "D")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-DATEDIF-010"
+desc = "DATEDIF accepts lowercase supported unit text"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,1), DATE(2021,1,1), "y")'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-DATEDIF-011"
+desc = "DATEDIF uses the date portions of positive fractional serials"
+setup = {}
+formula = '=DATEDIF(43831.75, 43832.25, "D")'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-DATEDIF-012"
+desc = "DATEDIF coerces numeric text dates through serial date coercion"
+setup = {}
+formula = '=DATEDIF("43831", "43862", "M")'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-DATEDIF-013"
+desc = "DATEDIF returns NUM for unsupported YM unit"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,1), DATE(2021,1,1), "YM")'
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DATEDIF-014"
+desc = "DATEDIF returns NUM when start date is after end date"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,2), DATE(2020,1,1), "D")'
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DATEDIF-015"
+desc = "DATEDIF returns VALUE for date text strings until DATEVALUE parsing exists"
+setup = {}
+formula = '=DATEDIF("2020-01-01", DATE(2020,1,2), "D")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATEDIF-016"
+desc = "DATEDIF returns VALUE for too few arguments"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,1), DATE(2020,1,2))'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATEDIF-017"
+desc = "DATEDIF returns VALUE for too many arguments"
+setup = {}
+formula = '=DATEDIF(DATE(2020,1,1), DATE(2020,1,2), "D", 0)'
+expect = { error = "#VALUE!" }

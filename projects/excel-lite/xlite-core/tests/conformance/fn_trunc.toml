@@ -1,0 +1,48 @@
+[[case]]
+id = "FN-TRUNC-001"
+desc = "TRUNC defaults to zero digits for positive decimals"
+setup = {}
+formula = "=TRUNC(12.9)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-TRUNC-002"
+desc = "TRUNC truncates negative decimals toward zero"
+setup = {}
+formula = "=TRUNC(-2.7)"
+expect = { number = -2 }
+
+[[case]]
+id = "FN-TRUNC-003"
+desc = "TRUNC preserves requested positive decimal places"
+setup = {}
+formula = "=TRUNC(12.987, 2)"
+expect = { number = 12.98 }
+
+[[case]]
+id = "FN-TRUNC-004"
+desc = "TRUNC truncates negative digit counts to powers of ten"
+setup = {}
+formula = "=TRUNC(987.65, -1)"
+expect = { number = 980 }
+
+[[case]]
+id = "FN-TRUNC-005"
+desc = "TRUNC propagates an error from its number argument"
+setup = {}
+formula = "=TRUNC(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-TRUNC-006"
+desc = "TRUNC coerces scalar numeric text arguments"
+setup = {}
+formula = '=TRUNC("8.765", "2")'
+expect = { number = 8.76 }
+
+[[case]]
+id = "FN-TRUNC-007"
+desc = "TRUNC coerces a blank reference to zero"
+setup = {}
+formula = "=TRUNC(A1)"
+expect = { number = 0 }

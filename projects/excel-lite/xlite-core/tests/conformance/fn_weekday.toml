@@ -1,0 +1,118 @@
+[[case]]
+id = "FN-WEEKDAY-001"
+desc = "WEEKDAY returns Thursday as 5 for Microsoft's 2008-02-14 example serial"
+setup = {}
+formula = "=WEEKDAY(39492)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-WEEKDAY-002"
+desc = "WEEKDAY return type 2 starts the week on Monday"
+setup = {}
+formula = "=WEEKDAY(39492,2)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-WEEKDAY-003"
+desc = "WEEKDAY return type 3 is zero-based from Monday"
+setup = {}
+formula = "=WEEKDAY(39492,3)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-WEEKDAY-004"
+desc = "WEEKDAY return type 11 matches Monday-based numbering"
+setup = {}
+formula = "=WEEKDAY(39492,11)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-WEEKDAY-005"
+desc = "WEEKDAY return type 17 matches Sunday-based numbering"
+setup = {}
+formula = "=WEEKDAY(39492,17)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-WEEKDAY-006"
+desc = "WEEKDAY return type 12 starts the week on Tuesday"
+setup = {}
+formula = "=WEEKDAY(39492,12)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-WEEKDAY-007"
+desc = "WEEKDAY serial 1 is Sunday in Excel's 1900 serial system"
+setup = {}
+formula = "=WEEKDAY(1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-WEEKDAY-008"
+desc = "WEEKDAY preserves the phantom 1900-02-29 serial"
+setup = {}
+formula = "=WEEKDAY(60)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-WEEKDAY-009"
+desc = "WEEKDAY serial 61 follows the phantom day"
+setup = {}
+formula = "=WEEKDAY(61)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-WEEKDAY-010"
+desc = "WEEKDAY uses the date portion of a positive fractional serial"
+setup = {}
+formula = "=WEEKDAY(39492.75)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-WEEKDAY-011"
+desc = "WEEKDAY coerces numeric text through the serial date helper"
+setup = {}
+formula = '=WEEKDAY("39492")'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-WEEKDAY-012"
+desc = "WEEKDAY returns NUM for unsupported return types"
+setup = {}
+formula = "=WEEKDAY(39492,10)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-WEEKDAY-013"
+desc = "WEEKDAY returns NUM for zero serials"
+setup = {}
+formula = "=WEEKDAY(0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-WEEKDAY-014"
+desc = "WEEKDAY returns NUM for negative serials"
+setup = {}
+formula = "=WEEKDAY(-1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-WEEKDAY-015"
+desc = "WEEKDAY returns VALUE for date text strings until DATEVALUE parsing exists"
+setup = {}
+formula = '=WEEKDAY("2008-02-14")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WEEKDAY-016"
+desc = "WEEKDAY returns VALUE for too few arguments"
+setup = {}
+formula = "=WEEKDAY()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WEEKDAY-017"
+desc = "WEEKDAY returns VALUE for too many arguments"
+setup = {}
+formula = "=WEEKDAY(39492,1,1)"
+expect = { error = "#VALUE!" }

@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-NOT-001"
+desc = "NOT returns FALSE for TRUE"
+setup = {}
+formula = "=NOT(TRUE())"
+expect = { bool = false }
+
+[[case]]
+id = "FN-NOT-002"
+desc = "NOT returns TRUE for FALSE"
+setup = {}
+formula = "=NOT(FALSE())"
+expect = { bool = true }
+
+[[case]]
+id = "FN-NOT-003"
+desc = "NOT coerces zero to FALSE before reversing"
+setup = {}
+formula = "=NOT(0)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-NOT-004"
+desc = "NOT coerces nonzero numbers to TRUE before reversing"
+setup = {}
+formula = "=NOT(5)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-NOT-005"
+desc = "NOT coerces TRUE text before reversing"
+setup = {}
+formula = '=NOT("TRUE")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-NOT-006"
+desc = "NOT coerces FALSE text before reversing"
+setup = {}
+formula = '=NOT("FALSE")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-NOT-007"
+desc = "NOT returns VALUE for invalid logical text"
+setup = {}
+formula = '=NOT("not logical")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NOT-008"
+desc = "NOT propagates formula errors"
+setup = {}
+formula = "=NOT(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-NOT-009"
+desc = "NOT propagates direct error references"
+setup = { A1 = "=1/0" }
+formula = "=NOT(A1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-NOT-010"
+desc = "NOT returns VALUE for wrong arity"
+setup = {}
+formula = "=NOT()"
+expect = { error = "#VALUE!" }

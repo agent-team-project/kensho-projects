@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-ROUND-001"
+desc = "ROUND rounds positive halves away from zero"
+setup = {}
+formula = "=ROUND(2.5,0)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-ROUND-002"
+desc = "ROUND rounds negative halves away from zero"
+setup = {}
+formula = "=ROUND(-2.5,0)"
+expect = { number = -3 }
+
+[[case]]
+id = "FN-ROUND-003"
+desc = "ROUND honors positive num_digits for decimal places"
+setup = {}
+formula = "=ROUND(1.25,1)"
+expect = { number = 1.3 }
+
+[[case]]
+id = "FN-ROUND-004"
+desc = "ROUND honors zero num_digits for integer rounding"
+setup = {}
+formula = "=ROUND(12.4,0)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-ROUND-005"
+desc = "ROUND honors negative num_digits left of the decimal point"
+setup = {}
+formula = "=ROUND(25,-1)"
+expect = { number = 30 }
+
+[[case]]
+id = "FN-ROUND-006"
+desc = "ROUND truncates fractional num_digits toward zero"
+setup = {}
+formula = "=ROUND(1.25,1.9)"
+expect = { number = 1.3 }
+
+[[case]]
+id = "FN-ROUND-007"
+desc = "ROUND coerces scalar numeric text arguments"
+setup = {}
+formula = '=ROUND("8.764","2")'
+expect = { number = 8.76 }
+
+[[case]]
+id = "FN-ROUND-008"
+desc = "ROUND coerces scalar boolean arguments"
+setup = {}
+formula = "=ROUND(TRUE,0)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-ROUND-009"
+desc = "ROUND coerces blank scalar references to zero"
+setup = {}
+formula = "=ROUND(A1,0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-ROUND-010"
+desc = "ROUND coerces blank num_digits references to zero"
+setup = {}
+formula = "=ROUND(9.9,A1)"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-ROUND-011"
+desc = "ROUND propagates an error from its number argument"
+setup = {}
+formula = "=ROUND(1/0,0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-ROUND-012"
+desc = "ROUND propagates an error from its num_digits argument"
+setup = {}
+formula = "=ROUND(1,1/0)"
+expect = { error = "#DIV/0!" }

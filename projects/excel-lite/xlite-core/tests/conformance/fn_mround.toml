@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-MROUND-001"
+desc = "MROUND rounds a positive number to the nearest multiple"
+setup = {}
+formula = "=MROUND(10,3)"
+expect = { number = 9 }
+
+[[case]]
+id = "FN-MROUND-002"
+desc = "MROUND rounds a negative number to the nearest negative multiple"
+setup = {}
+formula = "=MROUND(-10,-3)"
+expect = { number = -9 }
+
+[[case]]
+id = "FN-MROUND-003"
+desc = "MROUND rounds a positive tie away from zero"
+setup = {}
+formula = "=MROUND(7.5,5)"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-MROUND-004"
+desc = "MROUND rounds a negative tie away from zero"
+setup = {}
+formula = "=MROUND(-7.5,-5)"
+expect = { number = -10 }
+
+[[case]]
+id = "FN-MROUND-005"
+desc = "MROUND returns zero when the multiple is zero"
+setup = {}
+formula = "=MROUND(10,0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MROUND-006"
+desc = "MROUND permits a zero number with a negative multiple"
+setup = {}
+formula = "=MROUND(0,-5)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MROUND-007"
+desc = "MROUND returns NUM for opposite nonzero signs"
+setup = {}
+formula = "=MROUND(5,-2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-MROUND-008"
+desc = "MROUND coerces direct scalar numeric text"
+setup = {}
+formula = '=MROUND("10","4")'
+expect = { number = 12 }
+
+[[case]]
+id = "FN-MROUND-009"
+desc = "MROUND coerces direct scalar booleans"
+setup = {}
+formula = "=MROUND(TRUE,TRUE)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-MROUND-010"
+desc = "MROUND coerces a blank number reference to zero"
+setup = {}
+formula = "=MROUND(A1,5)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MROUND-011"
+desc = "MROUND propagates an error from its number argument"
+setup = {}
+formula = "=MROUND(1/0,2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MROUND-012"
+desc = "MROUND propagates an error from its multiple argument"
+setup = {}
+formula = "=MROUND(5,1/0)"
+expect = { error = "#DIV/0!" }

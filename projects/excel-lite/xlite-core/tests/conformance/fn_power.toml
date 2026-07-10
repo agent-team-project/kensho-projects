@@ -1,0 +1,42 @@
+[[case]]
+id = "FN-POWER-001"
+desc = "POWER raises a positive base to a nominal exponent"
+setup = {}
+formula = "=POWER(2,3)"
+expect = { number = 8 }
+
+[[case]]
+id = "FN-POWER-002"
+desc = "POWER with a zero exponent returns one"
+setup = {}
+formula = "=POWER(5,0)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-POWER-003"
+desc = "POWER propagates an error input"
+setup = {}
+formula = "=POWER(1/0,2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-POWER-004"
+desc = "POWER coerces direct scalar numeric text arguments"
+setup = {}
+formula = '=POWER("4","0.5")'
+expect = { number = 2 }
+tol = 1e-12
+
+[[case]]
+id = "FN-POWER-005"
+desc = "POWER treats a blank cell reference as a zero exponent"
+setup = {}
+formula = "=POWER(2,A1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-POWER-006"
+desc = "POWER returns NUM for a non-real result"
+setup = {}
+formula = "=POWER(-4,0.5)"
+expect = { error = "#NUM!" }

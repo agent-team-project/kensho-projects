@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-RIGHT-001"
+desc = "RIGHT defaults num_chars to one and returns the last character"
+setup = {}
+formula = '=RIGHT("Excel")'
+expect = { text = "l" }
+
+[[case]]
+id = "FN-RIGHT-002"
+desc = "RIGHT returns the explicit rightmost substring"
+setup = {}
+formula = '=RIGHT("spreadsheet",5)'
+expect = { text = "sheet" }
+
+[[case]]
+id = "FN-RIGHT-003"
+desc = "RIGHT returns all text when count exceeds text length"
+setup = {}
+formula = '=RIGHT("abc",10)'
+expect = { text = "abc" }
+
+[[case]]
+id = "FN-RIGHT-004"
+desc = "RIGHT returns empty text for zero count"
+setup = {}
+formula = '=RIGHT("abc",0)'
+expect = { text = "" }
+
+[[case]]
+id = "FN-RIGHT-005"
+desc = "RIGHT coerces numbers, booleans, and blanks to text"
+setup = { A1 = 12345, B1 = false }
+formula = '=CONCAT(RIGHT(A1,2),":",RIGHT(B1,4),":",RIGHT(C1,1))'
+expect = { text = "45:ALSE:" }
+
+[[case]]
+id = "FN-RIGHT-006"
+desc = "RIGHT truncates fractional counts toward zero"
+setup = {}
+formula = '=RIGHT("abcdef",2.9)'
+expect = { text = "ef" }
+
+[[case]]
+id = "FN-RIGHT-007"
+desc = "RIGHT returns VALUE for negative count"
+setup = {}
+formula = '=RIGHT("abc",-1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RIGHT-008"
+desc = "RIGHT propagates text argument errors"
+setup = { A1 = "=1/0" }
+formula = "=RIGHT(A1,1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RIGHT-009"
+desc = "RIGHT returns VALUE for count coercion errors"
+setup = {}
+formula = '=RIGHT("abc","not numeric")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RIGHT-010"
+desc = "RIGHT propagates count argument errors"
+setup = { A1 = "=1/0" }
+formula = '=RIGHT("abc",A1)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RIGHT-011"
+desc = "RIGHT returns VALUE for too few arguments"
+setup = {}
+formula = "=RIGHT()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RIGHT-012"
+desc = "RIGHT returns VALUE for too many arguments"
+setup = {}
+formula = '=RIGHT("abc",1,2)'
+expect = { error = "#VALUE!" }

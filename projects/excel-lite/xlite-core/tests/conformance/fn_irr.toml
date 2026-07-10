@@ -1,0 +1,96 @@
+[[case]]
+id = "FN-IRR-001"
+desc = "IRR matches the Microsoft four-year example"
+setup = { A1 = -70000, A2 = 12000, A3 = 15000, A4 = 18000, A5 = 21000 }
+formula = "=IRR(A1:A5)"
+expect = { number = -0.02124484827341099 }
+tol = 1e-7
+
+[[case]]
+id = "FN-IRR-002"
+desc = "IRR matches the Microsoft five-year example"
+setup = { A1 = -70000, A2 = 12000, A3 = 15000, A4 = 18000, A5 = 21000, A6 = 26000 }
+formula = "=IRR(A1:A6)"
+expect = { number = 0.08663094803653165 }
+tol = 1e-7
+
+[[case]]
+id = "FN-IRR-003"
+desc = "IRR matches the Microsoft explicit negative guess example"
+setup = { A1 = -70000, A2 = 12000, A3 = 15000 }
+formula = "=IRR(A1:A3, -10%)"
+expect = { number = -0.44350694133474056 }
+tol = 1e-7
+
+[[case]]
+id = "FN-IRR-004"
+desc = "IRR defaults omitted guess to 10 percent for a simple convergent range"
+setup = { A1 = -100, A2 = 60, A3 = 60 }
+formula = "=IRR(A1:A3)"
+expect = { number = 0.1306623862918075 }
+tol = 1e-7
+
+[[case]]
+id = "FN-IRR-005"
+desc = "IRR with explicit 10 percent guess matches the omitted guess case"
+setup = { A1 = -100, A2 = 60, A3 = 60 }
+formula = "=IRR(A1:A3, 10%)"
+expect = { number = 0.1306623862918075 }
+tol = 1e-7
+
+[[case]]
+id = "FN-IRR-006"
+desc = "IRR ignores range text logical values and blanks while preserving numeric order"
+setup = { A1 = -100, B1 = "skip", C1 = true, A2 = 60, C2 = 60 }
+formula = "=IRR(A1:C2)"
+expect = { number = 0.1306623862918075 }
+tol = 1e-7
+
+[[case]]
+id = "FN-IRR-007"
+desc = "IRR returns NUM when cash flows are missing a positive value"
+setup = { A1 = -100, A2 = -10 }
+formula = "=IRR(A1:A2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IRR-008"
+desc = "IRR returns NUM when cash flows are missing a negative value"
+setup = { A1 = 100, A2 = 10 }
+formula = "=IRR(A1:A2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IRR-009"
+desc = "IRR returns NUM for a non-finite numeric cash flow"
+setup = { A1 = -100, A2 = "=1E309", A3 = 120 }
+formula = "=IRR(A1:A3)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IRR-010"
+desc = "IRR returns NUM for a non-finite guess"
+setup = { A1 = -100, A2 = 120 }
+formula = "=IRR(A1:A2, 1E309)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IRR-011"
+desc = "IRR returns NUM when the initial guess makes the iteration domain invalid"
+setup = { A1 = -100, A2 = 120 }
+formula = "=IRR(A1:A2, -100%)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IRR-012"
+desc = "IRR returns VALUE for too few arguments"
+setup = {}
+formula = "=IRR()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-IRR-013"
+desc = "IRR returns VALUE for too many arguments"
+setup = { A1 = -100, A2 = 120 }
+formula = "=IRR(A1:A2, 10%, 20%)"
+expect = { error = "#VALUE!" }

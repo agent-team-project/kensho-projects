@@ -1,0 +1,48 @@
+[[case]]
+id = "FN-UPPER-001"
+desc = "UPPER converts lowercase text to uppercase"
+setup = {}
+formula = '=UPPER("excel lite")'
+expect = { text = "EXCEL LITE" }
+
+[[case]]
+id = "FN-UPPER-002"
+desc = "UPPER converts mixed case text to uppercase"
+setup = {}
+formula = '=UPPER("MiXeD Case")'
+expect = { text = "MIXED CASE" }
+
+[[case]]
+id = "FN-UPPER-003"
+desc = "UPPER leaves numbers punctuation and spaces unchanged"
+setup = {}
+formula = '=UPPER("123 - += !?")'
+expect = { text = "123 - += !?" }
+
+[[case]]
+id = "FN-UPPER-004"
+desc = "UPPER coerces number boolean and blank scalar values before uppercasing"
+setup = {}
+formula = '=CONCAT(UPPER(123), ":", UPPER(FALSE), ":", UPPER(A1))'
+expect = { text = "123:FALSE:" }
+
+[[case]]
+id = "FN-UPPER-005"
+desc = "UPPER propagates error values"
+setup = {}
+formula = "=UPPER(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-UPPER-006"
+desc = "UPPER returns VALUE for too few arguments"
+setup = {}
+formula = "=UPPER()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-UPPER-007"
+desc = "UPPER returns VALUE for too many arguments"
+setup = {}
+formula = '=UPPER("abc", "extra")'
+expect = { error = "#VALUE!" }

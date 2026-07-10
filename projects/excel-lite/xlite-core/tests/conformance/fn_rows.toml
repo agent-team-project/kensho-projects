@@ -1,0 +1,49 @@
+[[case]]
+id = "FN-ROWS-001"
+desc = "ROWS returns the number of rows in a rectangular range"
+setup = {}
+formula = "=ROWS(C1:E4)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-ROWS-002"
+desc = "ROWS returns the number of rows in a single-column range"
+setup = {}
+formula = "=ROWS(A1:A10)"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-ROWS-003"
+desc = "ROWS returns one for a single-row range"
+setup = {}
+formula = "=ROWS(A1:C1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-ROWS-004"
+desc = "ROWS treats a scalar as a single-cell array"
+deviation = "EXCEL-LITE v1 scalar-as-single-cell/array convention"
+setup = {}
+formula = "=ROWS(42)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-ROWS-005"
+desc = "ROWS propagates scalar argument errors"
+setup = {}
+formula = "=ROWS(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-ROWS-006"
+desc = "ROWS returns VALUE for too few arguments"
+setup = {}
+formula = "=ROWS()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ROWS-007"
+desc = "ROWS returns VALUE for too many arguments"
+setup = {}
+formula = "=ROWS(A1:A2,B1:B2)"
+expect = { error = "#VALUE!" }

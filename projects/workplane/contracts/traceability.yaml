@@ -1,0 +1,74 @@
+schema_version: 1
+contract: workplane-spec-traceability
+default: fail_unmapped
+
+claim_families:
+  - id: TRACE-CORE-PARITY
+    authority: [SPEC:P1, PRODUCT:PR-CORE-01, PRODUCT:PR-CORE-02]
+    behavior: human_and_agent_equivalent_public_plane
+    suites: [api_parity, permission, browser]
+    begins_at: walking-slice
+  - id: TRACE-LIFECYCLE
+    authority: [SPEC:P2, SPEC:P3, contracts/lifecycles.yaml]
+    behavior: mode_specific_outcome_contracts_and_fixed_transitions
+    suites: [domain, property, api]
+    begins_at: contract-freeze
+  - id: TRACE-DATES
+    authority: [SPEC:P4, PRODUCT:PR-FC-01..PR-FC-13, contracts/lifecycles.yaml:dates-never-transition]
+    behavior: targets_forecasts_deadlines_actuals_are_distinct_and_non_transitioning
+    suites: [domain, api, browser, research]
+    begins_at: contract-freeze
+  - id: TRACE-HISTORY
+    authority: [SPEC:P5, DOMAIN:events, API:idempotency]
+    behavior: attributable_immutable_events_and_replayable_projections
+    suites: [persistence_replay_idempotency, recovery]
+    begins_at: walking-slice
+  - id: TRACE-DECISIONS
+    authority: [SPEC:P8, PRODUCT:PR-DEC-01]
+    behavior: universal_superseding_decision_for_consequential_judgment
+    suites: [domain, permission, api, judgment_queue]
+    begins_at: walking-slice
+  - id: TRACE-PORTFOLIO
+    authority: [SPEC:5.1, PRODUCT:8, DOMAIN:portfolio]
+    behavior: transparent_priority_and_target_vs_actual_allocation_drift
+    suites: [domain, api, browser, research]
+    begins_at: durable-core
+  - id: TRACE-JUDGMENT
+    authority: [SPEC:5.2, PRODUCT:9.5, API:12]
+    behavior: scarce_judgment_queue_distinct_from_notification_inbox
+    suites: [projection, permission, api, browser, research]
+    begins_at: durable-core
+  - id: TRACE-BRIEF-CORE
+    authority: [PRODUCT:PR-BRIEF-01, PRODUCT:PR-BRIEF-02, API:13]
+    behavior: versioned_sections_typed_conflict_revision_restore
+    suites: [structured_brief, permission, browser, recovery]
+    begins_at: durable-core
+  - id: TRACE-COLLAB-FULL
+    authority: [SPEC:5.6, PROJECT:exploration.collaboration]
+    behavior: optional_convergent_crdt_coediting
+    suites: [crdt_convergence, collaboration_security, recovery, browser]
+    begins_at: full-track-promotion
+    condition: collaboration_promoted
+  - id: TRACE-AUTOMATION-FULL
+    authority: [SPEC:5.7, PROJECT:exploration.automation]
+    behavior: optional_bounded_idempotent_eca
+    suites: [automation, permission, recovery, browser]
+    begins_at: full-track-promotion
+    condition: automation_promoted
+  - id: TRACE-SECURITY
+    authority: [SECURITY:objectives, contracts/permissions.yaml]
+    behavior: tenant_isolation_attribution_revocation_and_separation_of_duty
+    suites: [permission, security, realtime, search, brief]
+    begins_at: contract-freeze
+  - id: TRACE-OPERATIONS
+    authority: [SPEC:5.8, ARCHITECTURE:deployment]
+    behavior: offline_self_host_backup_restore_and_observable_recovery
+    suites: [operations, recovery, security]
+    begins_at: dogfood-ready
+  - id: TRACE-RESEARCH
+    authority: [RESEARCH:H0..H8]
+    behavior: preregistered_dogfood_with_negative_results_preserved
+    suites: [research, evidence_manifest]
+    begins_at: contract-freeze
+
+release_rule: every_material_claim_has_one_claim_family_and_every_family_has_at_least_one_executable_case

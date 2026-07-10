@@ -1,0 +1,51 @@
+[[case]]
+id = "FN-LN-001"
+desc = "LN returns the natural logarithm of a positive number"
+setup = {}
+formula = "=LN(2.718281828459045)"
+expect = { number = 1.0 }
+tol = 1e-12
+
+[[case]]
+id = "FN-LN-002"
+desc = "LN of one returns zero"
+setup = {}
+formula = "=LN(1)"
+expect = { number = 0.0 }
+tol = 1e-12
+
+[[case]]
+id = "FN-LN-003"
+desc = "LN of zero returns NUM error"
+setup = {}
+formula = "=LN(0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LN-004"
+desc = "LN of a negative number returns NUM error"
+setup = {}
+formula = "=LN(-5)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LN-005"
+desc = "LN propagates an error input"
+setup = {}
+formula = "=LN(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LN-006"
+desc = "LN coerces numeric text direct arguments"
+setup = {}
+formula = '=LN("4")'
+expect = { number = 1.3862943611198906 }
+tol = 1e-12
+
+[[case]]
+id = "FN-LN-007"
+desc = "LN treats a blank cell reference as zero"
+setup = {}
+formula = "=LN(A1)"
+expect = { error = "#NUM!" }

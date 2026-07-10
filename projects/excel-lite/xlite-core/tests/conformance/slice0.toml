@@ -1,0 +1,27 @@
+[[case]]
+id = "SLICE0-SUM-001"
+desc = "SUM over a contiguous range returns the total"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = "=SUM(A1:A3)"
+expect = { number = 6 }
+
+[[case]]
+id = "SLICE0-AVERAGE-001"
+desc = "AVERAGE over a contiguous range returns the arithmetic mean"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = "=AVERAGE(A1:A3)"
+expect = { number = 2 }
+
+[[case]]
+id = "SLICE0-IF-001"
+desc = "IF chooses the true branch when a referenced comparison is true"
+setup = { A1 = 1 }
+formula = "=IF(A1>0,\"pos\",\"neg\")"
+expect = { text = "pos" }
+
+[[case]]
+id = "SLICE0-ARITH-001"
+desc = "Scalar arithmetic honors multiplication before addition"
+setup = { A1 = 5, A2 = 3 }
+formula = "=A1*A2+A1/A2"
+expect = { number = 16.666666666666668 }

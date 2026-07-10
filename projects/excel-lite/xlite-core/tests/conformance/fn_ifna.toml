@@ -1,0 +1,41 @@
+[[case]]
+id = "FN-IFNA-EL177-001"
+desc = "IFNA returns a non-error first value unchanged"
+setup = {}
+formula = '=IFNA("ready","fallback")'
+expect = { text = "ready" }
+
+[[case]]
+id = "FN-IFNA-EL177-002"
+desc = "IFNA returns the fallback when the first value is NA"
+setup = {}
+formula = '=IFNA(MODE(1,2),"fallback")'
+expect = { text = "fallback" }
+
+[[case]]
+id = "FN-IFNA-EL177-003"
+desc = "IFNA returns a non-NA error unchanged"
+setup = {}
+formula = '=IFNA(1/0,"fallback")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-IFNA-EL177-004"
+desc = "IFNA propagates fallback errors when the first value is NA"
+setup = {}
+formula = "=IFNA(MODE(1,2),1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-IFNA-EL177-005"
+desc = "IFNA returns VALUE when too few arguments are supplied"
+setup = {}
+formula = '=IFNA("value")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-IFNA-EL177-006"
+desc = "IFNA returns VALUE when too many arguments are supplied"
+setup = {}
+formula = '=IFNA("value","fallback","extra")'
+expect = { error = "#VALUE!" }

@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-LEN-001"
+desc = "LEN counts ordinary text characters"
+setup = {}
+formula = '=LEN("Excel")'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-LEN-002"
+desc = "LEN counts spaces as characters"
+setup = {}
+formula = '=LEN("a b c")'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-LEN-003"
+desc = "LEN returns zero for empty text"
+setup = {}
+formula = '=LEN("")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-LEN-004"
+desc = "LEN returns zero for blank cells"
+setup = {}
+formula = "=LEN(A1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-LEN-005"
+desc = "LEN coerces numbers and booleans to text before counting"
+setup = { A1 = 123, B1 = true }
+formula = "=LEN(A1)+LEN(B1)"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-LEN-006"
+desc = "LEN propagates error values"
+setup = { A1 = "=1/0" }
+formula = "=LEN(A1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LEN-007"
+desc = "LEN returns VALUE for too few arguments"
+setup = {}
+formula = "=LEN()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LEN-008"
+desc = "LEN returns VALUE for too many arguments"
+setup = {}
+formula = '=LEN("abc", "extra")'
+expect = { error = "#VALUE!" }

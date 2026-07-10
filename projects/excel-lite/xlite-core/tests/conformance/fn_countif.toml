@@ -1,0 +1,48 @@
+[[case]]
+id = "FN-COUNTIF-001"
+desc = "COUNTIF counts numeric equality criteria"
+setup = { A1 = 1, A2 = 2, A3 = 1 }
+formula = "=COUNTIF(A1:A3,1)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTIF-002"
+desc = "COUNTIF supports comparison criteria"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4 }
+formula = '=COUNTIF(A1:A4,">2")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTIF-003"
+desc = "COUNTIF counts text equality criteria"
+setup = { A1 = "apple", A2 = "banana", A3 = "apple" }
+formula = '=COUNTIF(A1:A3,"apple")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTIF-004"
+desc = "COUNTIF supports text wildcard criteria"
+setup = { A1 = "apple", A2 = "apricot", A3 = "banana" }
+formula = '=COUNTIF(A1:A3,"ap*")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTIF-005"
+desc = "COUNTIF returns zero when no cells match"
+setup = { A1 = "apple", A2 = "apricot", A3 = "banana" }
+formula = '=COUNTIF(A1:A3,"z*")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-COUNTIF-006"
+desc = "COUNTIF propagates errors from the criteria argument"
+setup = { A1 = 1, A2 = 2 }
+formula = "=COUNTIF(A1:A2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-COUNTIF-007"
+desc = "COUNTIF returns VALUE for wrong arity"
+setup = { A1 = 1, A2 = 2 }
+formula = "=COUNTIF(A1:A2)"
+expect = { error = "#VALUE!" }

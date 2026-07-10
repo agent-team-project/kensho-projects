@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-MINUTE-001"
+desc = "MINUTE returns zero at midnight"
+setup = {}
+formula = "=MINUTE(0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MINUTE-002"
+desc = "MINUTE returns zero at noon"
+setup = {}
+formula = "=MINUTE(0.5)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MINUTE-003"
+desc = "MINUTE uses the time portion of a date serial"
+setup = {}
+formula = "=MINUTE(1.78125)"
+expect = { number = 45 }
+
+[[case]]
+id = "FN-MINUTE-004"
+desc = "MINUTE accepts a value produced by TIME"
+setup = {}
+formula = "=MINUTE(TIME(18,45,0))"
+expect = { number = 45 }
+
+[[case]]
+id = "FN-MINUTE-005"
+desc = "MINUTE coerces scalar numeric text"
+setup = {}
+formula = '=MINUTE("1.78125")'
+expect = { number = 45 }
+
+[[case]]
+id = "FN-MINUTE-006"
+desc = "MINUTE returns NUM for negative serials"
+setup = {}
+formula = "=MINUTE(-0.1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-MINUTE-007"
+desc = "MINUTE returns VALUE for time text strings in v1"
+setup = {}
+formula = '=MINUTE("6:45 PM")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MINUTE-008"
+desc = "MINUTE returns VALUE for too few arguments"
+setup = {}
+formula = "=MINUTE()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MINUTE-009"
+desc = "MINUTE returns VALUE for too many arguments"
+setup = {}
+formula = "=MINUTE(0.5,0)"
+expect = { error = "#VALUE!" }

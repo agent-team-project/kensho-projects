@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-ERROR-TYPE-EL301-001"
+desc = "ERROR.TYPE returns 2 for a DIV/0 error expression"
+setup = {}
+formula = "=ERROR.TYPE(1/0)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-002"
+desc = "ERROR.TYPE returns 7 for a produced NA error"
+setup = {}
+formula = "=ERROR.TYPE(MODE(1,2))"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-003"
+desc = "ERROR.TYPE returns NA for text without coercion"
+setup = {}
+formula = '=ERROR.TYPE("text")'
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-004"
+desc = "ERROR.TYPE returns NA for numbers"
+setup = {}
+formula = "=ERROR.TYPE(42)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-005"
+desc = "ERROR.TYPE returns NA for booleans"
+setup = {}
+formula = "=ERROR.TYPE(TRUE)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-006"
+desc = "ERROR.TYPE returns NA for a blank cell reference"
+setup = {}
+formula = "=ERROR.TYPE(A1)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-007"
+desc = "ERROR.TYPE range scalar convention returns the top-left error code"
+setup = { A1 = "=1/0", B1 = 42, A2 = "=MODE(1,2)", B2 = "text" }
+formula = "=ERROR.TYPE(A1:B2)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-008"
+desc = "ERROR.TYPE range scalar convention ignores later errors when top-left is not an error"
+setup = { A1 = 42, B1 = "=1/0" }
+formula = "=ERROR.TYPE(A1:B1)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-009"
+desc = "ERROR.TYPE returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ERROR.TYPE()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ERROR-TYPE-EL301-010"
+desc = "ERROR.TYPE returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ERROR.TYPE(1,2)"
+expect = { error = "#VALUE!" }

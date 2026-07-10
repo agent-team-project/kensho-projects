@@ -1,0 +1,71 @@
+[[case]]
+id = "FN-VLOOKUP-001"
+desc = "SPEC example exact match returns the third column"
+setup = { A1 = "SKU-1", B1 = 10, C1 = "red", A2 = "SKU-2", B2 = 20, C2 = "green" }
+formula = '=VLOOKUP("SKU-2", A1:C2, 3, FALSE)'
+expect = { text = "green" }
+
+[[case]]
+id = "FN-VLOOKUP-002"
+desc = "exact no-match returns #N/A"
+setup = { A1 = "SKU-1", B1 = 10 }
+formula = '=VLOOKUP("SKU-9", A1:B1, 2, FALSE)'
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-VLOOKUP-003"
+desc = "approximate sorted numeric lookup returns largest key less than or equal to the lookup value"
+setup = { A1 = 10, B1 = "a", A2 = 20, B2 = "b", A3 = 30, B3 = "c" }
+formula = "=VLOOKUP(25, A1:B3, 2, TRUE)"
+expect = { text = "b" }
+
+[[case]]
+id = "FN-VLOOKUP-004"
+desc = "omitted range_lookup defaults to approximate mode"
+setup = { A1 = 10, B1 = "a", A2 = 20, B2 = "b", A3 = 30, B3 = "c" }
+formula = "=VLOOKUP(25, A1:B3, 2)"
+expect = { text = "b" }
+
+[[case]]
+id = "FN-VLOOKUP-005"
+desc = "col_index_num greater than the table width returns #REF!"
+setup = { A1 = 1, B1 = 2 }
+formula = "=VLOOKUP(1, A1:B1, 3, FALSE)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-VLOOKUP-006"
+desc = "col_index_num less than one returns #VALUE!"
+setup = { A1 = 1, B1 = 2 }
+formula = "=VLOOKUP(1, A1:B1, 0, FALSE)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-VLOOKUP-007"
+desc = "exact text matching is case-insensitive"
+setup = { A1 = "Sku-2", B1 = "green" }
+formula = '=VLOOKUP("sku-2", A1:B1, 2, FALSE)'
+expect = { text = "green" }
+
+[[case]]
+id = "FN-VLOOKUP-008"
+desc = "numeric text skips numeric keys and matches only text keys in exact mode"
+setup = { A1 = 42, B1 = "number key", A2 = '="42"', B2 = "text key" }
+formula = '=VLOOKUP("42", A1:B2, 2, FALSE)'
+expect = { text = "text key" }
+
+[[case]]
+id = "FN-VLOOKUP-009"
+desc = "blank return cell returns numeric zero"
+deviation = "SPEC Appendix B VLOOKUP blank result example"
+setup = { A1 = "k", A2 = "k2", B2 = 7 }
+formula = '=VLOOKUP("k", A1:B2, 2, FALSE)'
+expect = { number = 0 }
+tol = 0
+
+[[case]]
+id = "FN-VLOOKUP-010"
+desc = "wrong arity returns #VALUE!"
+setup = { A1 = 1, B1 = 2 }
+formula = "=VLOOKUP(1, A1:B1)"
+expect = { error = "#VALUE!" }

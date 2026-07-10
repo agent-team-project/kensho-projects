@@ -1,0 +1,55 @@
+schema_version: 1
+contract: workplane-staged-acceptance
+
+editions:
+  v1-core:
+    required_suites:
+      - contract
+      - domain
+      - permission
+      - persistence_replay_idempotency
+      - api_parity
+      - realtime
+      - structured_brief
+      - search_judgment_queue
+      - browser_accessibility
+      - performance
+      - recovery_operations
+      - security
+      - research
+    forbidden_dormant_surfaces: [crdt_endpoint, crdt_process, eca_endpoint, eca_table, eca_feature_flag]
+  v1-full:
+    inherits: v1-core
+    conditional_suites:
+      crdt: collaboration_promoted
+      eca: automation_promoted
+
+gates:
+  contract-freeze:
+    requires: [requirement_registry, case_registry, lifecycle_contract, permission_contract, operation_permission_contract, parity_contract, traceability_contract, research_digest]
+  walking-slice:
+    requires: [real_postgresql, real_http, generated_client, browser_transaction, agent_equivalent, idempotency, immutable_activity]
+  durable-core:
+    requires: [property_sequences_100000, replay_checksum, outbox_crash_retry, revoke_under_5s, realtime_order]
+  dogfood-ready:
+    requires: [core_workflows, permission_matrix, search, judgment_queue, backup_restore, accessibility, offline_start]
+  full-track-promotion:
+    conditional:
+      crdt: [need_evidence, convergence, permission, restart_recovery, operating_cost]
+      eca: [repeated_patterns, value_yield, dry_run, idempotency, no_privilege_widening]
+  release-candidate:
+    requires: [scale, recovery, browser_matrix, independent_product_review, independent_security_review, research_review]
+
+hard_failures:
+  - unauthorized_cross_organization_access
+  - hard_gate_waiver
+  - unauthorized_self_review
+  - event_or_projection_loss
+  - silent_brief_overwrite
+  - date_driven_lifecycle_transition
+  - ui_or_agent_private_authoritative_state
+  - missing_or_manipulated_research_evidence
+
+stopped_track_result:
+  accepted_when: [stop_decision, evidence_manifest, core_has_no_dormant_surface]
+  representation: successful_exploration_outcome

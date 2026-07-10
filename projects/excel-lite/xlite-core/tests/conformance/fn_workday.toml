@@ -1,0 +1,118 @@
+[[case]]
+id = "FN-WORKDAY-001"
+desc = "WORKDAY returns Microsoft's documented date 151 workdays after 2008-10-01"
+setup = {}
+formula = "=WORKDAY(DATE(2008,10,1),151)"
+expect = { number = 39933 }
+
+[[case]]
+id = "FN-WORKDAY-002"
+desc = "WORKDAY returns Microsoft's documented date when a holiday range is excluded"
+setup = { A1 = "=DATE(2008,11,26)", A2 = "=DATE(2008,12,4)", A3 = "=DATE(2009,1,21)" }
+formula = "=WORKDAY(DATE(2008,10,1),151,A1:A3)"
+expect = { number = 39938 }
+
+[[case]]
+id = "FN-WORKDAY-003"
+desc = "WORKDAY skips a weekend when moving forward"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,10),1)"
+expect = { number = 43843 }
+
+[[case]]
+id = "FN-WORKDAY-004"
+desc = "WORKDAY skips a weekend when moving backward"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,6),-1)"
+expect = { number = 43833 }
+
+[[case]]
+id = "FN-WORKDAY-005"
+desc = "WORKDAY truncates fractional days toward zero"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,6),1.9)"
+expect = { number = 43837 }
+
+[[case]]
+id = "FN-WORKDAY-006"
+desc = "WORKDAY returns the start serial when days truncates to zero"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,6),0)"
+expect = { number = 43836 }
+
+[[case]]
+id = "FN-WORKDAY-007"
+desc = "WORKDAY ignores a holiday that falls on a weekend"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,10),1,DATE(2020,1,11))"
+expect = { number = 43843 }
+
+[[case]]
+id = "FN-WORKDAY-008"
+desc = "WORKDAY ignores duplicate holiday dates"
+setup = { A1 = "=DATE(2020,1,8)", A2 = "=DATE(2020,1,8)" }
+formula = "=WORKDAY(DATE(2020,1,6),3,A1:A2)"
+expect = { number = 43840 }
+
+[[case]]
+id = "FN-WORKDAY-009"
+desc = "WORKDAY supports a scalar holiday argument"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,6),3,DATE(2020,1,8))"
+expect = { number = 43840 }
+
+[[case]]
+id = "FN-WORKDAY-010"
+desc = "WORKDAY supports a row-major lazy holiday range"
+setup = { A1 = "=DATE(2020,1,7)", B1 = "=DATE(2020,1,11)", A2 = "=DATE(2020,1,8)", B2 = "=DATE(2020,1,8)" }
+formula = "=WORKDAY(DATE(2020,1,6),2,A1:B2)"
+expect = { number = 43840 }
+
+[[case]]
+id = "FN-WORKDAY-011"
+desc = "WORKDAY coerces numeric text through the serial date helper"
+setup = {}
+formula = '=WORKDAY("43836","3")'
+expect = { number = 43839 }
+
+[[case]]
+id = "FN-WORKDAY-012"
+desc = "WORKDAY returns VALUE for date text strings until DATEVALUE parsing exists"
+setup = {}
+formula = '=WORKDAY("2020-01-06",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WORKDAY-013"
+desc = "WORKDAY returns VALUE for zero start serials"
+setup = {}
+formula = "=WORKDAY(0,1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WORKDAY-014"
+desc = "WORKDAY returns VALUE for negative start serials"
+setup = {}
+formula = "=WORKDAY(-1,1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WORKDAY-015"
+desc = "WORKDAY returns NUM for results outside the supported date range"
+setup = {}
+formula = "=WORKDAY(DATE(9999,12,31),1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-WORKDAY-016"
+desc = "WORKDAY returns VALUE for too few arguments"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,6))"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WORKDAY-017"
+desc = "WORKDAY returns VALUE for too many arguments"
+setup = {}
+formula = "=WORKDAY(DATE(2020,1,6),1,DATE(2020,1,8),DATE(2020,1,9))"
+expect = { error = "#VALUE!" }

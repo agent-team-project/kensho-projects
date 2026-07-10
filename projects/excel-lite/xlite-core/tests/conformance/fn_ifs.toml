@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-IFS-EL171-001"
+desc = "IFS returns the first TRUE branch"
+setup = {}
+formula = '=IFS(1<2,"yes",TRUE,"fallback")'
+expect = { text = "yes" }
+
+[[case]]
+id = "FN-IFS-EL171-002"
+desc = "IFS continues past FALSE tests"
+setup = {}
+formula = '=IFS(FALSE,"no",TRUE,"yes")'
+expect = { text = "yes" }
+
+[[case]]
+id = "FN-IFS-EL171-003"
+desc = "IFS returns NA when no test is TRUE"
+setup = {}
+formula = "=IFS(FALSE,1,FALSE,2)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-IFS-EL171-004"
+desc = "IFS ignores later test errors after the first TRUE test"
+setup = {}
+formula = '=IFS(TRUE,"ok",1/0,"ignored")'
+expect = { text = "ok" }
+
+[[case]]
+id = "FN-IFS-EL171-005"
+desc = "IFS ignores values paired with FALSE tests"
+setup = {}
+formula = '=IFS(FALSE,1/0,TRUE,"ok")'
+expect = { text = "ok" }
+
+[[case]]
+id = "FN-IFS-EL171-006"
+desc = "IFS propagates inspected test errors"
+setup = {}
+formula = '=IFS(1/0,"bad",TRUE,"ok")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-IFS-EL171-007"
+desc = "IFS propagates selected value errors"
+setup = {}
+formula = "=IFS(TRUE,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-IFS-EL171-008"
+desc = "IFS returns VALUE for too few arguments"
+setup = {}
+formula = "=IFS(TRUE)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-IFS-EL171-009"
+desc = "IFS returns VALUE for an odd argument count"
+setup = {}
+formula = "=IFS(FALSE,1,TRUE)"
+expect = { error = "#VALUE!" }

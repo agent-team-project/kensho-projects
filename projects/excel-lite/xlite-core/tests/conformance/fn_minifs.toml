@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-MINIFS-001"
+desc = "MINIFS returns the minimum cell matching one criteria range"
+setup = { A1 = 10, A2 = 20, A3 = 5, B1 = "fruit", B2 = "veg", B3 = "fruit" }
+formula = '=MINIFS(A1:A3,B1:B3,"fruit")'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-MINIFS-002"
+desc = "MINIFS requires all criteria ranges to match at the same position"
+setup = { A1 = 10, A2 = 40, A3 = 30, B1 = "fruit", B2 = "fruit", B3 = "veg", C1 = "west", C2 = "east", C3 = "east" }
+formula = '=MINIFS(A1:A3,B1:B3,"fruit",C1:C3,"east")'
+expect = { number = 40 }
+
+[[case]]
+id = "FN-MINIFS-003"
+desc = "MINIFS supports comparison and text wildcard criteria"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = 1, B2 = 2, B3 = 3, C1 = "alpha", C2 = "alpine", C3 = "beta" }
+formula = '=MINIFS(A1:A3,B1:B3,">=2",C1:C3,"al*")'
+expect = { number = 20 }
+
+[[case]]
+id = "FN-MINIFS-004"
+desc = "MINIFS returns zero when no cells match"
+setup = { A1 = 10, A2 = 20, B1 = "fruit", B2 = "veg" }
+formula = '=MINIFS(A1:A2,B1:B2,"meat")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MINIFS-005"
+desc = "MINIFS ignores matching text boolean and blank min cells while numeric cells participate"
+setup = { A1 = 10, A2 = "skip", A4 = true, A5 = 5, B1 = "x", B2 = "x", B3 = "x", B4 = "x", B5 = "x" }
+formula = '=MINIFS(A1:A5,B1:B5,"x")'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-MINIFS-006"
+desc = "MINIFS returns VALUE for criteria range shape mismatch"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", B3 = "x" }
+formula = '=MINIFS(A1:A2,B1:B3,"x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MINIFS-007"
+desc = "MINIFS propagates an error from a criteria argument"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x" }
+formula = "=MINIFS(A1:A2,B1:B2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MINIFS-008"
+desc = "MINIFS returns VALUE for too few arguments"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x" }
+formula = "=MINIFS(A1:A2,B1:B2)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MINIFS-009"
+desc = "MINIFS returns VALUE for an incomplete criteria range and criteria pair"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", C1 = "y", C2 = "y" }
+formula = '=MINIFS(A1:A2,B1:B2,"x",C1:C2)'
+expect = { error = "#VALUE!" }

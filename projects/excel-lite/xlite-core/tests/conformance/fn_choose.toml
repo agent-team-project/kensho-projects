@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-CHOOSE-EL255-001"
+desc = "CHOOSE returns the selected text value"
+setup = {}
+formula = '=CHOOSE(2,"red","blue","green")'
+expect = { text = "blue" }
+
+[[case]]
+id = "FN-CHOOSE-EL255-002"
+desc = "CHOOSE floors a fractional index before selection"
+setup = {}
+formula = '=CHOOSE(1.9,"first","second")'
+expect = { text = "first" }
+
+[[case]]
+id = "FN-CHOOSE-EL255-003"
+desc = "CHOOSE returns the selected numeric value"
+setup = {}
+formula = "=CHOOSE(3,10,20,30)"
+expect = { number = 30 }
+
+[[case]]
+id = "FN-CHOOSE-EL255-004"
+desc = "CHOOSE returns VALUE for a zero index"
+setup = {}
+formula = '=CHOOSE(0,"bad")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CHOOSE-EL255-005"
+desc = "CHOOSE returns VALUE when the index is outside the value list"
+setup = {}
+formula = '=CHOOSE(4,"a","b","c")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CHOOSE-EL255-006"
+desc = "CHOOSE ignores errors in unselected value arguments"
+setup = {}
+formula = '=CHOOSE(2,1/0,"ok")'
+expect = { text = "ok" }
+
+[[case]]
+id = "FN-CHOOSE-EL255-007"
+desc = "CHOOSE propagates errors from the selected value argument"
+setup = {}
+formula = '=CHOOSE(1,1/0,"ok")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-CHOOSE-EL255-008"
+desc = "CHOOSE scalarizes the selected range to its top-left value"
+setup = { A1 = "=1/0", A2 = "ignored", B1 = "selected", B2 = "not selected" }
+formula = "=CHOOSE(2,A1:A2,B1:B2)"
+expect = { text = "selected" }
+
+[[case]]
+id = "FN-CHOOSE-EL255-009"
+desc = "CHOOSE returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=CHOOSE(1)"
+expect = { error = "#VALUE!" }

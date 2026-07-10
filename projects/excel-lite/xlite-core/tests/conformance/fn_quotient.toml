@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-QUOTIENT-001"
+desc = "QUOTIENT returns the integer portion of positive division"
+setup = {}
+formula = "=QUOTIENT(9,2)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-QUOTIENT-002"
+desc = "QUOTIENT truncates negative results toward zero"
+setup = {}
+formula = "=QUOTIENT(-7,2)"
+expect = { number = -3 }
+
+[[case]]
+id = "FN-QUOTIENT-003"
+desc = "QUOTIENT returns DIV/0 for a zero denominator"
+setup = {}
+formula = "=QUOTIENT(5,0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-QUOTIENT-004"
+desc = "QUOTIENT coerces direct scalar numeric text and booleans"
+setup = {}
+formula = '=QUOTIENT("8.9",TRUE)'
+expect = { number = 8 }
+
+[[case]]
+id = "FN-QUOTIENT-005"
+desc = "QUOTIENT coerces a blank numerator reference to zero"
+setup = {}
+formula = "=QUOTIENT(A1,3)"
+expect = { number = 0 }

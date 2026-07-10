@@ -1,0 +1,78 @@
+[[case]]
+id = "FN-HLOOKUP-001"
+desc = "Microsoft-style exact match returns the requested row from the same column"
+setup = { A1 = "Axles", B1 = "Bearings", C1 = "Bolts", A2 = 4, B2 = 9, C2 = 12, A3 = "blue", B3 = "steel", C3 = "brass", A4 = 1, B4 = 2, C4 = 3 }
+formula = '=HLOOKUP("Bearings", A1:C4, 3, FALSE)'
+expect = { text = "steel" }
+
+[[case]]
+id = "FN-HLOOKUP-002"
+desc = "exact no-match returns #N/A"
+setup = { A1 = "SKU-1", B1 = "SKU-2", A2 = 10, B2 = 20 }
+formula = '=HLOOKUP("SKU-9", A1:B2, 2, FALSE)'
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-HLOOKUP-003"
+desc = "approximate sorted text lookup returns largest key less than or equal to the lookup value"
+setup = { A1 = "Alpha", B1 = "Bravo", C1 = "Delta", A2 = "a", B2 = "b", C2 = "d" }
+formula = '=HLOOKUP("Cat", A1:C2, 2, TRUE)'
+expect = { text = "b" }
+
+[[case]]
+id = "FN-HLOOKUP-004"
+desc = "omitted range_lookup defaults to approximate mode"
+setup = { A1 = 10, B1 = 20, C1 = 30, A2 = "a", B2 = "b", C2 = "c" }
+formula = "=HLOOKUP(25, A1:C2, 2)"
+expect = { text = "b" }
+
+[[case]]
+id = "FN-HLOOKUP-005"
+desc = "row_index_num greater than the table height returns #REF!"
+setup = { A1 = 1, A2 = 2 }
+formula = "=HLOOKUP(1, A1:A2, 3, FALSE)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-HLOOKUP-006"
+desc = "row_index_num less than one returns #VALUE!"
+setup = { A1 = 1, A2 = 2 }
+formula = "=HLOOKUP(1, A1:A2, 0, FALSE)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-HLOOKUP-007"
+desc = "exact text matching is case-insensitive"
+setup = { A1 = "Sku-2", A2 = "green" }
+formula = '=HLOOKUP("sku-2", A1:A2, 2, FALSE)'
+expect = { text = "green" }
+
+[[case]]
+id = "FN-HLOOKUP-008"
+desc = "exact text wildcard comparison supports star, question mark, and tilde escapes"
+setup = { A1 = "Alpha", B1 = "Bet", C1 = "file*", D1 = "Q~1", E1 = "what?", A2 = "star", B2 = "question", C2 = "literal star", D2 = "literal tilde", E2 = "literal question" }
+formula = '=CONCAT(HLOOKUP("Al*",A1:E2,2,FALSE),":",HLOOKUP("B?t",A1:E2,2,FALSE),":",HLOOKUP("file~*",A1:E2,2,FALSE),":",HLOOKUP("Q~~1",A1:E2,2,FALSE),":",HLOOKUP("what~?",A1:E2,2,FALSE))'
+expect = { text = "star:question:literal star:literal tilde:literal question" }
+
+[[case]]
+id = "FN-HLOOKUP-009"
+desc = "numeric text skips numeric keys and matches only text keys in exact mode"
+setup = { A1 = 42, B1 = '="42"', A2 = "number key", B2 = "text key" }
+formula = '=HLOOKUP("42", A1:B2, 2, FALSE)'
+expect = { text = "text key" }
+
+[[case]]
+id = "FN-HLOOKUP-010"
+desc = "blank return cell returns numeric zero"
+deviation = "EL-251 follows the existing EXCEL-LITE VLOOKUP blank-result convention"
+setup = { A1 = "k", B1 = "k2", B2 = 7 }
+formula = '=HLOOKUP("k", A1:B2, 2, FALSE)'
+expect = { number = 0 }
+tol = 0
+
+[[case]]
+id = "FN-HLOOKUP-011"
+desc = "wrong arity returns #VALUE!"
+setup = { A1 = 1, B1 = 2 }
+formula = "=HLOOKUP(1, A1:B1)"
+expect = { error = "#VALUE!" }

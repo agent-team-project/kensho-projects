@@ -1,0 +1,50 @@
+# Slice 0 walking skeleton formula cases.
+
+[[case]]
+id = "FN-SUM-001"
+desc = "SUM over a contiguous range returns the total"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = "=SUM(A1:A3)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-SUM-002"
+desc = "SUM ignores blank cells inside a range"
+setup = { A1 = 1, A3 = 4 }
+formula = "=SUM(A1:A3)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-AVERAGE-001"
+desc = "AVERAGE over a contiguous range returns the arithmetic mean"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = "=AVERAGE(A1:A3)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-IF-001"
+desc = "IF chooses the true branch when a referenced comparison is true"
+setup = { A1 = 1 }
+formula = '=IF(A1>0,"pos","neg")'
+expect = { text = "pos" }
+
+[[case]]
+id = "ARITH-001"
+desc = "Scalar arithmetic honors multiplication and division precedence"
+setup = {}
+formula = "=1+2*3-4/2"
+expect = { number = 5 }
+
+[[case]]
+id = "REF-001"
+desc = "A cell reference resolves to the referenced literal value"
+setup = { B2 = 42 }
+formula = "=B2"
+expect = { number = 42 }
+
+[[case]]
+id = "RANGE-001"
+desc = "A rectangular range can be consumed by SUM"
+setup = { A1 = 1, B1 = 2, A2 = 3, B2 = 4 }
+formula = "=SUM(A1:B2)"
+expect = { number = 10 }

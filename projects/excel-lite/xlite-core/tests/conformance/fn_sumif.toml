@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-SUMIF-001"
+desc = "SUMIF sums explicit sum range cells for a nominal numeric criteria"
+setup = { A1 = 1, A2 = 2, A3 = 1, B1 = 10, B2 = 20, B3 = 30 }
+formula = "=SUMIF(A1:A3,1,B1:B3)"
+expect = { number = 40 }
+
+[[case]]
+id = "FN-SUMIF-002"
+desc = "SUMIF with omitted sum range sums matching cells from the criteria range"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 2 }
+formula = "=SUMIF(A1:A4,2)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-SUMIF-003"
+desc = "SUMIF supports comparison criteria"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4 }
+formula = '=SUMIF(A1:A4,">2")'
+expect = { number = 7 }
+
+[[case]]
+id = "FN-SUMIF-004"
+desc = "SUMIF supports text wildcard criteria"
+setup = { A1 = "apple", A2 = "apricot", A3 = "banana", B1 = 10, B2 = 20, B3 = 30 }
+formula = '=SUMIF(A1:A3,"ap*",B1:B3)'
+expect = { number = 30 }
+
+[[case]]
+id = "FN-SUMIF-005"
+desc = "SUMIF returns zero when no cells match"
+setup = { A1 = "apple", A2 = "apricot", A3 = "banana", B1 = 10, B2 = 20, B3 = 30 }
+formula = '=SUMIF(A1:A3,"z*",B1:B3)'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SUMIF-006"
+desc = "SUMIF treats sum range text and blanks as zero and TRUE as one"
+setup = { A1 = "x", A2 = "x", A3 = "x", A4 = "x", B1 = 5, B2 = "skip", B3 = true }
+formula = '=SUMIF(A1:A4,"x",B1:B4)'
+expect = { number = 6 }
+
+[[case]]
+id = "FN-SUMIF-007"
+desc = "SUMIF propagates errors from the criteria argument"
+setup = { A1 = 1, A2 = 2, B1 = 10, B2 = 20 }
+formula = "=SUMIF(A1:A2,1/0,B1:B2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SUMIF-008"
+desc = "SUMIF returns VALUE for wrong arity"
+setup = { A1 = 1, A2 = 2 }
+formula = "=SUMIF(A1:A2)"
+expect = { error = "#VALUE!" }

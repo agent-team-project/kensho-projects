@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-NOW-001"
+desc = "NOW returns the deterministic default serial timestamp"
+setup = {}
+formula = "=NOW()"
+expect = { number = 1.0 }
+
+[[case]]
+id = "FN-NOW-002"
+desc = "NOW can be used in arithmetic"
+setup = {}
+formula = "=NOW()+0.5"
+expect = { number = 1.5 }
+
+[[case]]
+id = "FN-NOW-003"
+desc = "NOW rejects arguments"
+setup = {}
+formula = "=NOW(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NOW-004"
+desc = "NOW is deterministic across repeated calls in a formula"
+setup = {}
+formula = "=NOW()+NOW()"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-NOW-005"
+desc = "NOW can be compared as a serial timestamp"
+setup = {}
+formula = "=NOW()=1"
+expect = { bool = true }

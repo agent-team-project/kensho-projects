@@ -1,0 +1,49 @@
+[[case]]
+id = "FN-ROW-EL258-001"
+desc = "ROW with omitted reference returns the current cell row"
+setup = {}
+formula = "=ROW()"
+target = "C7"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-ROW-EL258-002"
+desc = "ROW returns the row of a cell reference"
+setup = {}
+formula = "=ROW(A5)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-ROW-EL258-003"
+desc = "ROW returns the top row of a normalized range reference"
+setup = {}
+formula = "=ROW(B4:A1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-ROW-EL258-004"
+desc = "ROW does not read an error value from a referenced cell"
+setup = { A1 = "=1/0" }
+formula = "=ROW(A1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-ROW-EL258-005"
+desc = "ROW returns VALUE for scalar non-reference arguments"
+setup = {}
+formula = "=ROW(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ROW-EL258-006"
+desc = "ROW propagates direct scalar expression errors"
+setup = {}
+formula = "=ROW(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-ROW-EL258-007"
+desc = "ROW returns VALUE for too many arguments"
+setup = {}
+formula = "=ROW(A1,B1)"
+expect = { error = "#VALUE!" }

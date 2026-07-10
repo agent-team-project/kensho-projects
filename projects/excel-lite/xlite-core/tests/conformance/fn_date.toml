@@ -1,0 +1,76 @@
+[[case]]
+id = "FN-DATE-001"
+desc = "DATE returns serial one for the first supported Excel1900 date"
+setup = {}
+formula = "=DATE(1900,1,1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-DATE-002"
+desc = "DATE returns the expected serial for 2020-01-01"
+setup = {}
+formula = "=DATE(2020,1,1)"
+expect = { number = 43831 }
+
+[[case]]
+id = "FN-DATE-003"
+desc = "DATE preserves Excel's 1900 phantom leap day"
+setup = {}
+formula = "=DATE(1900,2,29)"
+expect = { number = 60 }
+
+[[case]]
+id = "FN-DATE-004"
+desc = "DATE participates in arithmetic across leap-year February"
+setup = {}
+formula = "=DATE(2024,3,1)-DATE(2024,2,1)"
+expect = { number = 29 }
+
+[[case]]
+id = "FN-DATE-005"
+desc = "DATE carries month overflow into the following year"
+setup = {}
+formula = "=DATE(2020,13,1)"
+expect = { number = 44197 }
+
+[[case]]
+id = "FN-DATE-006"
+desc = "DATE carries day underflow into the previous month"
+setup = {}
+formula = "=DATE(2020,1,0)"
+expect = { number = 43830 }
+
+[[case]]
+id = "FN-DATE-007"
+desc = "DATE adds 1900 to shorthand years"
+setup = {}
+formula = "=DATE(120,1,1)"
+expect = { number = 43831 }
+
+[[case]]
+id = "FN-DATE-008"
+desc = "DATE coerces numeric text arguments"
+setup = {}
+formula = '=DATE("2020","1","1")'
+expect = { number = 43831 }
+
+[[case]]
+id = "FN-DATE-009"
+desc = "DATE returns VALUE for uncoercible scalar text"
+setup = {}
+formula = '=DATE("not numeric",1,1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATE-010"
+desc = "DATE returns VALUE for too few arguments"
+setup = {}
+formula = "=DATE(2020,1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DATE-011"
+desc = "DATE returns NUM for years above the supported range"
+setup = {}
+formula = "=DATE(10000,1,1)"
+expect = { error = "#NUM!" }

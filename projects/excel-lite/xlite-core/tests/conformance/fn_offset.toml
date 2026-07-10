@@ -1,0 +1,207 @@
+[[case]]
+id = "FN-OFFSET-EL256-001"
+desc = "OFFSET from A1 by one row and one column displays B2"
+setup = { B2 = 42 }
+formula = "=OFFSET(A1,1,1)"
+expect = { number = 42 }
+
+[[case]]
+id = "FN-OFFSET-EL256-002"
+desc = "OFFSET defaults height and width to the input reference shape"
+setup = { C3 = "target" }
+formula = "=OFFSET(B2:C3,1,1)"
+expect = { text = "target" }
+
+[[case]]
+id = "FN-OFFSET-EL256-003"
+desc = "SUM consumes an OFFSET-returned range"
+setup = { A1 = 1, B1 = 2, A2 = 3, B2 = 4 }
+formula = "=SUM(OFFSET(A1,0,0,2,2))"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-OFFSET-EL256-004"
+desc = "ROWS consumes an OFFSET-returned range"
+setup = {}
+formula = "=ROWS(OFFSET(A1,0,0,3,2))"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-OFFSET-EL256-005"
+desc = "COLUMNS consumes an OFFSET-returned range"
+setup = {}
+formula = "=COLUMNS(OFFSET(A1,0,0,3,2))"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-OFFSET-EL256-006"
+desc = "INDEX consumes an OFFSET-returned range and returns the requested intersection"
+setup = { B2 = 88 }
+formula = "=INDEX(OFFSET(A1,0,0,3,3),2,2)"
+expect = { number = 88 }
+
+[[case]]
+id = "FN-OFFSET-EL256-007"
+desc = "Negative row and column offsets can point back into the grid"
+setup = { C3 = 9 }
+formula = "=OFFSET(D4,-1,-1)"
+expect = { number = 9 }
+
+[[case]]
+id = "FN-OFFSET-EL256-008"
+desc = "Fractional offsets and dimensions truncate toward zero"
+setup = { B2 = 1, C2 = 2, B3 = 3, C3 = 4 }
+formula = "=SUM(OFFSET(A1,1.9,1.1,2.9,2.1))"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-OFFSET-EL256-009"
+desc = "OFFSET returns REF when a negative row offset leaves the grid"
+setup = {}
+formula = "=OFFSET(A1,-1,0)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-010"
+desc = "OFFSET returns REF when a target edge exceeds the grid"
+setup = {}
+formula = "=OFFSET(XFD1048576,0,0,2,1)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-011"
+desc = "OFFSET returns REF for zero height after truncation"
+setup = {}
+formula = "=OFFSET(A1,0,0,0.9,1)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-012"
+desc = "OFFSET returns REF for negative width"
+setup = {}
+formula = "=OFFSET(A1,0,0,1,-1)"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-013"
+desc = "OFFSET returns VALUE when the row offset cannot be coerced"
+setup = {}
+formula = '=OFFSET(A1,"row",0)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-014"
+desc = "OFFSET returns VALUE when the column offset cannot be coerced"
+setup = {}
+formula = '=OFFSET(A1,0,"col")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-015"
+desc = "OFFSET returns VALUE when the height cannot be coerced"
+setup = {}
+formula = '=OFFSET(A1,0,0,"height",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-016"
+desc = "OFFSET returns VALUE when the width cannot be coerced"
+setup = {}
+formula = '=OFFSET(A1,0,0,1,"width")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-017"
+desc = "OFFSET propagates a direct scalar error in the reference argument"
+setup = {}
+formula = "=OFFSET(1/0,0,0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-018"
+desc = "OFFSET propagates an inspected scalar offset error"
+setup = {}
+formula = "=OFFSET(A1,1/0,0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-019"
+desc = "OFFSET propagates an inspected scalar dimension error"
+setup = {}
+formula = "=OFFSET(A1,0,0,1/0,1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-020"
+desc = "OFFSET returns VALUE for a non-reference first argument"
+setup = {}
+formula = "=OFFSET(42,0,0)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-021"
+desc = "OFFSET returns VALUE for too few arguments"
+setup = {}
+formula = "=OFFSET(A1,0)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-022"
+desc = "OFFSET returns VALUE for too many arguments"
+setup = {}
+formula = "=OFFSET(A1,0,0,1,1,1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OFFSET-EL256-023"
+kind = "recalc"
+desc = "Editing the current OFFSET target updates the consumer"
+setup = { A1 = 0, B1 = 10, C1 = "=OFFSET(A1,0,1)+1" }
+formula = "=C1"
+expect = { number = 11 }
+
+[[case.steps]]
+set = { B1 = 20 }
+formula = "=C1"
+expect = { number = 21 }
+
+[[case]]
+id = "FN-OFFSET-EL256-024"
+kind = "recalc"
+desc = "Editing a formula target and OFFSET consumer in the same recalculation orders the target first"
+setup = { A1 = 1, B1 = "=A1+1", C1 = "=OFFSET(A1,0,1)+1" }
+formula = "=C1"
+expect = { number = 3 }
+
+[[case.steps]]
+set = { A1 = 5 }
+formula = "=C1"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-OFFSET-EL256-025"
+kind = "recalc"
+desc = "Edits inside an OFFSET-returned dynamic range recompute the consumer while outside edits leave the result unchanged"
+setup = { A1 = 1, B1 = 2, A2 = 3, B2 = 4, C1 = 100, D1 = "=SUM(OFFSET(A1,0,0,2,2))" }
+formula = "=D1"
+expect = { number = 10 }
+
+[[case.steps]]
+set = { B2 = 10 }
+formula = "=D1"
+expect = { number = 16 }
+
+[[case.steps]]
+set = { C1 = 200 }
+formula = "=D1"
+expect = { number = 16 }
+
+[[case]]
+id = "FN-OFFSET-EL256-026"
+kind = "cycle"
+desc = "OFFSET self-reference returns CIRC without hanging"
+setup = {}
+formula = "=OFFSET(A1,0,0)"
+target = "A1"
+expect = { error = "#CIRC!" }
+timeout_ms = 1000

@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-OR-001"
+desc = "OR returns TRUE when any direct value coerces to TRUE"
+setup = {}
+formula = '=OR(FALSE,0,"TRUE")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-OR-002"
+desc = "OR returns FALSE when all direct values coerce to FALSE"
+setup = {}
+formula = '=OR(FALSE,0,"FALSE")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-OR-003"
+desc = "OR coerces numeric scalars with zero as FALSE and nonzero as TRUE"
+setup = {}
+formula = "=OR(0,2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-OR-004"
+desc = "OR coerces direct TRUE and FALSE text scalars"
+setup = {}
+formula = '=OR("FALSE","TRUE")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-OR-005"
+desc = "OR returns VALUE for invalid direct text"
+setup = {}
+formula = '=OR("maybe")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OR-006"
+desc = "OR includes range booleans and numbers while ignoring range text and blanks"
+setup = { A1 = false, B1 = "ignored", C1 = 0, C2 = 2 }
+formula = "=OR(A1:C2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-OR-007"
+desc = "OR returns VALUE for a range with only text and blanks"
+setup = { A1 = "ignored", B1 = "also ignored" }
+formula = "=OR(A1:B2)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-OR-008"
+desc = "OR propagates errors from range arguments"
+setup = { A1 = false, A2 = "=1/0" }
+formula = "=OR(A1:A2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-OR-009"
+desc = "OR returns VALUE for wrong arity"
+setup = {}
+formula = "=OR()"
+expect = { error = "#VALUE!" }

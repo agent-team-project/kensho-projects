@@ -1,0 +1,70 @@
+[[case]]
+id = "FN-TYPE-EL299-001"
+desc = "TYPE returns 1 for a number"
+setup = {}
+formula = "=TYPE(7)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-TYPE-EL299-002"
+desc = "TYPE returns 2 for text"
+setup = {}
+formula = '=TYPE("text")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-TYPE-EL299-003"
+desc = "TYPE returns 4 for TRUE"
+setup = {}
+formula = "=TYPE(TRUE)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-TYPE-EL299-004"
+desc = "TYPE returns 16 for a DIV/0 error expression"
+setup = {}
+formula = "=TYPE(1/0)"
+expect = { number = 16 }
+
+[[case]]
+id = "FN-TYPE-EL299-005"
+desc = "TYPE returns 16 for a function-produced NA error"
+setup = {}
+formula = "=TYPE(MODE(1,2))"
+expect = { number = 16 }
+
+[[case]]
+id = "FN-TYPE-EL299-006"
+desc = "TYPE returns 1 for a blank cell reference"
+setup = {}
+formula = "=TYPE(A1)"
+expect = { number = 1 }
+deviation = "EL-299: EXCEL-LITE v1 treats scalar blank values as zero/number-like because Microsoft TYPE has no separate blank code"
+
+[[case]]
+id = "FN-TYPE-EL299-007"
+desc = "TYPE range scalar convention uses the top-left value"
+setup = { A1 = "text", B1 = 7, A2 = "=1/0" }
+formula = "=TYPE(A1:B2)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-TYPE-EL299-008"
+desc = "TYPE returns 1 for a top-left blank range value"
+setup = { B1 = "text" }
+formula = "=TYPE(A1:B1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-TYPE-EL299-009"
+desc = "TYPE returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=TYPE()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TYPE-EL299-010"
+desc = "TYPE returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=TYPE(1,2)"
+expect = { error = "#VALUE!" }

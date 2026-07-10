@@ -1,0 +1,113 @@
+[[case]]
+id = "FN-LOG-001"
+desc = "LOG defaults to base 10"
+setup = {}
+formula = "=LOG(10)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-LOG-002"
+desc = "LOG supports an explicit base"
+setup = {}
+formula = "=LOG(8,2)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-LOG-003"
+desc = "LOG supports a non-integer base"
+setup = {}
+formula = "=LOG(86,2.7182818)"
+expect = { number = 4.454347342888286 }
+tol = 1e-12
+
+[[case]]
+id = "FN-LOG-004"
+desc = "LOG of zero returns NUM error"
+setup = {}
+formula = "=LOG(0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LOG-005"
+desc = "LOG of a negative number returns NUM error"
+setup = {}
+formula = "=LOG(-5)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LOG-006"
+desc = "LOG with a zero base returns NUM error"
+setup = {}
+formula = "=LOG(10,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LOG-007"
+desc = "LOG with a negative base returns NUM error"
+setup = {}
+formula = "=LOG(10,-2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LOG-008"
+desc = "LOG with base one returns NUM error"
+setup = {}
+formula = "=LOG(10,1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LOG-009"
+desc = "LOG coerces scalar numeric text arguments"
+setup = {}
+formula = '=LOG("100","10")'
+expect = { number = 2 }
+tol = 1e-12
+
+[[case]]
+id = "FN-LOG-010"
+desc = "LOG coerces a boolean number argument"
+setup = {}
+formula = "=LOG(TRUE,10)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-LOG-011"
+desc = "LOG treats a blank number reference as zero"
+setup = {}
+formula = "=LOG(A1,10)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LOG-012"
+desc = "LOG treats a blank base reference as zero"
+setup = {}
+formula = "=LOG(10,A1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LOG-013"
+desc = "LOG propagates an error from the number argument"
+setup = {}
+formula = "=LOG(1/0,10)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LOG-014"
+desc = "LOG propagates an error from the base argument"
+setup = {}
+formula = "=LOG(10,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LOG-015"
+desc = "LOG returns VALUE for non-numeric text in the number argument"
+setup = {}
+formula = '=LOG("not numeric",10)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LOG-016"
+desc = "LOG returns VALUE for non-numeric text in the base argument"
+setup = {}
+formula = '=LOG(10,"not numeric")'
+expect = { error = "#VALUE!" }

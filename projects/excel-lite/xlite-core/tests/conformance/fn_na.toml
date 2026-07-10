@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-NA-EL298-001"
+desc = "NA returns the #N/A error"
+setup = {}
+formula = "=NA()"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-NA-EL298-002"
+desc = "IFNA recognizes NA as the canonical #N/A error"
+setup = {}
+formula = "=IFNA(NA(),42)"
+expect = { number = 42 }
+
+[[case]]
+id = "FN-NA-EL298-003"
+desc = "ISNA returns TRUE for NA"
+setup = {}
+formula = "=ISNA(NA())"
+expect = { bool = true }
+
+[[case]]
+id = "FN-NA-EL298-004"
+desc = "NA returns VALUE when arguments are supplied"
+setup = {}
+formula = "=NA(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NA-EL298-005"
+desc = "ISERROR returns TRUE for NA"
+setup = {}
+formula = "=ISERROR(NA())"
+expect = { bool = true }

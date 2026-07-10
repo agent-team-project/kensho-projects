@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-COUNTIFS-001"
+desc = "COUNTIFS counts numeric equality criteria"
+setup = { A1 = 1, A2 = 2, A3 = 1 }
+formula = "=COUNTIFS(A1:A3,1)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTIFS-002"
+desc = "COUNTIFS requires all criteria ranges to match at the same position"
+setup = { A1 = "fruit", A2 = "fruit", A3 = "veg", A4 = "fruit", B1 = "west", B2 = "east", B3 = "east", B4 = "east" }
+formula = '=COUNTIFS(A1:A4,"fruit",B1:B4,"east")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTIFS-003"
+desc = "COUNTIFS supports comparison criteria"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4 }
+formula = '=COUNTIFS(A1:A4,">=2")'
+expect = { number = 3 }
+
+[[case]]
+id = "FN-COUNTIFS-004"
+desc = "COUNTIFS supports text wildcard criteria"
+setup = { A1 = "alpha", A2 = "alpine", A3 = "beta" }
+formula = '=COUNTIFS(A1:A3,"al*")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTIFS-005"
+desc = "COUNTIFS returns zero when no cells match"
+setup = { A1 = "fruit", A2 = "veg" }
+formula = '=COUNTIFS(A1:A2,"meat")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-COUNTIFS-006"
+desc = "COUNTIFS returns VALUE for criteria range shape mismatch"
+setup = { A1 = "x", A2 = "x", B1 = "x", B2 = "x", B3 = "x" }
+formula = '=COUNTIFS(A1:A2,"x",B1:B3,"x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-COUNTIFS-007"
+desc = "COUNTIFS propagates an error from a criteria argument"
+setup = { A1 = 1, A2 = 2 }
+formula = "=COUNTIFS(A1:A2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-COUNTIFS-008"
+desc = "COUNTIFS returns VALUE for an incomplete criteria range and criteria pair"
+setup = { A1 = "x", A2 = "x", B1 = "x", B2 = "x" }
+formula = '=COUNTIFS(A1:A2,"x",B1:B2)'
+expect = { error = "#VALUE!" }

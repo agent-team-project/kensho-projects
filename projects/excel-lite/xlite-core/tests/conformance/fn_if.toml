@@ -1,0 +1,97 @@
+[[case]]
+id = "FN-IF-EL170-001"
+desc = "IF returns the true branch when the condition is TRUE"
+setup = {}
+formula = '=IF(TRUE,"true branch","false branch")'
+expect = { text = "true branch" }
+
+[[case]]
+id = "FN-IF-EL170-002"
+desc = "IF returns the false branch when the condition is FALSE"
+setup = {}
+formula = '=IF(FALSE,"true branch","false branch")'
+expect = { text = "false branch" }
+
+[[case]]
+id = "FN-IF-EL170-003"
+desc = "IF returns blank when the false branch is omitted and the condition is FALSE"
+setup = {}
+formula = "=IF(FALSE,1)"
+expect = { blank = true }
+
+[[case]]
+id = "FN-IF-EL170-004"
+desc = "IF coerces nonzero numeric conditions to TRUE"
+setup = {}
+formula = '=IF(2,"nonzero","zero")'
+expect = { text = "nonzero" }
+
+[[case]]
+id = "FN-IF-EL170-005"
+desc = "IF coerces zero numeric conditions to FALSE"
+setup = {}
+formula = '=IF(0,"nonzero","zero")'
+expect = { text = "zero" }
+
+[[case]]
+id = "FN-IF-EL170-006"
+desc = "IF coerces TRUE text conditions to TRUE"
+setup = {}
+formula = '=IF("TRUE",1,0)'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-IF-EL170-007"
+desc = "IF coerces FALSE text conditions to FALSE"
+setup = {}
+formula = '=IF("FALSE",1,0)'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-IF-EL170-008"
+desc = "IF returns VALUE for invalid logical text"
+setup = {}
+formula = '=IF("maybe",1,0)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-IF-EL170-009"
+desc = "IF propagates a chosen true branch error"
+setup = {}
+formula = "=IF(TRUE,1/0,5)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-IF-EL170-010"
+desc = "IF propagates a chosen false branch error"
+setup = {}
+formula = "=IF(FALSE,5,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-IF-EL170-011"
+desc = "IF ignores an unchosen false branch error"
+setup = {}
+formula = "=IF(TRUE,7,1/0)"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-IF-EL170-012"
+desc = "IF ignores an unchosen true branch error"
+setup = {}
+formula = "=IF(FALSE,1/0,8)"
+expect = { number = 8 }
+
+[[case]]
+id = "FN-IF-EL170-013"
+desc = "IF returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=IF(TRUE)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-IF-EL170-014"
+desc = "IF returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=IF(TRUE,1,2,3)"
+expect = { error = "#VALUE!" }

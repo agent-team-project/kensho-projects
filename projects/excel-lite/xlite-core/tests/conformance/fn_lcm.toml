@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-LCM-001"
+desc = "LCM returns the least common multiple for two scalar numbers"
+setup = {}
+formula = "=LCM(5,2)"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-LCM-002"
+desc = "LCM returns the least common multiple across multiple scalar numbers"
+setup = {}
+formula = "=LCM(24,36,10)"
+expect = { number = 360 }
+
+[[case]]
+id = "FN-LCM-003"
+desc = "LCM returns zero when any argument truncates to zero"
+setup = {}
+formula = "=LCM(5,0.9)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-LCM-004"
+desc = "LCM truncates decimal inputs toward zero"
+setup = {}
+formula = "=LCM(4.9,6.1)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-LCM-005"
+desc = "LCM returns NUM for a negative argument"
+setup = {}
+formula = "=LCM(-1,2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LCM-006"
+desc = "LCM coerces scalar text, booleans, and blanks with arithmetic rules"
+setup = {}
+formula = '=LCM("6",TRUE,A1)'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-LCM-007"
+desc = "LCM aggregates numeric cells in a range and ignores range text, booleans, and blanks"
+setup = { A1 = 6, B1 = "skip", A2 = true, B2 = 4 }
+formula = "=LCM(A1:B3,10)"
+expect = { number = 60 }
+
+[[case]]
+id = "FN-LCM-008"
+desc = "LCM propagates an error from a scalar argument"
+setup = {}
+formula = "=LCM(2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LCM-009"
+desc = "LCM propagates an error from a range argument"
+setup = { A1 = 2, A2 = "=1/0" }
+formula = "=LCM(A1:A2,3)"
+expect = { error = "#DIV/0!" }

@@ -1,0 +1,93 @@
+schema_version: 1
+contract: workplane-permissions
+source_of_truth: true
+generated_views: [docs/SECURITY.md]
+default: deny
+
+principals:
+  kinds: [human, agent]
+  required_fields: [actor_id, actor_kind, organization_id, status]
+  active_status: active
+
+roles:
+  organization: [owner, admin, member, observer]
+  project: [owner, steward, contributor, reviewer, viewer]
+
+actions:
+  session: [session.login, session.logout, session.read, session.revoke]
+  organization: [org.read, org.manage, org.delete, membership.read, membership.manage]
+  identity: [service_identity.read, service_identity.manage, token.read, token.issue, token.revoke]
+  portfolio: [portfolio.read, portfolio.manage, priority.decide]
+  project: [project.read, project.create, project.edit, project.activate, project.hold, project.resume, project.promote, project.complete, project.stop, project.cancel, project.reforecast, project.target.write, project.deadline.write]
+  exploration: [hypothesis.read, hypothesis.write, experiment.read, experiment.write, observation.create]
+  brief: [brief.read, brief.write, brief.comment, brief.restore, brief.export, brief.grant]
+  deliverable: [deliverable.read, deliverable.edit, deliverable.submit, deliverable.waive, deliverable.cancel, deliverable.reforecast]
+  work: [work.read, work.edit, work.transition, work.assign]
+  dependency: [dependency.read, dependency.edit]
+  evidence: [evidence.read, evidence.create, evidence.supersede]
+  review: [review.request, review.verdict, finding.resolve, finding.withdraw, gate.soft_waive]
+  decision: [decision.read, decision.record]
+  comment: [comment.read, comment.create, comment.edit]
+  attention: [inbox.read, inbox.ack, judgment.read, judgment.claim, judgment.resolve]
+  optional_automation: [automation.read, automation.manage, automation.retry]
+  other: [search.read, export.create, export.download, audit.read, research.read, realtime.subscribe, event.subscribe, risk.accept]
+
+human_required:
+  - token.issue
+  - membership.manage
+  - org.delete
+  - risk.accept
+  - deliverable.waive
+  - gate.soft_waive
+
+action_syntax:
+  qualifiers: forbidden
+  rule: every_authorization_target_is_one_enumerated_action_string
+
+operation_map: contracts/operation-permissions.yaml
+
+execution_contexts:
+  eca:
+    principal_kind: agent
+    required_fields: [service_identity_id, human_principal_id, rule_id, rule_version, event_id]
+
+never_allowed:
+  eca_context:
+    - token.issue
+    - token.revoke
+    - membership.manage
+    - review.verdict
+    - risk.accept
+    - deliverable.waive
+    - gate.soft_waive
+    - project.complete
+    - project.cancel
+  self_relation:
+    - {subject: agent, forbidden_relation: self_widen_scope}
+    - {subject: submitter, forbidden_relation: independent_review_approve}
+    - {subject: any_actor, forbidden_relation: hard_gate_waive}
+
+evaluation_order:
+  - authenticated_active_principal
+  - active_organization_membership
+  - organization_boundary
+  - resource_visibility
+  - organization_and_project_roles
+  - agent_token_scope_and_restriction
+  - human_required_policy
+  - separation_of_duty
+  - resource_state
+
+required_test_dimensions:
+  - principal_kind
+  - principal_status
+  - organization_role
+  - project_role
+  - project_visibility
+  - token_scope
+  - action
+  - resource_state
+  - self_relation
+  - transport
+
+transports: [http, websocket, sse, search, brief, export, research]

@@ -1,0 +1,49 @@
+[[case]]
+id = "FN-COLUMN-EL259-001"
+desc = "COLUMN with omitted reference returns the current cell column"
+setup = {}
+formula = "=COLUMN()"
+target = "D6"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-COLUMN-EL259-002"
+desc = "COLUMN returns the column of a cell reference"
+setup = {}
+formula = "=COLUMN(D10)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-COLUMN-EL259-003"
+desc = "COLUMN returns the leftmost column of a normalized range reference"
+setup = {}
+formula = "=COLUMN(D4:B1)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COLUMN-EL259-004"
+desc = "COLUMN does not read an error value from a referenced cell"
+setup = { A1 = "=1/0" }
+formula = "=COLUMN(A1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-COLUMN-EL259-005"
+desc = "COLUMN returns VALUE for scalar non-reference arguments"
+setup = {}
+formula = "=COLUMN(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-COLUMN-EL259-006"
+desc = "COLUMN propagates direct scalar expression errors"
+setup = {}
+formula = "=COLUMN(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-COLUMN-EL259-007"
+desc = "COLUMN returns VALUE for too many arguments"
+setup = {}
+formula = "=COLUMN(A1,B1)"
+expect = { error = "#VALUE!" }

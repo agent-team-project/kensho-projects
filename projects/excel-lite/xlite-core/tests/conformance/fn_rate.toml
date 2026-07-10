@@ -1,0 +1,119 @@
+[[case]]
+id = "FN-RATE-001"
+desc = "RATE returns the Microsoft monthly loan example"
+setup = {}
+formula = "=RATE(4*12, -200, 8000)"
+expect = { number = 0.00770147248820239 }
+tol = 1e-12
+
+[[case]]
+id = "FN-RATE-002"
+desc = "RATE returns the Microsoft annualized loan example"
+setup = {}
+formula = "=RATE(4*12, -200, 8000)*12"
+expect = { number = 0.09241766985842868 }
+tol = 1e-12
+
+[[case]]
+id = "FN-RATE-003"
+desc = "RATE explicit future value, type, and guess match omitted defaults"
+setup = {}
+formula = "=RATE(4*12, -200, 8000, 0, 0, 0.1)"
+expect = { number = 0.00770147248820239 }
+tol = 1e-12
+
+[[case]]
+id = "FN-RATE-004"
+desc = "RATE supports an explicit non-default guess"
+setup = {}
+formula = "=RATE(4*12, -200, 8000, 0, 0, 0.01)"
+expect = { number = 0.00770147248820239 }
+tol = 1e-12
+
+[[case]]
+id = "FN-RATE-005"
+desc = "RATE converges to an approximately zero rate"
+setup = {}
+formula = "=RATE(10, -100, 1000, 0, 0, 0.01)"
+expect = { number = 0 }
+tol = 1e-7
+
+[[case]]
+id = "FN-RATE-006"
+desc = "RATE handles beginning-of-period payment timing"
+setup = {}
+formula = "=RATE(24, -100, 2000, 0, 1)"
+expect = { number = 0.01655011906668426 }
+tol = 1e-12
+
+[[case]]
+id = "FN-RATE-007"
+desc = "RATE truncates fractional payment type toward one"
+setup = {}
+formula = "=RATE(24, -100, 2000, 0, 1.9)"
+expect = { number = 0.01655011906668426 }
+tol = 1e-12
+
+[[case]]
+id = "FN-RATE-008"
+desc = "RATE truncates negative fractional payment type toward zero"
+setup = {}
+formula = "=RATE(24, -100, 2000, 0, -0.9)"
+expect = { number = 0.015130843902310353 }
+tol = 1e-12
+
+[[case]]
+id = "FN-RATE-009"
+desc = "RATE rejects invalid payment type values"
+setup = {}
+formula = "=RATE(24, -100, 2000, 0, 2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-RATE-010"
+desc = "RATE returns NUM when Newton iteration does not converge"
+setup = {}
+formula = "=RATE(12, -100, -1000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-RATE-011"
+desc = "RATE returns NUM when the fractional-power domain is invalid"
+setup = {}
+formula = "=RATE(2.5, -100, 1000, 0, 0, -1.5)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-RATE-012"
+desc = "RATE returns NUM for a non-finite numeric argument"
+setup = {}
+formula = "=RATE(1E309, -100, 1000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-RATE-013"
+desc = "RATE propagates the first numeric coercion error"
+setup = {}
+formula = '=RATE(12, 1/0, "not numeric")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RATE-014"
+desc = "RATE returns VALUE for text that cannot be coerced to a number"
+setup = {}
+formula = '=RATE("not numeric", -100, 1000)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RATE-015"
+desc = "RATE returns VALUE for too few arguments"
+setup = {}
+formula = "=RATE(12, -100)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RATE-016"
+desc = "RATE returns VALUE for too many arguments"
+setup = {}
+formula = "=RATE(12, -100, 1000, 0, 0, 0.1, 0.1)"
+expect = { error = "#VALUE!" }

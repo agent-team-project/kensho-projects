@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-HOUR-001"
+desc = "HOUR returns midnight for zero serial"
+setup = {}
+formula = "=HOUR(0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-HOUR-002"
+desc = "HOUR returns noon for a half-day serial"
+setup = {}
+formula = "=HOUR(0.5)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-HOUR-003"
+desc = "HOUR ignores the integer date portion of the serial"
+setup = {}
+formula = "=HOUR(1.75)"
+expect = { number = 18 }
+
+[[case]]
+id = "FN-HOUR-004"
+desc = "HOUR accepts a value produced by TIME"
+setup = {}
+formula = "=HOUR(TIME(18,45,0))"
+expect = { number = 18 }
+
+[[case]]
+id = "FN-HOUR-005"
+desc = "HOUR coerces numeric text through the serial date helper"
+setup = {}
+formula = '=HOUR("1.75")'
+expect = { number = 18 }
+
+[[case]]
+id = "FN-HOUR-006"
+desc = "HOUR returns NUM for negative serials"
+setup = {}
+formula = "=HOUR(-0.25)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-HOUR-007"
+desc = "HOUR returns VALUE for time text until TIMEVALUE parsing exists"
+setup = {}
+formula = '=HOUR("6:45 PM")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-HOUR-008"
+desc = "HOUR returns VALUE for too few arguments"
+setup = {}
+formula = "=HOUR()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-HOUR-009"
+desc = "HOUR returns VALUE for too many arguments"
+setup = {}
+formula = "=HOUR(0.5,1)"
+expect = { error = "#VALUE!" }

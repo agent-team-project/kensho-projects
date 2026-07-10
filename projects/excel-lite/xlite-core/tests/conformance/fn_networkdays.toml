@@ -1,0 +1,118 @@
+[[case]]
+id = "FN-NETWORKDAYS-001"
+desc = "NETWORKDAYS returns Microsoft's documented weekday count between 2012-10-01 and 2013-03-01"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2012,10,1),DATE(2013,3,1))"
+expect = { number = 110 }
+
+[[case]]
+id = "FN-NETWORKDAYS-002"
+desc = "NETWORKDAYS subtracts Microsoft's documented single holiday"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2012,10,1),DATE(2013,3,1),DATE(2012,11,22))"
+expect = { number = 109 }
+
+[[case]]
+id = "FN-NETWORKDAYS-003"
+desc = "NETWORKDAYS subtracts Microsoft's documented three holiday range"
+setup = { A1 = "=DATE(2012,11,22)", A2 = "=DATE(2012,12,4)", A3 = "=DATE(2013,1,21)" }
+formula = "=NETWORKDAYS(DATE(2012,10,1),DATE(2013,3,1),A1:A3)"
+expect = { number = 107 }
+
+[[case]]
+id = "FN-NETWORKDAYS-004"
+desc = "NETWORKDAYS counts a same weekday start and end date"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,6),DATE(2020,1,6))"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-NETWORKDAYS-005"
+desc = "NETWORKDAYS returns zero for a same weekend start and end date"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,5),DATE(2020,1,5))"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-NETWORKDAYS-006"
+desc = "NETWORKDAYS returns a negative count for a reverse interval"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,10),DATE(2020,1,6))"
+expect = { number = -5 }
+
+[[case]]
+id = "FN-NETWORKDAYS-007"
+desc = "NETWORKDAYS ignores a holiday that falls on a weekend"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,6),DATE(2020,1,10),DATE(2020,1,11))"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-NETWORKDAYS-008"
+desc = "NETWORKDAYS ignores duplicate holiday dates"
+setup = { A1 = "=DATE(2020,1,8)", A2 = "=DATE(2020,1,8)" }
+formula = "=NETWORKDAYS(DATE(2020,1,6),DATE(2020,1,10),A1:A2)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-NETWORKDAYS-009"
+desc = "NETWORKDAYS supports a scalar holiday argument"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,6),DATE(2020,1,10),DATE(2020,1,8))"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-NETWORKDAYS-010"
+desc = "NETWORKDAYS scans a holiday range in row-major order"
+setup = { A1 = "=DATE(2020,1,7)", B1 = "=DATE(2020,1,8)", A2 = "=DATE(2020,1,11)", B2 = "=DATE(2020,2,1)" }
+formula = "=NETWORKDAYS(DATE(2020,1,6),DATE(2020,1,10),A1:B2)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-NETWORKDAYS-011"
+desc = "NETWORKDAYS uses the date portion of positive fractional serials"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,6)+0.75,DATE(2020,1,10)+0.25)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-NETWORKDAYS-012"
+desc = "NETWORKDAYS coerces numeric text through the serial date helper"
+setup = {}
+formula = '=NETWORKDAYS("43836","43840")'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-NETWORKDAYS-013"
+desc = "NETWORKDAYS returns VALUE for date text strings until DATEVALUE parsing exists"
+setup = {}
+formula = '=NETWORKDAYS("2020-01-06",DATE(2020,1,10))'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NETWORKDAYS-014"
+desc = "NETWORKDAYS returns VALUE for zero start serials"
+setup = {}
+formula = "=NETWORKDAYS(0,DATE(2020,1,10))"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NETWORKDAYS-015"
+desc = "NETWORKDAYS returns VALUE for negative end serials"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,6),-1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NETWORKDAYS-016"
+desc = "NETWORKDAYS returns VALUE for too few arguments"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,6))"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NETWORKDAYS-017"
+desc = "NETWORKDAYS returns VALUE for too many arguments"
+setup = {}
+formula = "=NETWORKDAYS(DATE(2020,1,6),DATE(2020,1,10),DATE(2020,1,8),DATE(2020,1,9))"
+expect = { error = "#VALUE!" }

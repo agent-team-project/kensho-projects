@@ -1,0 +1,139 @@
+[[case]]
+id = "FN-WEEKNUM-001"
+desc = "WEEKNUM returns Microsoft's documented default result for 2012-03-09"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9))"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-WEEKNUM-002"
+desc = "WEEKNUM return type 2 starts the week on Monday"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9),2)"
+expect = { number = 11 }
+
+[[case]]
+id = "FN-WEEKNUM-003"
+desc = "WEEKNUM return type 11 matches Monday-based System 1 numbering"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9),11)"
+expect = { number = 11 }
+
+[[case]]
+id = "FN-WEEKNUM-004"
+desc = "WEEKNUM return type 12 starts the week on Tuesday"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9),12)"
+expect = { number = 11 }
+
+[[case]]
+id = "FN-WEEKNUM-005"
+desc = "WEEKNUM return type 16 starts the week on Saturday"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9),16)"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-WEEKNUM-006"
+desc = "WEEKNUM return type 17 matches Sunday-based System 1 numbering"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9),17)"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-WEEKNUM-007"
+desc = "WEEKNUM return type 21 returns ISO week 53 for 2021-01-01"
+setup = {}
+formula = "=WEEKNUM(DATE(2021,1,1),21)"
+expect = { number = 53 }
+
+[[case]]
+id = "FN-WEEKNUM-008"
+desc = "WEEKNUM return type 21 returns ISO week 1 for 2021-01-04"
+setup = {}
+formula = "=WEEKNUM(DATE(2021,1,4),21)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-WEEKNUM-009"
+desc = "WEEKNUM handles a year-end System 1 date"
+setup = {}
+formula = "=WEEKNUM(DATE(2020,12,31),1)"
+expect = { number = 53 }
+
+[[case]]
+id = "FN-WEEKNUM-010"
+desc = "WEEKNUM serial 1 is week 1 in Excel's 1900 serial system"
+setup = {}
+formula = "=WEEKNUM(1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-WEEKNUM-011"
+desc = "WEEKNUM preserves the phantom 1900-02-29 serial"
+setup = {}
+formula = "=WEEKNUM(60)"
+expect = { number = 9 }
+
+[[case]]
+id = "FN-WEEKNUM-012"
+desc = "WEEKNUM serial 61 follows the phantom day"
+setup = {}
+formula = "=WEEKNUM(61)"
+expect = { number = 9 }
+
+[[case]]
+id = "FN-WEEKNUM-013"
+desc = "WEEKNUM uses the date portion of a positive fractional serial"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9)+0.75)"
+expect = { number = 10 }
+
+[[case]]
+id = "FN-WEEKNUM-014"
+desc = "WEEKNUM coerces numeric text through the serial date helper"
+setup = {}
+formula = '=WEEKNUM("40977")'
+expect = { number = 10 }
+
+[[case]]
+id = "FN-WEEKNUM-015"
+desc = "WEEKNUM returns NUM for unsupported return types"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9),10)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-WEEKNUM-016"
+desc = "WEEKNUM returns NUM for zero serials"
+setup = {}
+formula = "=WEEKNUM(0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-WEEKNUM-017"
+desc = "WEEKNUM returns NUM for negative serials"
+setup = {}
+formula = "=WEEKNUM(-1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-WEEKNUM-018"
+desc = "WEEKNUM returns VALUE for date text strings until DATEVALUE parsing exists"
+setup = {}
+formula = '=WEEKNUM("2012-03-09")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WEEKNUM-019"
+desc = "WEEKNUM returns VALUE for too few arguments"
+setup = {}
+formula = "=WEEKNUM()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-WEEKNUM-020"
+desc = "WEEKNUM returns VALUE for too many arguments"
+setup = {}
+formula = "=WEEKNUM(DATE(2012,3,9),1,1)"
+expect = { error = "#VALUE!" }

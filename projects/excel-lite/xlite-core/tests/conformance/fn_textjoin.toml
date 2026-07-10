@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-TEXTJOIN-001"
+desc = "TEXTJOIN joins scalar text with a delimiter"
+setup = {}
+formula = '=TEXTJOIN(", ", TRUE, "Hello", "world", "again")'
+expect = { text = "Hello, world, again" }
+
+[[case]]
+id = "FN-TEXTJOIN-002"
+desc = "TEXTJOIN ignore_empty TRUE skips blank and empty values"
+setup = {}
+formula = '=TEXTJOIN("|", TRUE, "A", A1, "", "B")'
+expect = { text = "A|B" }
+
+[[case]]
+id = "FN-TEXTJOIN-003"
+desc = "TEXTJOIN ignore_empty FALSE includes blank and empty values"
+setup = {}
+formula = '=TEXTJOIN("|", FALSE, "A", A1, "", "B")'
+expect = { text = "A|||B" }
+
+[[case]]
+id = "FN-TEXTJOIN-004"
+desc = "TEXTJOIN scans range arguments in row-major order"
+setup = { A1 = "A", B1 = "B", A2 = "C", B2 = "D" }
+formula = '=TEXTJOIN("-", TRUE, A1:B2)'
+expect = { text = "A-B-C-D" }
+
+[[case]]
+id = "FN-TEXTJOIN-005"
+desc = "TEXTJOIN coerces mixed scalar number, boolean, blank, and text values"
+setup = {}
+formula = '=TEXTJOIN(",", FALSE, 12, FALSE, A1, "tail")'
+expect = { text = "12,FALSE,,tail" }
+
+[[case]]
+id = "FN-TEXTJOIN-006"
+desc = "TEXTJOIN coerces delimiter and ignore_empty from scalar values"
+setup = {}
+formula = '=TEXTJOIN(0, "TRUE", "A", A1, "B")'
+expect = { text = "A0B" }
+
+[[case]]
+id = "FN-TEXTJOIN-007"
+desc = "TEXTJOIN propagates error values in text ranges"
+setup = { A1 = "prefix", B1 = "=1/0", C1 = "ignored" }
+formula = '=TEXTJOIN(",", TRUE, A1:C1)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-TEXTJOIN-008"
+desc = "TEXTJOIN propagates direct text argument errors"
+setup = {}
+formula = '=TEXTJOIN(",", TRUE, "prefix", 1/0, "ignored")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-TEXTJOIN-009"
+desc = "TEXTJOIN returns VALUE for wrong arity"
+setup = {}
+formula = '=TEXTJOIN(",", TRUE)'
+expect = { error = "#VALUE!" }

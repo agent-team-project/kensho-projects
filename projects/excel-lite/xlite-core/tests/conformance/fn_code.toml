@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-CODE-001"
+desc = "CODE returns the ASCII-compatible code for uppercase A"
+setup = {}
+formula = '=CODE("A")'
+expect = { number = 65 }
+
+[[case]]
+id = "FN-CODE-002"
+desc = "CODE returns the ASCII-compatible code for punctuation"
+setup = {}
+formula = '=CODE("!")'
+expect = { number = 33 }
+
+[[case]]
+id = "FN-CODE-003"
+desc = "CODE uses only the first character"
+setup = {}
+formula = '=CODE("ABC")'
+expect = { number = 65 }
+
+[[case]]
+id = "FN-CODE-004"
+desc = "CODE coerces scalar numbers and booleans to text"
+setup = {}
+formula = "=CODE(123)+CODE(FALSE)"
+expect = { number = 119 }
+
+[[case]]
+id = "FN-CODE-005"
+desc = "CODE returns VALUE for blank text coercion"
+setup = {}
+formula = "=CODE(A1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CODE-006"
+desc = "CODE returns VALUE for empty text"
+setup = {}
+formula = '=CODE("")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CODE-007"
+desc = "CODE propagates error values"
+setup = {}
+formula = "=CODE(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-CODE-008"
+desc = "CODE returns VALUE for too few arguments"
+setup = {}
+formula = "=CODE()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CODE-009"
+desc = "CODE returns VALUE for too many arguments"
+setup = {}
+formula = '=CODE("A", "extra")'
+expect = { error = "#VALUE!" }

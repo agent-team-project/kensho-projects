@@ -1,0 +1,14 @@
+/target/
+/.agent_team/daemon/
+/.agent_team/daemon.pid
+/.agent_team/outbox/
+/.agent_team/state/
+/.agent_team/worktrees/
+/.agent_team/budget/
+/.agent_team/feedback/
+/.agent_team/jobs/
+/.agent_team/outcomes/
+/.claude/
+*.tmp
+*.log
+.DS_Store

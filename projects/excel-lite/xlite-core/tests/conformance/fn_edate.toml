@@ -1,0 +1,76 @@
+[[case]]
+id = "FN-EDATE-001"
+desc = "EDATE returns the serial date one month after a mid-month start date"
+setup = {}
+formula = "=EDATE(DATE(2020,1,15),1)"
+expect = { number = 43876 }
+
+[[case]]
+id = "FN-EDATE-002"
+desc = "EDATE clamps to the last day when the target month is shorter"
+setup = {}
+formula = "=EDATE(DATE(2020,1,31),1)"
+expect = { number = 43890 }
+
+[[case]]
+id = "FN-EDATE-003"
+desc = "EDATE supports negative month offsets"
+setup = {}
+formula = "=EDATE(DATE(2020,1,31),-1)"
+expect = { number = 43830 }
+
+[[case]]
+id = "FN-EDATE-004"
+desc = "EDATE truncates fractional months toward zero"
+setup = {}
+formula = "=EDATE(DATE(2020,1,31),1.9)"
+expect = { number = 43890 }
+
+[[case]]
+id = "FN-EDATE-005"
+desc = "EDATE coerces numeric text arguments"
+setup = {}
+formula = '=EDATE("43831","1")'
+expect = { number = 43862 }
+
+[[case]]
+id = "FN-EDATE-006"
+desc = "EDATE returns VALUE for date text strings until DATEVALUE parsing exists"
+setup = {}
+formula = '=EDATE("2020-01-15",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-EDATE-007"
+desc = "EDATE returns NUM for zero start serials"
+setup = {}
+formula = "=EDATE(0,1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-EDATE-008"
+desc = "EDATE returns NUM for nonfinite months"
+setup = {}
+formula = "=EDATE(DATE(2020,1,1),1E309)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-EDATE-009"
+desc = "EDATE returns NUM for results outside the supported date range"
+setup = {}
+formula = "=EDATE(DATE(9999,12,31),1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-EDATE-010"
+desc = "EDATE returns VALUE for too few arguments"
+setup = {}
+formula = "=EDATE(DATE(2020,1,1))"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-EDATE-011"
+desc = "EDATE returns VALUE for too many arguments"
+setup = {}
+formula = "=EDATE(DATE(2020,1,1),1,1)"
+expect = { error = "#VALUE!" }

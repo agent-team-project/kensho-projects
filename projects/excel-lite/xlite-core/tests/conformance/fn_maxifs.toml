@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-MAXIFS-001"
+desc = "MAXIFS returns the maximum cell matching one criteria range"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "fruit", B2 = "veg", B3 = "fruit" }
+formula = '=MAXIFS(A1:A3,B1:B3,"fruit")'
+expect = { number = 30 }
+
+[[case]]
+id = "FN-MAXIFS-002"
+desc = "MAXIFS requires all criteria ranges to match at the same position"
+setup = { A1 = 10, A2 = 40, A3 = 30, B1 = "fruit", B2 = "fruit", B3 = "veg", C1 = "west", C2 = "east", C3 = "east" }
+formula = '=MAXIFS(A1:A3,B1:B3,"fruit",C1:C3,"east")'
+expect = { number = 40 }
+
+[[case]]
+id = "FN-MAXIFS-003"
+desc = "MAXIFS supports comparison and text wildcard criteria"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = 1, B2 = 2, B3 = 3, C1 = "alpha", C2 = "alpine", C3 = "beta" }
+formula = '=MAXIFS(A1:A3,B1:B3,">=2",C1:C3,"al*")'
+expect = { number = 20 }
+
+[[case]]
+id = "FN-MAXIFS-004"
+desc = "MAXIFS returns zero when no cells match"
+setup = { A1 = 10, A2 = 20, B1 = "fruit", B2 = "veg" }
+formula = '=MAXIFS(A1:A2,B1:B2,"meat")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MAXIFS-005"
+desc = "MAXIFS ignores matching text boolean and blank max cells while numeric cells participate"
+setup = { A1 = 10, A2 = "skip", A4 = true, A5 = 25, B1 = "x", B2 = "x", B3 = "x", B4 = "x", B5 = "x" }
+formula = '=MAXIFS(A1:A5,B1:B5,"x")'
+expect = { number = 25 }
+
+[[case]]
+id = "FN-MAXIFS-006"
+desc = "MAXIFS returns VALUE for criteria range shape mismatch"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", B3 = "x" }
+formula = '=MAXIFS(A1:A2,B1:B3,"x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MAXIFS-007"
+desc = "MAXIFS propagates an error from a criteria argument"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x" }
+formula = "=MAXIFS(A1:A2,B1:B2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MAXIFS-008"
+desc = "MAXIFS returns VALUE for too few arguments"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x" }
+formula = "=MAXIFS(A1:A2,B1:B2)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MAXIFS-009"
+desc = "MAXIFS returns VALUE for an incomplete criteria range and criteria pair"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", C1 = "y", C2 = "y" }
+formula = '=MAXIFS(A1:A2,B1:B2,"x",C1:C2)'
+expect = { error = "#VALUE!" }

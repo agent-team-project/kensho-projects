@@ -1,0 +1,16 @@
+# Project-scoped Codex guardrails for Kensho agents.
+# The local codex CLI must use ChatGPT subscription/workspace auth, not API-key auth.
+forced_login_method = "chatgpt"
+
+# Keep agent shell commands from seeing Platform/API-key credentials.
+[shell_environment_policy]
+inherit = "core"
+ignore_default_excludes = false
+exclude = [
+  "OPENAI_*",
+  "CODEX_API_KEY",
+  "CODEX_ACCESS_TOKEN",
+  "*_API_KEY",
+  "*_TOKEN",
+  "*_SECRET",
+]

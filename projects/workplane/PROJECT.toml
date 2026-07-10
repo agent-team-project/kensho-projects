@@ -1,0 +1,79 @@
+schema_version = 1
+name = "Workplane"
+slug = "workplane"
+kind = "product-study"
+status = "specified-pre-slice"
+mode = "exploration"
+owner = "Kensho research track"
+dogfood_strategy = "conditional preferred treatment with post-v0.5 fallback; never hold v0.5 for Workplane"
+
+[thesis]
+statement = "For a few humans directing many agents, one actor-neutral evidence-gated project layer reduces human absorption cost and improves evidence quality at equal or better gate integrity."
+falsifiable = true
+
+[challenge]
+baseline = "Excel-lite"
+dimension = "integration, concurrency, governance, and empirical evaluation"
+must_be_harder = true
+
+[forecast]
+basis = "created at exploitation kickoff from current fleet throughput, integration capacity, and observed uncertainty"
+calendar_values_precommitted = false
+set_at_kickoff = true
+reforecast_after_each_gate = true
+best_effort = true
+quality_override = false
+
+[delivery]
+max_parallel_tracks_initial = 2
+max_parallel_tracks_after_slice = 3
+max_release_bearing_units_initial = 4
+max_release_bearing_units_after_health_gate = 6
+max_recursive_depth = 1
+merge_only_on_green = true
+backwards_compatibility = false
+shims = false
+
+[research]
+context_case = "Kensho GPT-5.6 model-policy rollout"
+preferred_first_dogfood = "Kensho v0.5 naming and ontology wave"
+preferred_first_dogfood_condition = "Workplane dogfood-ready before naming-wave implementation dispatch"
+fallback_first_dogfood = "first consequential post-v0.5 Kensho epic, registered before implementation dispatch"
+hold_v0_5_for_workplane = false
+second_dogfood_project = "Workplane implementation project with M0-M6 milestone deliverables"
+publish_evaluation_report = true
+
+[scope]
+dogfood_gate = "v1-core"
+full_target = "v1-full"
+stage_bar_without_lowering = true
+
+[portfolio]
+declared_exploration_share = 0.25
+mix_is_attention_not_enforcement = true
+
+[exploration.collaboration]
+hypothesis = "CRDT co-editing can meet convergence, permission, and operational gates without delaying thesis-bearing dogfood."
+decision_checkpoint = "dogfood-ready"
+promote_if = "convergence matrix, authorization matrix, restart recovery, and two-browser acceptance are green within the track forecast"
+stop_if = "the track delays v1-core, cannot make convergence deterministic, or creates unresolved cross-plane authority"
+fallback = "versioned rich briefs with section-level optimistic locking"
+
+[exploration.automation]
+hypothesis = "A bounded ECA engine adds repeatable value beyond agents subscribed to public events."
+start_after = "first dogfood checkpoint"
+promote_if = "dogfood records repeated deterministic actions whose agent implementation has material absorption cost"
+stop_if = "use cases remain better served by an agent using ordinary commands"
+
+[exploration.study]
+kill_criteria = [
+  "walking slice shows contract/event review load cannot be absorbed even with two tracks",
+  "dogfood adoption repeatedly returns to mailboxes/files for thesis-level rather than implementation-level reasons",
+  "manual project maintenance exceeds measured absorption benefit after the shadow checkpoint",
+  "gate integrity worsens or date pressure produces unrecorded bypasses"
+]
+
+[runtime]
+self_hosted = true
+paid_services_required = false
+external_network_required_at_runtime = false

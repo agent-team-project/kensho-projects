@@ -1,0 +1,41 @@
+[[case]]
+id = "FN-COUNT-001"
+desc = "COUNT counts only numbers in a range and ignores text, booleans, and blanks"
+setup = { A1 = 1, B1 = "skip", A2 = true, B2 = 3 }
+formula = "=COUNT(A1:B3)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNT-002"
+desc = "COUNT combines a range and a direct numeric scalar"
+setup = { A1 = 1, B1 = "skip", A2 = true, B2 = 2 }
+formula = "=COUNT(A1:B2,3)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-COUNT-003"
+desc = "COUNT includes direct numeric text"
+setup = {}
+formula = '=COUNT("42")'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-COUNT-004"
+desc = "COUNT ignores direct non-numeric text"
+setup = {}
+formula = '=COUNT("forty-two")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-COUNT-005"
+desc = "COUNT returns zero for a blank-only range"
+setup = {}
+formula = "=COUNT(A1:A3)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-COUNT-006"
+desc = "COUNT returns VALUE for wrong arity"
+setup = {}
+formula = "=COUNT()"
+expect = { error = "#VALUE!" }

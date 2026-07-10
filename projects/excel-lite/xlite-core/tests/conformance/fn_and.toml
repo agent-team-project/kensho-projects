@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-AND-001"
+desc = "AND returns TRUE when all direct values coerce to TRUE"
+setup = {}
+formula = '=AND(TRUE,1,"TRUE")'
+expect = { bool = true }
+
+[[case]]
+id = "FN-AND-002"
+desc = "AND returns FALSE when any direct boolean value is FALSE"
+setup = {}
+formula = "=AND(TRUE,FALSE,TRUE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-AND-003"
+desc = "AND coerces numeric scalars with zero as FALSE and nonzero as TRUE"
+setup = {}
+formula = "=AND(1,2,0)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-AND-004"
+desc = "AND coerces direct TRUE and FALSE text scalars"
+setup = {}
+formula = '=AND("TRUE","FALSE")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-AND-005"
+desc = "AND returns VALUE for invalid direct text"
+setup = {}
+formula = '=AND("maybe")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-AND-006"
+desc = "AND includes range booleans and numbers while ignoring range text and blanks"
+setup = { A1 = true, B1 = "ignored", C1 = 1, C2 = 2 }
+formula = "=AND(A1:C2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-AND-007"
+desc = "AND returns VALUE for a range with only text and blanks"
+setup = { A1 = "ignored", B1 = "also ignored" }
+formula = "=AND(A1:B2)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-AND-008"
+desc = "AND propagates errors from range arguments"
+setup = { A1 = true, A2 = "=1/0" }
+formula = "=AND(A1:A2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-AND-009"
+desc = "AND returns VALUE for wrong arity"
+setup = {}
+formula = "=AND()"
+expect = { error = "#VALUE!" }

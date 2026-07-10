@@ -1,0 +1,18 @@
+[package]
+name = "chess-search"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+chess-core.workspace = true
+chess-eval.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true

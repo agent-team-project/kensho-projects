@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-INT-001"
+desc = "INT floors a positive decimal down"
+setup = {}
+formula = "=INT(12.9)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-INT-002"
+desc = "INT floors negative decimals toward negative infinity"
+setup = {}
+formula = "=INT(-2.5)"
+expect = { number = -3 }
+
+[[case]]
+id = "FN-INT-003"
+desc = "INT propagates an error from its argument"
+setup = {}
+formula = "=INT(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-INT-004"
+desc = "INT coerces scalar numeric text"
+setup = {}
+formula = '=INT("8.75")'
+expect = { number = 8 }
+
+[[case]]
+id = "FN-INT-005"
+desc = "INT coerces a blank reference to zero"
+setup = {}
+formula = "=INT(A1)"
+expect = { number = 0 }

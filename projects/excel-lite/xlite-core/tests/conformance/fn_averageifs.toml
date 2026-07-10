@@ -1,0 +1,63 @@
+[[case]]
+id = "FN-AVERAGEIFS-001"
+desc = "AVERAGEIFS averages cells matching one criteria range"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "fruit", B2 = "veg", B3 = "fruit" }
+formula = '=AVERAGEIFS(A1:A3,B1:B3,"fruit")'
+expect = { number = 20 }
+
+[[case]]
+id = "FN-AVERAGEIFS-002"
+desc = "AVERAGEIFS requires all criteria ranges to match at the same position"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "fruit", B2 = "fruit", B3 = "veg", C1 = "west", C2 = "east", C3 = "east" }
+formula = '=AVERAGEIFS(A1:A3,B1:B3,"fruit",C1:C3,"east")'
+expect = { number = 20 }
+
+[[case]]
+id = "FN-AVERAGEIFS-003"
+desc = "AVERAGEIFS supports comparison criteria"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = 1, B2 = 2, B3 = 3 }
+formula = '=AVERAGEIFS(A1:A3,B1:B3,">=2")'
+expect = { number = 25 }
+
+[[case]]
+id = "FN-AVERAGEIFS-004"
+desc = "AVERAGEIFS supports text wildcard criteria"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "alpha", B2 = "alpine", B3 = "beta" }
+formula = '=AVERAGEIFS(A1:A3,B1:B3,"al*")'
+expect = { number = 15 }
+
+[[case]]
+id = "FN-AVERAGEIFS-005"
+desc = "AVERAGEIFS returns DIV/0 when no cells match"
+setup = { A1 = 10, A2 = 20, B1 = "fruit", B2 = "veg" }
+formula = '=AVERAGEIFS(A1:A2,B1:B2,"meat")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-AVERAGEIFS-006"
+desc = "AVERAGEIFS ignores matching text and blank average cells and counts booleans"
+setup = { A1 = 10, A2 = "skip", A4 = true, A5 = false, B1 = "x", B2 = "x", B3 = "x", B4 = "x", B5 = "x" }
+formula = '=AVERAGEIFS(A1:A5,B1:B5,"x")'
+expect = { number = 3.6666666667 }
+tol = 1e-9
+
+[[case]]
+id = "FN-AVERAGEIFS-007"
+desc = "AVERAGEIFS returns VALUE for criteria range shape mismatch"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", B3 = "x" }
+formula = '=AVERAGEIFS(A1:A2,B1:B3,"x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-AVERAGEIFS-008"
+desc = "AVERAGEIFS propagates an error from a criteria argument"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x" }
+formula = "=AVERAGEIFS(A1:A2,B1:B2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-AVERAGEIFS-009"
+desc = "AVERAGEIFS returns VALUE for an incomplete criteria range and criteria pair"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", C1 = "y", C2 = "y" }
+formula = '=AVERAGEIFS(A1:A2,B1:B2,"x",C1:C2)'
+expect = { error = "#VALUE!" }

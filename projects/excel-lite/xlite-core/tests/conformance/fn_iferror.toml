@@ -1,0 +1,48 @@
+[[case]]
+id = "FN-IFERROR-EL176-001"
+desc = "IFERROR returns a non-error first value unchanged"
+setup = {}
+formula = "=IFERROR(42,99)"
+expect = { number = 42 }
+
+[[case]]
+id = "FN-IFERROR-EL176-002"
+desc = "IFERROR returns fallback for DIV/0 errors"
+setup = {}
+formula = '=IFERROR(1/0,"fallback")'
+expect = { text = "fallback" }
+
+[[case]]
+id = "FN-IFERROR-EL176-003"
+desc = "IFERROR returns fallback for produced NA errors"
+setup = {}
+formula = '=IFERROR(MODE(1,2),"fallback")'
+expect = { text = "fallback" }
+
+[[case]]
+id = "FN-IFERROR-EL176-004"
+desc = "IFERROR propagates fallback errors when the first value is an error"
+setup = {}
+formula = "=IFERROR(1/0,MODE(1,2))"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-IFERROR-EL176-005"
+desc = "IFERROR does not return fallback result for a non-error first value"
+setup = {}
+formula = "=IFERROR(7,1/0)"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-IFERROR-EL176-006"
+desc = "IFERROR returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=IFERROR(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-IFERROR-EL176-007"
+desc = "IFERROR returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=IFERROR(1,2,3)"
+expect = { error = "#VALUE!" }

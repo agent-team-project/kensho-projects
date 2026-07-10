@@ -1,0 +1,97 @@
+[[case]]
+id = "FN-REPLACE-001"
+desc = "REPLACE substitutes a middle span by one-based character position"
+setup = {}
+formula = '=REPLACE("abcdefgh", 3, 4, "X")'
+expect = { text = "abXgh" }
+
+[[case]]
+id = "FN-REPLACE-002"
+desc = "REPLACE substitutes a leading span"
+setup = {}
+formula = '=REPLACE("abcdefgh", 1, 3, "X")'
+expect = { text = "Xdefgh" }
+
+[[case]]
+id = "FN-REPLACE-003"
+desc = "REPLACE substitutes through the end when num_chars is overlong"
+setup = {}
+formula = '=REPLACE("abcdef", 4, 99, "X")'
+expect = { text = "abcX" }
+
+[[case]]
+id = "FN-REPLACE-004"
+desc = "REPLACE inserts text when num_chars is zero"
+setup = {}
+formula = '=REPLACE("abcdef", 3, 0, "X")'
+expect = { text = "abXcdef" }
+
+[[case]]
+id = "FN-REPLACE-005"
+desc = "REPLACE truncates fractional start_num and num_chars toward zero"
+setup = {}
+formula = '=REPLACE("abcdef", 2.9, 3.9, "X")'
+expect = { text = "aXef" }
+
+[[case]]
+id = "FN-REPLACE-006"
+desc = "REPLACE counts Unicode text by Rust char values"
+setup = {}
+formula = "=REPLACE(\"a\u00e9\u65e5\U0001F600z\", 2, 3, \"X\")"
+expect = { text = "aXz" }
+
+[[case]]
+id = "FN-REPLACE-007"
+desc = "REPLACE coerces scalar text and numeric arguments"
+setup = {}
+formula = '=REPLACE(12345, "2.9", "2.9", TRUE)'
+expect = { text = "1TRUE45" }
+
+[[case]]
+id = "FN-REPLACE-008"
+desc = "REPLACE returns VALUE for start_num less than one before truncation"
+setup = {}
+formula = '=REPLACE("abc", 0.9, 1, "X")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-REPLACE-009"
+desc = "REPLACE returns VALUE for negative num_chars"
+setup = {}
+formula = '=REPLACE("abc", 1, -0.1, "X")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-REPLACE-010"
+desc = "REPLACE propagates errors from old_text"
+setup = {}
+formula = '=REPLACE(1/0, 1, 1, "X")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-REPLACE-011"
+desc = "REPLACE propagates errors from start_num"
+setup = {}
+formula = '=REPLACE("abc", 1/0, 1, "X")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-REPLACE-012"
+desc = "REPLACE propagates errors from new_text"
+setup = {}
+formula = '=REPLACE("abc", 1, 1, 1/0)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-REPLACE-013"
+desc = "REPLACE returns VALUE for too few arguments"
+setup = {}
+formula = '=REPLACE("abc", 1, 1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-REPLACE-014"
+desc = "REPLACE returns VALUE for too many arguments"
+setup = {}
+formula = '=REPLACE("abc", 1, 1, "X", "Y")'
+expect = { error = "#VALUE!" }

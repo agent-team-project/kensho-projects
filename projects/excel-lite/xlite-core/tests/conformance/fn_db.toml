@@ -1,0 +1,148 @@
+[[case]]
+id = "FN-DB-001"
+desc = "DB returns the Microsoft depreciation example period 1"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 1, 7)"
+expect = { number = 186083.33333333334 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-002"
+desc = "DB returns the Microsoft depreciation example period 2"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 2, 7)"
+expect = { number = 259639.41666666666 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-003"
+desc = "DB returns the Microsoft depreciation example period 3"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 3, 7)"
+expect = { number = 176814.44275 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-004"
+desc = "DB returns the Microsoft depreciation example period 4"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 4, 7)"
+expect = { number = 120410.63551274998 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-005"
+desc = "DB returns the Microsoft depreciation example period 5"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 5, 7)"
+expect = { number = 81999.64278418274 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-006"
+desc = "DB returns the Microsoft depreciation example period 6"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 6, 7)"
+expect = { number = 55841.75673602846 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-007"
+desc = "DB returns the Microsoft depreciation example final partial period"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 7, 7)"
+expect = { number = 15845.098473848071 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-008"
+desc = "DB defaults omitted month to twelve"
+setup = {}
+formula = "=DB(1000, 100, 5, 1)"
+expect = { number = 369 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-009"
+desc = "DB truncates period and month toward zero"
+setup = {}
+formula = "=DB(1000000, 100000, 6, 2.9, 7.9)"
+expect = { number = 259639.41666666666 }
+tol = 1e-12
+
+[[case]]
+id = "FN-DB-010"
+desc = "DB handles a large period and life without iterating over periods"
+setup = {}
+formula = "=DB(1000, 0, 1000000000000, 1000000000000)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-DB-011"
+desc = "DB returns NUM for negative salvage"
+setup = {}
+formula = "=DB(1000, -1, 5, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DB-012"
+desc = "DB returns NUM when salvage is greater than cost"
+setup = {}
+formula = "=DB(1000, 1001, 5, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DB-013"
+desc = "DB returns NUM when life is not positive"
+setup = {}
+formula = "=DB(1000, 100, 0, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DB-014"
+desc = "DB returns NUM for an invalid month"
+setup = {}
+formula = "=DB(1000, 100, 5, 1, 13)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DB-015"
+desc = "DB returns NUM when period exceeds the allowed final period"
+setup = {}
+formula = "=DB(1000, 100, 5, 6)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DB-016"
+desc = "DB returns NUM for a non-finite numeric argument"
+setup = {}
+formula = "=DB(1E309, 0, 1, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-DB-017"
+desc = "DB returns VALUE for invalid numeric text"
+setup = {}
+formula = '=DB("not numeric", 0, 1, 1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DB-018"
+desc = "DB propagates the first numeric coercion error"
+setup = {}
+formula = '=DB(1000, 1/0, "not numeric", 1)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-DB-019"
+desc = "DB returns VALUE for too few arguments"
+setup = {}
+formula = "=DB(1000, 100, 5)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DB-020"
+desc = "DB returns VALUE for too many arguments"
+setup = {}
+formula = "=DB(1000, 100, 5, 1, 12, 0)"
+expect = { error = "#VALUE!" }

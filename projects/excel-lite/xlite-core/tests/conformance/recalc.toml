@@ -1,0 +1,71 @@
+# Slice 0 recalc propagation cases.
+
+[[case]]
+id = "RECALC-001"
+kind = "recalc"
+desc = "Editing a precedent recomputes a direct dependent"
+setup = { A1 = 1, B1 = "=A1+1" }
+formula = "=B1"
+expect = { number = 2 }
+
+[[case.steps]]
+set = { A1 = 5 }
+formula = "=B1"
+expect = { number = 6 }
+
+[[case]]
+id = "RECALC-SLICE0-001"
+kind = "recalc"
+desc = "Editing A1 updates the Slice 0 SUM exit-test formula"
+setup = { A1 = 1, A2 = 2, A3 = 3, D1 = "=SUM(A1:A3)" }
+formula = "=D1"
+expect = { number = 6 }
+
+[[case.steps]]
+set = { A1 = 5 }
+formula = "=D1"
+expect = { number = 10 }
+
+[[case]]
+id = "RECALC-002"
+kind = "recalc"
+desc = "Editing the root of a cascade updates all downstream formulas"
+setup = { A1 = 1, B1 = "=A1+1", C1 = "=B1+1", D1 = "=C1+1" }
+formula = "=D1"
+expect = { number = 4 }
+
+[[case.steps]]
+set = { A1 = 5 }
+formula = "=D1"
+expect = { number = 8 }
+
+[[case]]
+id = "RECALC-003"
+kind = "recalc"
+desc = "Editing the root of a diamond updates the join formula"
+setup = { A1 = 1, B1 = "=A1+1", C1 = "=A1+2", D1 = "=B1+C1" }
+formula = "=D1"
+expect = { number = 5 }
+
+[[case.steps]]
+set = { A1 = 5 }
+formula = "=D1"
+expect = { number = 13 }
+
+[[case]]
+id = "RECALC-006"
+kind = "recalc"
+desc = "A SUM range is dirtied by edits inside the range but not outside it"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4, A5 = 5, S1 = "=SUM(A1:A5)" }
+formula = "=S1"
+expect = { number = 15 }
+
+[[case.steps]]
+set = { A3 = 30 }
+formula = "=S1"
+expect = { number = 42 }
+
+[[case.steps]]
+set = { A6 = 100 }
+formula = "=S1"
+expect = { number = 42 }

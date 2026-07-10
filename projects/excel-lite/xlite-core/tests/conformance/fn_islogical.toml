@@ -1,0 +1,76 @@
+[[case]]
+id = "FN-ISLOGICAL-EL297-001"
+desc = "ISLOGICAL returns TRUE for TRUE"
+setup = {}
+formula = "=ISLOGICAL(TRUE)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-002"
+desc = "ISLOGICAL returns TRUE for FALSE"
+setup = {}
+formula = "=ISLOGICAL(FALSE)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-003"
+desc = "ISLOGICAL returns FALSE for numbers"
+setup = {}
+formula = "=ISLOGICAL(1)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-004"
+desc = "ISLOGICAL returns FALSE for logical text without coercion"
+setup = {}
+formula = '=ISLOGICAL("TRUE")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-005"
+desc = "ISLOGICAL returns FALSE for empty text"
+setup = {}
+formula = '=ISLOGICAL("")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-006"
+desc = "ISLOGICAL returns FALSE for a blank cell reference"
+setup = {}
+formula = "=ISLOGICAL(A1)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-007"
+desc = "ISLOGICAL receives error values and returns FALSE"
+setup = {}
+formula = "=ISLOGICAL(1/0)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-008"
+desc = "ISLOGICAL range scalar convention returns TRUE when top-left is logical"
+setup = { A1 = true, A2 = 1 }
+formula = "=ISLOGICAL(A1:A2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-009"
+desc = "ISLOGICAL range scalar convention ignores later logical values when top-left is nonlogical"
+setup = { A1 = 1, A2 = true }
+formula = "=ISLOGICAL(A1:A2)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-010"
+desc = "ISLOGICAL returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ISLOGICAL()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ISLOGICAL-EL297-011"
+desc = "ISLOGICAL returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ISLOGICAL(TRUE,FALSE)"
+expect = { error = "#VALUE!" }

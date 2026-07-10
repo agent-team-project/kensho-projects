@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-REPT-001"
+desc = "REPT repeats text multiple times"
+setup = {}
+formula = '=REPT("ha", 3)'
+expect = { text = "hahaha" }
+
+[[case]]
+id = "FN-REPT-002"
+desc = "REPT returns empty text when number_times is zero"
+setup = {}
+formula = '=REPT("x", 0)'
+expect = { text = "" }
+
+[[case]]
+id = "FN-REPT-003"
+desc = "REPT truncates fractional number_times toward zero"
+setup = {}
+formula = '=REPT("ab", 2.9)'
+expect = { text = "abab" }
+
+[[case]]
+id = "FN-REPT-004"
+desc = "REPT keeps empty text empty when repeated"
+setup = {}
+formula = '=REPT("", 5)'
+expect = { text = "" }
+
+[[case]]
+id = "FN-REPT-005"
+desc = "REPT coerces scalar text and numeric count arguments"
+setup = {}
+formula = '=REPT(12, "3.9")'
+expect = { text = "121212" }
+
+[[case]]
+id = "FN-REPT-006"
+desc = "REPT propagates text coercion errors"
+setup = {}
+formula = "=REPT(1/0, 2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-REPT-007"
+desc = "REPT propagates count coercion errors"
+setup = {}
+formula = '=REPT("x", 1/0)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-REPT-008"
+desc = "REPT returns VALUE when result would exceed 32767 characters"
+setup = {}
+formula = '=REPT("x", 32768)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-REPT-009"
+desc = "REPT returns VALUE for too few arguments"
+setup = {}
+formula = '=REPT("x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-REPT-010"
+desc = "REPT returns VALUE for too many arguments"
+setup = {}
+formula = '=REPT("x", 2, 3)'
+expect = { error = "#VALUE!" }

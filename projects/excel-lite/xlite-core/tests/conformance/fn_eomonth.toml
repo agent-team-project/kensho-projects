@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-EOMONTH-001"
+desc = "EOMONTH returns the last day of the start date month"
+setup = {}
+formula = "=EOMONTH(DATE(2020,1,15),0)"
+expect = { number = 43861 }
+
+[[case]]
+id = "FN-EOMONTH-002"
+desc = "EOMONTH returns the last day of the next leap-year month"
+setup = {}
+formula = "=EOMONTH(DATE(2020,1,15),1)"
+expect = { number = 43890 }
+
+[[case]]
+id = "FN-EOMONTH-003"
+desc = "EOMONTH supports negative month offsets"
+setup = {}
+formula = "=EOMONTH(DATE(2020,1,15),-1)"
+expect = { number = 43830 }
+
+[[case]]
+id = "FN-EOMONTH-004"
+desc = "EOMONTH truncates fractional months toward zero"
+setup = {}
+formula = "=EOMONTH(DATE(2020,1,15),1.9)"
+expect = { number = 43890 }
+
+[[case]]
+id = "FN-EOMONTH-005"
+desc = "EOMONTH coerces numeric text arguments"
+setup = {}
+formula = '=EOMONTH("43845","1.9")'
+expect = { number = 43890 }
+
+[[case]]
+id = "FN-EOMONTH-006"
+desc = "EOMONTH returns VALUE for date text until DATEVALUE parsing exists"
+setup = {}
+formula = '=EOMONTH("2020-01-15",0)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-EOMONTH-007"
+desc = "EOMONTH returns NUM for zero start serials"
+setup = {}
+formula = "=EOMONTH(0,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-EOMONTH-008"
+desc = "EOMONTH returns NUM when the positive fractional date portion is outside range"
+setup = {}
+formula = "=EOMONTH(0.9,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-EOMONTH-009"
+desc = "EOMONTH returns NUM for nonfinite months"
+setup = {}
+formula = "=EOMONTH(DATE(2020,1,15),1E309)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-EOMONTH-010"
+desc = "EOMONTH returns NUM for result dates beyond the supported range"
+setup = {}
+formula = "=EOMONTH(DATE(9999,12,31),1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-EOMONTH-011"
+desc = "EOMONTH returns VALUE for too few arguments"
+setup = {}
+formula = "=EOMONTH(DATE(2020,1,15))"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-EOMONTH-012"
+desc = "EOMONTH returns VALUE for too many arguments"
+setup = {}
+formula = "=EOMONTH(DATE(2020,1,15),0,0)"
+expect = { error = "#VALUE!" }

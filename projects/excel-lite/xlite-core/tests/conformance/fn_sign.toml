@@ -1,0 +1,43 @@
+# SIGN function conformance cases.
+
+[[case]]
+id = "FN-SIGN-001"
+desc = "SIGN returns 1 for positive numbers"
+setup = {}
+formula = "=SIGN(12.5)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-SIGN-002"
+desc = "SIGN returns -1 for negative numbers"
+setup = {}
+formula = "=SIGN(-3)"
+expect = { number = -1 }
+
+[[case]]
+id = "FN-SIGN-003"
+desc = "SIGN returns 0 for zero"
+setup = {}
+formula = "=SIGN(0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SIGN-004"
+desc = "SIGN propagates scalar coercion errors"
+setup = {}
+formula = '=SIGN("x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SIGN-005"
+desc = "SIGN coerces direct numeric text"
+setup = {}
+formula = '=SIGN("42")'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-SIGN-006"
+desc = "SIGN treats a blank cell reference as zero"
+setup = {}
+formula = "=SIGN(A1)"
+expect = { number = 0 }

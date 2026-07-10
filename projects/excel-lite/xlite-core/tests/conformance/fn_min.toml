@@ -1,0 +1,48 @@
+[[case]]
+id = "FN-MIN-001"
+desc = "MIN returns the smallest number from a mixed numeric range"
+setup = { A1 = 1, B1 = 3.5, A2 = -5, B2 = 2 }
+formula = "=MIN(A1:B2)"
+expect = { number = -5 }
+
+[[case]]
+id = "FN-MIN-002"
+desc = "MIN combines ranges and direct scalar values"
+setup = { A1 = 4, A2 = 9, B1 = 12, B2 = -1 }
+formula = "=MIN(A1:A2,-10,B1:B2)"
+expect = { number = -10 }
+
+[[case]]
+id = "FN-MIN-003"
+desc = "MIN coerces direct numeric text and booleans"
+setup = {}
+formula = '=MIN("7",TRUE,FALSE)'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MIN-004"
+desc = "MIN ignores range text booleans and blanks"
+setup = { A1 = 5, A2 = "skip", A3 = true, A5 = -4 }
+formula = "=MIN(A1:A5)"
+expect = { number = -4 }
+
+[[case]]
+id = "FN-MIN-005"
+desc = "MIN returns zero for a text-only or blank-only range"
+setup = { A1 = "x", A2 = "twelve" }
+formula = "=MIN(A1:A3)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MIN-006"
+desc = "MIN propagates direct non-numeric text"
+setup = {}
+formula = '=MIN("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MIN-007"
+desc = "MIN returns VALUE for wrong arity"
+setup = {}
+formula = "=MIN()"
+expect = { error = "#VALUE!" }

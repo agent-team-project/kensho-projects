@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-MEDIAN-001"
+desc = "MEDIAN returns the middle sorted value for an odd numeric count"
+setup = {}
+formula = "=MEDIAN(10,2,7)"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-MEDIAN-002"
+desc = "MEDIAN averages the two middle sorted values for an even numeric count"
+setup = {}
+formula = "=MEDIAN(10,2,7,4)"
+expect = { number = 5.5 }
+
+[[case]]
+id = "FN-MEDIAN-003"
+desc = "MEDIAN combines multiple arguments and ranges before sorting"
+setup = { A1 = 100, A2 = 1, B1 = 5, B2 = 9 }
+formula = "=MEDIAN(A1:A2,3,B1:B2)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-MEDIAN-004"
+desc = "MEDIAN coerces direct numeric text booleans and a blank reference"
+setup = {}
+formula = '=MEDIAN("6",TRUE,FALSE,A1)'
+expect = { number = 0.5 }
+
+[[case]]
+id = "FN-MEDIAN-005"
+desc = "MEDIAN ignores range text booleans and blanks while including zero"
+setup = { A1 = "skip", A2 = true, A3 = 0, A5 = 10 }
+formula = "=MEDIAN(A1:A5)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-MEDIAN-006"
+desc = "MEDIAN returns NUM when no numeric values remain"
+setup = { A1 = "x", A2 = true }
+formula = "=MEDIAN(A1:A3)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-MEDIAN-007"
+desc = "MEDIAN propagates direct uncoercible text"
+setup = {}
+formula = '=MEDIAN("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MEDIAN-008"
+desc = "MEDIAN propagates direct errors"
+setup = {}
+formula = "=MEDIAN(1/0,2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MEDIAN-009"
+desc = "MEDIAN returns VALUE for wrong arity"
+setup = {}
+formula = "=MEDIAN()"
+expect = { error = "#VALUE!" }

@@ -1,0 +1,171 @@
+# Slice 1 formula engine contract cases.
+
+[[case]]
+id = "PREC-001"
+desc = "Unary minus binds tighter than power"
+setup = {}
+formula = "=-2^2"
+expect = { number = 4 }
+deviation = "A.2"
+
+[[case]]
+id = "PREC-002"
+desc = "Power is left-associative"
+setup = {}
+formula = "=2^3^2"
+expect = { number = 64 }
+deviation = "A.2"
+
+[[case]]
+id = "PREC-003"
+desc = "Postfix percent divides by one hundred"
+setup = {}
+formula = "=50%"
+expect = { number = 0.5 }
+
+[[case]]
+id = "PREC-004"
+desc = "Addition binds tighter than concatenation"
+setup = {}
+formula = "=1+2&3"
+expect = { text = "33" }
+
+[[case]]
+id = "COERCE-001"
+desc = "Arithmetic coerces numeric text"
+setup = {}
+formula = '="5"+1'
+expect = { number = 6 }
+
+[[case]]
+id = "COERCE-002"
+desc = "Arithmetic rejects non-numeric text"
+setup = {}
+formula = '="x"+1'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "COERCE-003"
+desc = "Arithmetic coerces booleans"
+setup = {}
+formula = "=TRUE+1"
+expect = { number = 2 }
+
+[[case]]
+id = "COERCE-004"
+desc = "Arithmetic coerces blank references to zero"
+setup = {}
+formula = "=A1+1"
+expect = { number = 1 }
+
+[[case]]
+id = "COERCE-005"
+desc = "Division by zero produces DIV/0"
+setup = {}
+formula = "=1/0"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "COERCE-010"
+desc = "Concatenation coerces numbers to text"
+setup = {}
+formula = "=1&2"
+expect = { text = "12" }
+
+[[case]]
+id = "COERCE-011"
+desc = "Concatenation coerces booleans to uppercase text"
+setup = {}
+formula = '="a"&TRUE'
+expect = { text = "aTRUE" }
+
+[[case]]
+id = "COERCE-012"
+desc = "Concatenation uses general number text"
+setup = {}
+formula = '=1.5&"x"'
+expect = { text = "1.5x" }
+
+[[case]]
+id = "COERCE-020"
+desc = "Text comparison is case-insensitive"
+setup = {}
+formula = '="a"="A"'
+expect = { bool = true }
+
+[[case]]
+id = "COERCE-021"
+desc = "Numbers sort before text"
+setup = {}
+formula = '=1<"a"'
+expect = { bool = true }
+
+[[case]]
+id = "COERCE-022"
+desc = "Blank compares as zero against numbers"
+setup = {}
+formula = "=A1=0"
+expect = { bool = true }
+
+[[case]]
+id = "COERCE-023"
+desc = "Blank compares as empty string against text"
+setup = {}
+formula = '=A1=""'
+expect = { bool = true }
+
+[[case]]
+id = "ERRPROP-001"
+desc = "Arithmetic propagates the left operand error"
+setup = {}
+formula = "=1/0+5"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "ERRPROP-003"
+desc = "Reference errors propagate through arithmetic"
+setup = { A1 = "=Sheet2!A1", B1 = 5 }
+formula = "=A1+B1"
+expect = { error = "#REF!" }
+
+[[case]]
+id = "ERRPROP-004"
+desc = "Function arguments propagate the first error left to right"
+setup = {}
+formula = '=SUM(1/0,"x"+1)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "ERRPROP-005"
+desc = "IF can ignore an error in the unchosen branch"
+setup = {}
+formula = "=IF(FALSE,1/0,99)"
+expect = { number = 99 }
+
+[[case]]
+id = "AGG-001"
+desc = "SUM ignores text inside ranges"
+setup = { A1 = 1, A2 = "x", A3 = 3 }
+formula = "=SUM(A1:A3)"
+expect = { number = 4 }
+
+[[case]]
+id = "AGG-002"
+desc = "SUM coerces direct scalar numeric text"
+setup = {}
+formula = '=SUM("5",2)'
+expect = { number = 7 }
+
+[[case]]
+id = "AGG-005"
+desc = "AVERAGE ignores text inside ranges"
+setup = { A1 = 1, A2 = "x", A3 = 3 }
+formula = "=AVERAGE(A1:A3)"
+expect = { number = 2 }
+
+[[case]]
+id = "AGG-006"
+desc = "AVERAGE ignores blank cells inside ranges"
+setup = { A1 = 1, A2 = 2 }
+formula = "=AVERAGE(A1:A3)"
+expect = { number = 1.5 }

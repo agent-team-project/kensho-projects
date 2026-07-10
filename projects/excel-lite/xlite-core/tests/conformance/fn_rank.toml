@@ -1,0 +1,111 @@
+[[case]]
+id = "FN-RANK-001"
+desc = "RANK returns the descending rank when order is omitted"
+setup = { A1 = 7, A2 = 3, A3 = 5, A4 = 10 }
+formula = "=RANK(5,A1:A4)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-RANK-002"
+desc = "RANK returns the descending rank when order is zero"
+setup = { A1 = 7, A2 = 3, A3 = 5, A4 = 10 }
+formula = "=RANK(5,A1:A4,0)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-RANK-003"
+desc = "RANK returns the ascending rank when order is nonzero"
+setup = { A1 = 7, A2 = 3, A3 = 5, A4 = 10 }
+formula = "=RANK(5,A1:A4,1)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-RANK-004"
+desc = "RANK gives duplicate numbers the same competition rank"
+setup = { A1 = 10, A2 = 8, A3 = 8, A4 = 7, A5 = 5 }
+formula = "=RANK(8,A1:A5)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-RANK-005"
+desc = "RANK skips subsequent ranks after duplicate numbers"
+setup = { A1 = 10, A2 = 8, A3 = 8, A4 = 7, A5 = 5 }
+formula = "=RANK(7,A1:A5)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-RANK-006"
+desc = "RANK ignores nonnumeric cells in ref"
+setup = { A1 = 4, A2 = "skip", A3 = true, A5 = 2 }
+formula = "=RANK(2,A1:A5)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-RANK-007"
+desc = "RANK returns NA when number is not present in ref"
+setup = { A1 = 4, A2 = 2 }
+formula = "=RANK(3,A1:A2)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-RANK-008"
+desc = "RANK returns NA when ref has no numeric values"
+setup = { A1 = "three", A2 = true }
+formula = "=RANK(3,A1:A3)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-RANK-009"
+desc = "RANK coerces direct number and order arguments"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = '=RANK("2",A1:A3,TRUE)'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-RANK-010"
+desc = "RANK propagates direct number coercion errors"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = '=RANK("apple",A1:A3)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RANK-011"
+desc = "RANK propagates direct number errors"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = "=RANK(1/0,A1:A3)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RANK-012"
+desc = "RANK propagates order coercion errors"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = '=RANK(2,A1:A3,"x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RANK-013"
+desc = "RANK propagates direct order errors"
+setup = { A1 = 1, A2 = 2, A3 = 3 }
+formula = "=RANK(2,A1:A3,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RANK-014"
+desc = "RANK propagates errors from ref"
+setup = { A1 = 2, A2 = "=1/0" }
+formula = "=RANK(2,A1:A2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RANK-015"
+desc = "RANK returns VALUE when ref is not a range"
+setup = {}
+formula = "=RANK(1,1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-RANK-016"
+desc = "RANK returns VALUE for wrong arity"
+setup = { A1 = 1 }
+formula = "=RANK(1,A1:A1,0,1)"
+expect = { error = "#VALUE!" }

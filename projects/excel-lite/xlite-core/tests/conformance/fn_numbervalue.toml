@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-NUMBERVALUE-001"
+desc = "NUMBERVALUE returns Microsoft's documented decimal and group separator example"
+setup = {}
+formula = '=NUMBERVALUE("2.500,27",",",".")'
+expect = { number = 2500.27 }
+
+[[case]]
+id = "FN-NUMBERVALUE-002"
+desc = "NUMBERVALUE returns Microsoft's documented percent example"
+setup = {}
+formula = '=NUMBERVALUE("3.5%")'
+expect = { number = 0.035 }
+
+[[case]]
+id = "FN-NUMBERVALUE-003"
+desc = "NUMBERVALUE applies multiple trailing percent signs"
+setup = {}
+formula = '=NUMBERVALUE("9%%")'
+expect = { number = 0.0009 }
+
+[[case]]
+id = "FN-NUMBERVALUE-004"
+desc = "NUMBERVALUE returns zero for empty text"
+setup = {}
+formula = '=NUMBERVALUE("")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-NUMBERVALUE-005"
+desc = "NUMBERVALUE ignores ASCII spaces inside the number"
+setup = {}
+formula = '=NUMBERVALUE(" 3 000 ")'
+expect = { number = 3000 }
+
+[[case]]
+id = "FN-NUMBERVALUE-006"
+desc = "NUMBERVALUE uses only the first character of multi-character separator arguments"
+setup = {}
+formula = '=NUMBERVALUE("1b234a56","a-extra","b-extra")'
+expect = { number = 1234.56 }
+
+[[case]]
+id = "FN-NUMBERVALUE-007"
+desc = "NUMBERVALUE returns VALUE for duplicate decimal separators"
+setup = {}
+formula = '=NUMBERVALUE("1.2.3")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NUMBERVALUE-008"
+desc = "NUMBERVALUE returns VALUE for group separators after the decimal separator"
+setup = {}
+formula = '=NUMBERVALUE("1.2,3")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NUMBERVALUE-009"
+desc = "NUMBERVALUE returns VALUE when decimal and group separators are the same character"
+setup = {}
+formula = '=NUMBERVALUE("1.2",".",".")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NUMBERVALUE-010"
+desc = "NUMBERVALUE returns VALUE for invalid numeric text"
+setup = {}
+formula = '=NUMBERVALUE("not a number")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NUMBERVALUE-011"
+desc = "NUMBERVALUE returns VALUE for too few arguments"
+setup = {}
+formula = '=NUMBERVALUE()'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-NUMBERVALUE-012"
+desc = "NUMBERVALUE returns VALUE for too many arguments"
+setup = {}
+formula = '=NUMBERVALUE("1",".",",","extra")'
+expect = { error = "#VALUE!" }

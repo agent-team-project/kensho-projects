@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "el-*"
+      - "xl-*"
+
+jobs:
+  core:
+    name: Repository acceptance
+    runs-on: ubuntu-latest
+    env:
+      CARGO_LLVM_COV_VERSION: "0.8.7"
+      XLITE_CORE_COVERAGE_THRESHOLD: "90.0"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Linux app test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev
+
+      - name: Validate conformance corpus
+        run: python3 scripts/validate_conformance_cases.py
+
+      - name: Compile conformance validator
+        run: python3 -m py_compile scripts/validate_conformance_cases.py
+
+      - name: Compile offline verifier
+        run: python3 -m py_compile scripts/verify_offline_bundle.py
+
+      - name: Compile CI contract validator
+        run: python3 -m py_compile scripts/validate_ci_contracts.py
+
+      - name: Compile Rust coverage gate
+        run: python3 -m py_compile scripts/check_rust_coverage.py scripts/test_check_rust_coverage.py
+
+      - name: Test Rust coverage gate parser
+        run: python3 -m unittest scripts/test_check_rust_coverage.py
+
+      - name: Validate CI registry and decoupling contracts
+        run: python3 scripts/validate_ci_contracts.py
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy, llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --version "$CARGO_LLVM_COV_VERSION" --locked
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+
+      - name: Run Rust lints
+        run: >
+          cargo clippy --workspace --all-targets --
+          -D warnings
+          -A clippy::trim_split_whitespace
+          -A clippy::manual_is_multiple_of
+          -A clippy::manual_range_contains
+          -A clippy::manual_contains
+          -A clippy::manual_saturating_arithmetic
+          -A clippy::derivable_impls
+          -A clippy::approx_constant
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+      - name: Run xlite-core function/eval coverage gate
+        run: |
+          mkdir -p target/llvm-cov
+          cargo llvm-cov -p xlite-core --lcov --output-path target/llvm-cov/lcov.info
+          python3 scripts/check_rust_coverage.py \
+            --lcov target/llvm-cov/lcov.info \
+            --threshold "$XLITE_CORE_COVERAGE_THRESHOLD" \
+            --include xlite-core/src/functions/ \
+            --include xlite-core/src/eval.rs
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Svelte/TypeScript checks
+        run: npm run check
+
+      - name: Run Node tests
+        run: npm test
+
+      - name: Build UI bundle
+        run: npm run build
+
+      - name: Verify offline bundle
+        run: npm run verify:offline

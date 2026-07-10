@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-YEAR-001"
+desc = "YEAR returns the year for an Excel serial date"
+setup = {}
+formula = "=YEAR(43831)"
+expect = { number = 2020 }
+
+[[case]]
+id = "FN-YEAR-002"
+desc = "YEAR uses the date portion of a positive fractional serial"
+setup = {}
+formula = "=YEAR(43831.75)"
+expect = { number = 2020 }
+
+[[case]]
+id = "FN-YEAR-003"
+desc = "YEAR preserves the Excel 1900 phantom day"
+setup = {}
+formula = "=YEAR(60)"
+expect = { number = 1900 }
+
+[[case]]
+id = "FN-YEAR-004"
+desc = "YEAR coerces numeric text through the serial date helper"
+setup = {}
+formula = '=YEAR("43831")'
+expect = { number = 2020 }
+
+[[case]]
+id = "FN-YEAR-005"
+desc = "YEAR returns NUM for negative serials"
+setup = {}
+formula = "=YEAR(-1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-YEAR-006"
+desc = "YEAR returns NUM for zero serials in v1"
+setup = {}
+formula = "=YEAR(0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-YEAR-007"
+desc = "YEAR returns VALUE for date text strings until DATEVALUE parsing exists"
+setup = {}
+formula = '=YEAR("2020-01-01")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-YEAR-008"
+desc = "YEAR returns VALUE for too few arguments"
+setup = {}
+formula = "=YEAR()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-YEAR-009"
+desc = "YEAR returns VALUE for too many arguments"
+setup = {}
+formula = "=YEAR(43831,1)"
+expect = { error = "#VALUE!" }

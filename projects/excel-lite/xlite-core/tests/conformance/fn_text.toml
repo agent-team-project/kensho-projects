@@ -1,0 +1,111 @@
+[[case]]
+id = "FN-TEXT-001"
+desc = "TEXT formats fixed decimal numbers with half-away rounding"
+setup = {}
+formula = '=TEXT(1234.567,"0.00")'
+expect = { text = "1234.57" }
+
+[[case]]
+id = "FN-TEXT-002"
+desc = "TEXT inserts group separators for grouped fixed decimal formats"
+setup = {}
+formula = '=TEXT(1234.5,"#,##0.00")'
+expect = { text = "1,234.50" }
+
+[[case]]
+id = "FN-TEXT-003"
+desc = "TEXT multiplies percent formats by 100 before formatting"
+setup = {}
+formula = '=TEXT(0.285,"0.0%")'
+expect = { text = "28.5%" }
+
+[[case]]
+id = "FN-TEXT-004"
+desc = "TEXT formats grouped currency"
+setup = {}
+formula = '=TEXT(1234.5,"$#,##0.00")'
+expect = { text = "$1,234.50" }
+
+[[case]]
+id = "FN-TEXT-005"
+desc = "TEXT preserves the negative sign before currency symbols"
+setup = {}
+formula = '=TEXT(-12.3,"$0.00")'
+expect = { text = "-$12.30" }
+
+[[case]]
+id = "FN-TEXT-006"
+desc = "TEXT formats DATE serials as ISO dates"
+setup = {}
+formula = '=TEXT(DATE(2024,3,5),"yyyy-mm-dd")'
+expect = { text = "2024-03-05" }
+
+[[case]]
+id = "FN-TEXT-007"
+desc = "TEXT formats DATE serials with short month names"
+setup = {}
+formula = '=TEXT(DATE(2024,3,5),"mmm d, yyyy")'
+expect = { text = "Mar 5, 2024" }
+
+[[case]]
+id = "FN-TEXT-008"
+desc = "TEXT preserves Excel 1900 serial 60 through the shared date helper"
+setup = {}
+formula = '=TEXT(60,"mmm d, yyyy")'
+expect = { text = "Feb 29, 1900" }
+
+[[case]]
+id = "FN-TEXT-009"
+desc = "TEXT formats TIME serials with AM/PM"
+setup = {}
+formula = '=TEXT(TIME(18,45,0),"h:mm AM/PM")'
+expect = { text = "6:45 PM" }
+
+[[case]]
+id = "FN-TEXT-010"
+desc = "TEXT formats TIME serials with padded seconds"
+setup = {}
+formula = '=TEXT(TIME(6,5,7),"hh:mm:ss")'
+expect = { text = "06:05:07" }
+
+[[case]]
+id = "FN-TEXT-011"
+desc = "TEXT treats date and time format tokens as case-insensitive"
+setup = {}
+formula = '=TEXT(DATE(2024,3,5),"YYYY-MM-DD")&" "&TEXT(TIME(18,45,0),"h:mm am/pm")'
+expect = { text = "2024-03-05 6:45 PM" }
+
+[[case]]
+id = "FN-TEXT-012"
+desc = "TEXT returns VALUE for unsupported v1 format codes"
+setup = {}
+formula = '=TEXT(1,"General")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TEXT-013"
+desc = "TEXT returns VALUE for unsupported custom format sections"
+setup = {}
+formula = '=TEXT(1,"0.00;[Red]-0.00")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TEXT-014"
+desc = "TEXT returns VALUE for too few arguments"
+setup = {}
+formula = "=TEXT(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TEXT-015"
+desc = "TEXT returns VALUE for too many arguments"
+setup = {}
+formula = '=TEXT(1,"0",2)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TEXT-016"
+desc = "TEXT propagates source errors from value coercion"
+setup = {}
+formula = '=TEXT(1/0,"0")'
+expect = { error = "#DIV/0!" }

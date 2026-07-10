@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-CHAR-001"
+desc = "CHAR returns uppercase A for ASCII code 65"
+setup = {}
+formula = "=CHAR(65)"
+expect = { text = "A" }
+
+[[case]]
+id = "FN-CHAR-002"
+desc = "CHAR returns exclamation mark for ASCII code 33"
+setup = {}
+formula = "=CHAR(33)"
+expect = { text = "!" }
+
+[[case]]
+id = "FN-CHAR-003"
+desc = "CHAR coerces numeric text"
+setup = {}
+formula = '=CHAR("66")'
+expect = { text = "B" }
+
+[[case]]
+id = "FN-CHAR-004"
+desc = "CHAR truncates fractional numbers toward zero"
+setup = {}
+formula = "=CHAR(65.9)"
+expect = { text = "A" }
+
+[[case]]
+id = "FN-CHAR-005"
+desc = "CHAR returns VALUE for low out-of-range codes"
+setup = {}
+formula = "=CHAR(0)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CHAR-006"
+desc = "CHAR returns VALUE for high out-of-range codes"
+setup = {}
+formula = "=CHAR(256)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CHAR-007"
+desc = "CHAR propagates error values"
+setup = {}
+formula = "=CHAR(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-CHAR-008"
+desc = "CHAR returns VALUE for too few arguments"
+setup = {}
+formula = "=CHAR()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CHAR-009"
+desc = "CHAR returns VALUE for too many arguments"
+setup = {}
+formula = "=CHAR(65, 66)"
+expect = { error = "#VALUE!" }

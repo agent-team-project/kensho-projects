@@ -1,0 +1,70 @@
+[[case]]
+id = "FN-SLN-001"
+desc = "SLN returns the Microsoft straight-line depreciation example"
+setup = {}
+formula = "=SLN(30000, 7500, 10)"
+expect = { number = 2250 }
+
+[[case]]
+id = "FN-SLN-002"
+desc = "SLN returns a fractional result for fractional cost"
+setup = {}
+formula = "=SLN(1000.5, 250, 7)"
+expect = { number = 107.21428571428571 }
+tol = 1e-12
+
+[[case]]
+id = "FN-SLN-003"
+desc = "SLN handles zero salvage"
+setup = {}
+formula = "=SLN(600, 0, 5)"
+expect = { number = 120 }
+
+[[case]]
+id = "FN-SLN-004"
+desc = "SLN allows negative depreciation when salvage exceeds cost"
+setup = {}
+formula = "=SLN(500, 800, 3)"
+expect = { number = -100 }
+
+[[case]]
+id = "FN-SLN-005"
+desc = "SLN returns DIV0 when life is zero"
+setup = {}
+formula = "=SLN(1000, 100, 0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SLN-006"
+desc = "SLN returns NUM for a non-finite numeric argument"
+setup = {}
+formula = "=SLN(1E309, 0, 1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-SLN-007"
+desc = "SLN propagates the first numeric coercion error"
+setup = {}
+formula = '=SLN(1000, 1/0, "not numeric")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SLN-008"
+desc = "SLN returns VALUE for text that cannot be coerced to a number"
+setup = {}
+formula = '=SLN("not numeric", 0, 10)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SLN-009"
+desc = "SLN coerces scalar top-left range arguments"
+setup = { A1 = 30000, B1 = 1, A2 = 2, B2 = 3 }
+formula = "=SLN(A1:B2, 7500, 10)"
+expect = { number = 2250 }
+
+[[case]]
+id = "FN-SLN-010"
+desc = "SLN returns VALUE for too few arguments"
+setup = {}
+formula = "=SLN(1000, 100)"
+expect = { error = "#VALUE!" }

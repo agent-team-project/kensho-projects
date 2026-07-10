@@ -1,0 +1,3 @@
+[workspace]
+members = ["xlite-core", "xlite-app"]
+resolver = "2"

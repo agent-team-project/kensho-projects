@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-PRODUCT-001"
+desc = "PRODUCT multiplies multiple scalar numbers"
+setup = {}
+formula = "=PRODUCT(2,3,4)"
+expect = { number = 24 }
+
+[[case]]
+id = "FN-PRODUCT-002"
+desc = "PRODUCT multiplies numeric cells in a range and ignores range text, booleans, and blanks"
+setup = { A1 = 2, B1 = "skip", A2 = true, B2 = 3 }
+formula = "=PRODUCT(A1:B3)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-PRODUCT-003"
+desc = "PRODUCT propagates an error from an argument"
+setup = {}
+formula = "=PRODUCT(2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-PRODUCT-004"
+desc = "PRODUCT coerces direct numeric text and booleans"
+setup = {}
+formula = '=PRODUCT("2",TRUE,3)'
+expect = { number = 6 }
+
+[[case]]
+id = "FN-PRODUCT-005"
+desc = "PRODUCT returns zero for a blank-only range"
+setup = {}
+formula = "=PRODUCT(A1:A3)"
+expect = { number = 0 }

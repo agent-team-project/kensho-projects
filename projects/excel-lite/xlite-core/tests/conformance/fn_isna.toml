@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-ISNA-EL296-001"
+desc = "ISNA returns TRUE when the argument evaluates to #N/A"
+setup = {}
+formula = "=ISNA(MODE(1,2))"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNA-EL296-002"
+desc = "ISNA returns FALSE for a non-NA error"
+setup = {}
+formula = "=ISNA(1/0)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNA-EL296-003"
+desc = "ISNA returns FALSE for a number"
+setup = {}
+formula = "=ISNA(42)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNA-EL296-004"
+desc = "ISNA returns FALSE for text without coercion"
+setup = {}
+formula = '=ISNA("text")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNA-EL296-005"
+desc = "ISNA returns FALSE for a boolean"
+setup = {}
+formula = "=ISNA(TRUE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNA-EL296-006"
+desc = "ISNA returns FALSE for a blank cell reference"
+setup = {}
+formula = "=ISNA(A1)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNA-EL296-007"
+desc = "ISNA uses the range top-left value when it is #N/A"
+setup = { A1 = "=MODE(1,2)", B1 = "=1/0", A2 = 42, B2 = "text" }
+formula = "=ISNA(A1:B2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNA-EL296-008"
+desc = "ISNA uses the range top-left value when it is another error"
+setup = { A1 = "=1/0", B1 = "=MODE(1,2)" }
+formula = "=ISNA(A1:B1)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNA-EL296-009"
+desc = "ISNA returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ISNA()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ISNA-EL296-010"
+desc = "ISNA returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ISNA(1,2)"
+expect = { error = "#VALUE!" }

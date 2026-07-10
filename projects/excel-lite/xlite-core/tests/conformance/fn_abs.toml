@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-ABS-001"
+desc = "ABS returns the magnitude of a negative number"
+setup = {}
+formula = "=ABS(-12.5)"
+expect = { number = 12.5 }
+
+[[case]]
+id = "FN-ABS-002"
+desc = "ABS preserves zero"
+setup = {}
+formula = "=ABS(0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-ABS-003"
+desc = "ABS propagates an error from its argument"
+setup = {}
+formula = "=ABS(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-ABS-004"
+desc = "ABS coerces scalar numeric text"
+setup = {}
+formula = '=ABS("-8.75")'
+expect = { number = 8.75 }
+
+[[case]]
+id = "FN-ABS-005"
+desc = "ABS coerces a blank reference to zero"
+setup = {}
+formula = "=ABS(A1)"
+expect = { number = 0 }

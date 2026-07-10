@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-TAN-001"
+desc = "TAN of zero returns zero"
+setup = {}
+formula = "=TAN(0)"
+expect = { number = 0 }
+tol = 1e-12
+
+[[case]]
+id = "FN-TAN-002"
+desc = "TAN returns one for pi over four radians"
+setup = {}
+formula = "=TAN(PI()/4)"
+expect = { number = 1 }
+tol = 1e-12
+
+[[case]]
+id = "FN-TAN-003"
+desc = "TAN preserves negative input sign behavior"
+setup = {}
+formula = "=TAN(-PI()/4)"
+expect = { number = -1 }
+tol = 1e-12
+
+[[case]]
+id = "FN-TAN-004"
+desc = "TAN returns the tangent of a nontrivial decimal radian input"
+setup = {}
+formula = "=TAN(0.75)"
+expect = { number = 0.9315964599440725 }
+tol = 1e-12
+
+[[case]]
+id = "FN-TAN-005"
+desc = "TAN coerces direct scalar numeric text"
+setup = {}
+formula = '=TAN("0.5")'
+expect = { number = 0.5463024898437905 }
+tol = 1e-12
+
+[[case]]
+id = "FN-TAN-006"
+desc = "TAN coerces direct scalar booleans"
+setup = {}
+formula = "=TAN(TRUE)"
+expect = { number = 1.5574077246549023 }
+tol = 1e-12
+
+[[case]]
+id = "FN-TAN-007"
+desc = "TAN treats a blank cell reference as zero"
+setup = {}
+formula = "=TAN(A1)"
+expect = { number = 0 }
+tol = 1e-12
+
+[[case]]
+id = "FN-TAN-008"
+desc = "TAN propagates an error input"
+setup = {}
+formula = "=TAN(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-TAN-009"
+desc = "TAN propagates scalar coercion errors"
+setup = {}
+formula = '=TAN("not numeric")'
+expect = { error = "#VALUE!" }

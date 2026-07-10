@@ -1,0 +1,123 @@
+[[case]]
+id = "FN-CUMIPMT-001"
+desc = "CUMIPMT returns the Microsoft second-year cumulative interest example"
+setup = {}
+formula = "=CUMIPMT(9%/12,30*12,125000,13,24,0)"
+expect = { number = -11135.232130750845 }
+tol = 1e-12
+
+[[case]]
+id = "FN-CUMIPMT-002"
+desc = "CUMIPMT returns the Microsoft first-payment interest example"
+setup = {}
+formula = "=CUMIPMT(9%/12,30*12,125000,1,1,0)"
+expect = { number = -937.5 }
+tol = 1e-12
+
+[[case]]
+id = "FN-CUMIPMT-003"
+desc = "CUMIPMT returns zero for the first beginning-of-period payment"
+setup = {}
+formula = "=CUMIPMT(9%/12,30*12,125000,1,1,1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-CUMIPMT-004"
+desc = "CUMIPMT includes period two interest for beginning-of-period payments"
+setup = {}
+formula = "=CUMIPMT(9%/12,30*12,125000,1,2,1)"
+expect = { number = -930.0128168398437 }
+tol = 1e-12
+
+[[case]]
+id = "FN-CUMIPMT-005"
+desc = "CUMIPMT truncates nper, start, end, and type toward zero"
+setup = {}
+formula = "=CUMIPMT(9%/12,360.9,125000,1.9,2.9,1.9)"
+expect = { number = -930.0128168398437 }
+tol = 1e-12
+
+[[case]]
+id = "FN-CUMIPMT-006"
+desc = "CUMIPMT returns NUM when rate is not positive"
+setup = {}
+formula = "=CUMIPMT(0,12,1000,1,1,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-007"
+desc = "CUMIPMT returns NUM when nper is not positive"
+setup = {}
+formula = "=CUMIPMT(1%,0,1000,1,1,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-008"
+desc = "CUMIPMT returns NUM when pv is not positive"
+setup = {}
+formula = "=CUMIPMT(1%,12,0,1,1,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-009"
+desc = "CUMIPMT returns NUM when start period is less than one"
+setup = {}
+formula = "=CUMIPMT(1%,12,1000,0,1,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-010"
+desc = "CUMIPMT returns NUM when end period is before start period"
+setup = {}
+formula = "=CUMIPMT(1%,12,1000,2,1,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-011"
+desc = "CUMIPMT returns NUM when end period exceeds nper"
+setup = {}
+formula = "=CUMIPMT(1%,12,1000,1,13,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-012"
+desc = "CUMIPMT returns NUM for invalid payment type values"
+setup = {}
+formula = "=CUMIPMT(1%,12,1000,1,1,2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-013"
+desc = "CUMIPMT returns promptly for a large finite period span"
+setup = {}
+formula = "=CUMIPMT(0.01,1000000000000,1000,999999999999,1000000000000,0)"
+expect = { error = "#NUM!" }
+timeout_ms = 1000
+
+[[case]]
+id = "FN-CUMIPMT-014"
+desc = "CUMIPMT returns NUM for a non-finite numeric argument"
+setup = {}
+formula = '=CUMIPMT("1E309",360,125000,1,1,0)'
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CUMIPMT-015"
+desc = "CUMIPMT propagates the first numeric coercion error"
+setup = {}
+formula = '=CUMIPMT(1%,1/0,"not numeric",1,1,0)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-CUMIPMT-016"
+desc = "CUMIPMT returns VALUE for too few arguments"
+setup = {}
+formula = "=CUMIPMT(1%,12,1000,1,1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-CUMIPMT-017"
+desc = "CUMIPMT returns VALUE for too many arguments"
+setup = {}
+formula = "=CUMIPMT(1%,12,1000,1,1,0,0)"
+expect = { error = "#VALUE!" }

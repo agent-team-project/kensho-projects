@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-SMALL-001"
+desc = "SMALL returns the kth smallest range value with duplicates preserved"
+setup = { A1 = 9, A2 = 3, B1 = 3, B2 = 1 }
+formula = "=SMALL(A1:B2,3)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-SMALL-002"
+desc = "SMALL k one returns the minimum"
+setup = { A1 = 7, A2 = -2, B1 = 4 }
+formula = "=SMALL(A1:B2,1)"
+expect = { number = -2 }
+
+[[case]]
+id = "FN-SMALL-003"
+desc = "SMALL k equal to numeric count returns the maximum"
+setup = { A1 = 7, A2 = -2, B1 = 4 }
+formula = "=SMALL(A1:B2,3)"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-SMALL-004"
+desc = "SMALL direct scalar array input behaves as a one item data set"
+setup = {}
+formula = '=SMALL("4.5",1)'
+expect = { number = 4.5 }
+
+[[case]]
+id = "FN-SMALL-005"
+desc = "SMALL ignores range text booleans and blanks while including zero"
+setup = { A1 = "skip", A2 = true, A3 = 0, A5 = 5 }
+formula = "=SMALL(A1:A5,1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SMALL-006"
+desc = "SMALL returns NUM when no numeric range values remain"
+setup = { A1 = "x", A2 = true }
+formula = "=SMALL(A1:A3,1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-SMALL-007"
+desc = "SMALL returns NUM when k is zero"
+setup = {}
+formula = "=SMALL(8,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-SMALL-008"
+desc = "SMALL returns NUM when k is fractional"
+setup = {}
+formula = "=SMALL(8,1.5)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-SMALL-009"
+desc = "SMALL returns NUM when k exceeds the numeric count"
+setup = {}
+formula = "=SMALL(8,2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-SMALL-010"
+desc = "SMALL propagates direct array coercion errors"
+setup = {}
+formula = '=SMALL("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SMALL-011"
+desc = "SMALL returns VALUE for k coercion errors"
+setup = {}
+formula = '=SMALL(1,"apple")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SMALL-012"
+desc = "SMALL returns VALUE for wrong arity"
+setup = {}
+formula = "=SMALL(1)"
+expect = { error = "#VALUE!" }

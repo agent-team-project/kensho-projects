@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-TIME-001"
+desc = "TIME returns noon as half a day"
+setup = {}
+formula = "=TIME(12,0,0)"
+expect = { number = 0.5 }
+
+[[case]]
+id = "FN-TIME-002"
+desc = "TIME rolls hours over into the next day"
+setup = {}
+formula = "=TIME(27,0,0)"
+expect = { number = 0.125 }
+
+[[case]]
+id = "FN-TIME-003"
+desc = "TIME rolls minutes over into hours"
+setup = {}
+formula = "=TIME(0,750,0)"
+expect = { number = 0.5208333333333334 }
+
+[[case]]
+id = "FN-TIME-004"
+desc = "TIME rolls seconds over into minutes"
+setup = {}
+formula = "=TIME(0,0,2000)"
+expect = { number = 0.023148148148148147 }
+
+[[case]]
+id = "FN-TIME-005"
+desc = "TIME coerces scalar numeric text, boolean, and blank arguments"
+setup = {}
+formula = '=TIME("1",TRUE,A1)'
+expect = { number = 0.04236111111111111 }
+
+[[case]]
+id = "FN-TIME-006"
+desc = "TIME truncates fractional arguments toward zero"
+setup = {}
+formula = "=TIME(1.9,2.9,3.9)"
+expect = { number = 0.043090277777777776 }
+
+[[case]]
+id = "FN-TIME-007"
+desc = "TIME returns NUM for negative arguments"
+setup = {}
+formula = "=TIME(-1,0,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-TIME-008"
+desc = "TIME returns NUM for arguments above 32767"
+setup = {}
+formula = "=TIME(0,32768,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-TIME-009"
+desc = "TIME returns VALUE for uncoercible scalar text"
+setup = {}
+formula = '=TIME("not numeric",0,0)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIME-010"
+desc = "TIME propagates scalar error values"
+setup = {}
+formula = "=TIME(0,1/0,0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-TIME-011"
+desc = "TIME returns VALUE for too few arguments"
+setup = {}
+formula = "=TIME(12,0)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-TIME-012"
+desc = "TIME returns VALUE for too many arguments"
+setup = {}
+formula = "=TIME(12,0,0,0)"
+expect = { error = "#VALUE!" }

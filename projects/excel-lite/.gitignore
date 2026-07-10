@@ -1,0 +1,6 @@
+.worker_agent/
+node_modules/
+ui/dist/
+target/
+xlite-app/target/
+xlite-app/gen/

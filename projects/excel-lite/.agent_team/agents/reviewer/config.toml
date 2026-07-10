@@ -1,0 +1,9 @@
+# Skills available to the `reviewer` agent at runtime.
+#
+# Local skills under ./skills/ are auto-included.
+# Pull in shared skills (under ../../skills/) by name, or anywhere by path:
+# Keep this list to reviewer-authorized helpers only. Reviewers report through
+# job gates plus PR comments; they do not create PRs or emit status updates.
+[skills]
+extra = ["linear", "github", "inbox", "channel"]
+# disable = []   # opt-out from local defaults if needed

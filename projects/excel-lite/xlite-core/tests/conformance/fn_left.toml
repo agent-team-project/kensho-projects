@@ -1,0 +1,104 @@
+[[case]]
+id = "FN-LEFT-001"
+desc = "LEFT defaults num_chars to one"
+setup = {}
+formula = '=LEFT("Excel")'
+expect = { text = "E" }
+
+[[case]]
+id = "FN-LEFT-002"
+desc = "LEFT returns the requested leftmost substring"
+setup = {}
+formula = '=LEFT("Spreadsheet", 6)'
+expect = { text = "Spread" }
+
+[[case]]
+id = "FN-LEFT-003"
+desc = "LEFT returns all text when num_chars exceeds text length"
+setup = {}
+formula = '=LEFT("abc", 10)'
+expect = { text = "abc" }
+
+[[case]]
+id = "FN-LEFT-004"
+desc = "LEFT returns empty text for zero num_chars"
+setup = {}
+formula = '=LEFT("abc", 0)'
+expect = { text = "" }
+
+[[case]]
+id = "FN-LEFT-005"
+desc = "LEFT coerces number text argument before slicing"
+setup = {}
+formula = "=LEFT(12345, 3)"
+expect = { text = "123" }
+
+[[case]]
+id = "FN-LEFT-006"
+desc = "LEFT coerces boolean text argument before slicing"
+setup = {}
+formula = "=LEFT(TRUE, 4)"
+expect = { text = "TRUE" }
+
+[[case]]
+id = "FN-LEFT-007"
+desc = "LEFT coerces blank text argument to empty text"
+setup = {}
+formula = "=LEFT(A1, 1)"
+expect = { text = "" }
+
+[[case]]
+id = "FN-LEFT-008"
+desc = "LEFT truncates fractional num_chars toward zero"
+setup = {}
+formula = '=LEFT("abcdef", 2.9)'
+expect = { text = "ab" }
+
+[[case]]
+id = "FN-LEFT-009"
+desc = "LEFT coerces numeric text num_chars before slicing"
+setup = {}
+formula = '=LEFT("abcdef", "3")'
+expect = { text = "abc" }
+
+[[case]]
+id = "FN-LEFT-010"
+desc = "LEFT returns VALUE for negative num_chars"
+setup = {}
+formula = '=LEFT("abc", -1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LEFT-011"
+desc = "LEFT propagates errors from text coercion"
+setup = {}
+formula = "=LEFT(1/0, 1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LEFT-012"
+desc = "LEFT returns VALUE for num_chars coercion errors"
+setup = {}
+formula = '=LEFT("abc", "apple")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LEFT-013"
+desc = "LEFT propagates errors from num_chars coercion"
+setup = {}
+formula = '=LEFT("abc", 1/0)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LEFT-014"
+desc = "LEFT returns VALUE for too few arguments"
+setup = {}
+formula = "=LEFT()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LEFT-015"
+desc = "LEFT returns VALUE for too many arguments"
+setup = {}
+formula = '=LEFT("abc", 1, 2)'
+expect = { error = "#VALUE!" }

@@ -1,0 +1,25 @@
+# Appendix A documented deviation pins that are not owned by one function file.
+
+[[case]]
+id = "DATE-SER-003"
+desc = "DATE preserves Excel's 1900 phantom leap-day serial"
+setup = {}
+formula = "=DATE(1900,2,29)"
+expect = { number = 60 }
+deviation = "A.3"
+
+[[case]]
+id = "XSHEET-001"
+desc = "Cross-sheet references parse but resolve to REF in v1"
+setup = {}
+formula = "=Sheet2!A1"
+expect = { error = "#REF!" }
+deviation = "A.4"
+
+[[case]]
+id = "NAME-001"
+desc = "Unknown function names resolve to NAME"
+setup = {}
+formula = "=FOObar(1)"
+expect = { error = "#NAME?" }
+deviation = "A.5"

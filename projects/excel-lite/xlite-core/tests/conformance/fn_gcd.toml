@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-GCD-001"
+desc = "GCD returns the greatest common divisor for two scalar numbers"
+setup = {}
+formula = "=GCD(24,36)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-GCD-002"
+desc = "GCD returns the greatest common divisor for multiple scalar numbers"
+setup = {}
+formula = "=GCD(48,180,30)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-GCD-003"
+desc = "GCD returns the nonzero value when paired with zero"
+setup = {}
+formula = "=GCD(5,0)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-GCD-004"
+desc = "GCD returns zero for all-zero inputs"
+setup = {}
+formula = "=GCD(0,0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-GCD-005"
+desc = "GCD truncates decimal arguments toward zero"
+setup = {}
+formula = "=GCD(8.9,12.1)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-GCD-006"
+desc = "GCD returns NUM for negative arguments"
+setup = {}
+formula = "=GCD(-1,2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-GCD-007"
+desc = "GCD coerces direct scalar text, boolean, and blank arguments"
+setup = {}
+formula = '=GCD("6",TRUE,A1)'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-GCD-008"
+desc = "GCD aggregates numeric range cells and ignores range text, booleans, and blanks"
+setup = { A1 = 12, B1 = "skip", A2 = true, B2 = 18 }
+formula = "=GCD(A1:B3)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-GCD-009"
+desc = "GCD propagates errors from scalar arguments"
+setup = {}
+formula = "=GCD(18,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-GCD-010"
+desc = "GCD propagates errors from range arguments"
+setup = { A1 = 18, A2 = "=1/0" }
+formula = "=GCD(A1:A2)"
+expect = { error = "#DIV/0!" }

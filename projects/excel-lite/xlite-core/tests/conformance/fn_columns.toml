@@ -1,0 +1,49 @@
+[[case]]
+id = "FN-COLUMNS-EL261-001"
+desc = "COLUMNS returns the number of columns in a multi-row reference"
+setup = {}
+formula = "=COLUMNS(C1:E4)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-COLUMNS-EL261-002"
+desc = "COLUMNS returns one for a single-column reference"
+setup = {}
+formula = "=COLUMNS(A1:A10)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-COLUMNS-EL261-003"
+desc = "COLUMNS returns the number of columns in a single-row reference"
+setup = {}
+formula = "=COLUMNS(A1:C1)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-COLUMNS-EL261-004"
+desc = "COLUMNS treats scalar values as single-cell arrays"
+setup = {}
+formula = "=COLUMNS(42)"
+expect = { number = 1 }
+deviation = "EL-261: EXCEL-LITE v1 treats scalar values as one-cell arrays for COLUMNS"
+
+[[case]]
+id = "FN-COLUMNS-EL261-005"
+desc = "COLUMNS propagates scalar expression errors"
+setup = {}
+formula = "=COLUMNS(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-COLUMNS-EL261-006"
+desc = "COLUMNS returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=COLUMNS()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-COLUMNS-EL261-007"
+desc = "COLUMNS returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=COLUMNS(A1:A2,B1:B2)"
+expect = { error = "#VALUE!" }

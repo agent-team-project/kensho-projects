@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-SWITCH-EL178-001"
+desc = "SWITCH returns the result for the first matching numeric value"
+setup = {}
+formula = '=SWITCH(2,1,"one",2,"two","other")'
+expect = { text = "two" }
+
+[[case]]
+id = "FN-SWITCH-EL178-002"
+desc = "SWITCH matches text values"
+setup = {}
+formula = '=SWITCH("b","a",1,"b",2,0)'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-SWITCH-EL178-003"
+desc = "SWITCH returns the default when no match exists"
+setup = {}
+formula = '=SWITCH("z","a",1,"b",2,0)'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SWITCH-EL178-004"
+desc = "SWITCH returns NA when no match exists and no default is present"
+setup = {}
+formula = '=SWITCH("z","a",1,"b",2)'
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-SWITCH-EL178-005"
+desc = "SWITCH ignores non-matching result errors"
+setup = {}
+formula = '=SWITCH(2,1,1/0,2,"two")'
+expect = { text = "two" }
+
+[[case]]
+id = "FN-SWITCH-EL178-006"
+desc = "SWITCH propagates selected result errors"
+setup = {}
+formula = '=SWITCH(1,1,1/0,2,"two")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SWITCH-EL178-007"
+desc = "SWITCH propagates expression errors"
+setup = {}
+formula = '=SWITCH(1/0,1,"one","other")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SWITCH-EL178-008"
+desc = "SWITCH returns VALUE for too few arguments"
+setup = {}
+formula = '=SWITCH(1,1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SWITCH-EL178-009"
+desc = "SWITCH propagates inspected match value errors"
+setup = {}
+formula = '=SWITCH(1,1/0,"bad",1,"one")'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SWITCH-EL178-010"
+desc = "SWITCH ignores later arguments after the first match"
+setup = {}
+formula = '=SWITCH(1,1,"one",1/0,"bad",1/0)'
+expect = { text = "one" }

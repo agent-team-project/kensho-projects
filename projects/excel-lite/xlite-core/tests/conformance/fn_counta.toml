@@ -1,0 +1,41 @@
+[[case]]
+id = "FN-COUNTA-001"
+desc = "COUNTA counts nonblank cells in a range containing numbers, text, booleans, and blanks"
+setup = { A1 = 1, B1 = "text", A2 = true }
+formula = "=COUNTA(A1:B3)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-COUNTA-002"
+desc = "COUNTA returns zero for a blank-only range"
+setup = {}
+formula = "=COUNTA(A1:C2)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-COUNTA-003"
+desc = "COUNTA combines ranges with direct scalar values"
+setup = { A1 = 1, A3 = "text" }
+formula = '=COUNTA(A1:A3,"",TRUE,"direct")'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-COUNTA-004"
+desc = "COUNTA counts direct empty text as a value"
+setup = {}
+formula = '=COUNTA("")'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-COUNTA-005"
+desc = "COUNTA counts direct boolean and text values"
+setup = {}
+formula = '=COUNTA(TRUE,"text")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-COUNTA-006"
+desc = "COUNTA returns VALUE for wrong arity"
+setup = {}
+formula = "=COUNTA()"
+expect = { error = "#VALUE!" }

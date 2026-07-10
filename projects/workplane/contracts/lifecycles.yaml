@@ -1,0 +1,79 @@
+schema_version: 1
+contract: workplane-lifecycles
+source_of_truth: true
+generated_views: [docs/DOMAIN.md]
+default: deny
+
+rules:
+  - id: dates-never-transition
+    applies_to: [target, forecast_p50, forecast_p90, deadline, review_after]
+    effect: attention_only
+    forbidden_effects: [activate, hold, complete, stop, cancel, approve, waive]
+
+project:
+  modes: [exploration, exploitation]
+  states: [proposed, active, held, completed, stopped, cancelled]
+  transitions:
+    - {from: proposed, command: activate, to: active, requires: mode_contract_complete}
+    - {from: active, command: hold, to: held, requires: hold_reason}
+    - {from: held, command: resume, to: active, requires: resume_decision}
+    - {from: active, mode: exploration, command: stop, to: stopped, requires: stop_decision}
+    - {from: active, mode: exploration, command: promote, to: active, mode_to: exploitation, requires: promotion_contract}
+    - {from: active, mode: exploitation, command: complete, to: completed, requires: completion_contract}
+    - {from: proposed, command: cancel, to: cancelled, requires: cancel_decision}
+    - {from: active, command: cancel, to: cancelled, requires: cancel_decision}
+    - {from: held, command: cancel, to: cancelled, requires: cancel_decision}
+  terminal_states: [completed, stopped, cancelled]
+  terminal_mutations_allowed: [comment, evidence_supersede, retrospective_record]
+
+mode_contracts:
+  exploration:
+    required_for_activate: [outcome_or_decision_question, owner, decision_criteria, experiment_bound, forecast]
+    any_of_for_activate: [active_hypothesis, explicit_unknown]
+    conditional_requirements:
+      active_hypothesis: [falsifier]
+    forbidden: [completion_percentage]
+    decisions: [continue, pivot, stop, promote]
+  exploitation:
+    required_for_activate: [outcome, owner, required_deliverable_with_acceptance_criteria, forecast, priority_rationale]
+    required_for_complete: [all_required_deliverables_accepted_or_policy_waived, all_hard_gates_passed, no_open_blocking_finding, outcome_and_residual_risk, completion_decision]
+
+deliverable:
+  states: [draft, ready, submitted, bounced, accepted, waived, cancelled]
+  transitions:
+    - {from: draft, command: mark_ready, to: ready, requires: criteria_and_gates}
+    - {from: ready, command: submit, to: submitted, requires: evidence_contract}
+    - {from: submitted, command: bounce, to: bounced, requires: actionable_finding}
+    - {from: bounced, command: resubmit, to: submitted, requires: resolution_evidence}
+    - {from: submitted, command: approve, to: accepted, requires: all_findings_resolved_and_all_hard_gates_passed}
+    - {from: ready, command: waive, to: waived, requires: human_deliverable_waiver_contract}
+    - {from: submitted, command: waive, to: waived, requires: human_deliverable_waiver_contract}
+    - {from: bounced, command: waive, to: waived, requires: human_deliverable_waiver_contract}
+    - {from: draft, command: cancel, to: cancelled, requires: project_cancel_or_optional_deliverable_cancel}
+    - {from: ready, command: cancel, to: cancelled, requires: project_cancel_or_optional_deliverable_cancel}
+  waiver_contract: [all_attached_hard_gates_passed, no_open_blocking_finding, policy_designated_human, deliverable_waiver_decision, rationale, residual_risk]
+  immutable_states: [accepted, waived, cancelled]
+
+gate:
+  states: [pending, passed, failed, waived]
+  transitions:
+    - {from: pending, command: pass, to: passed, requires: verdict_or_automated_evidence}
+    - {from: pending, command: fail, to: failed, requires: verdict_or_automated_evidence}
+    - {from: failed, command: pass, to: passed, requires: superseding_verdict_or_automated_evidence}
+    - {from: pending, kind: soft, command: waive, to: waived, requires: human_soft_gate_waiver_contract}
+    - {from: failed, kind: soft, command: waive, to: waived, requires: human_soft_gate_waiver_contract}
+  hard_gate_waiver: forbidden
+  waiver_contract: [policy_designated_human, soft_gate_waiver_decision, rationale, residual_risk]
+
+work_item:
+  states: [open, in_progress, in_review, done, cancelled]
+  derived_health_states: [blocked]
+  transitions:
+    - {from: open, command: start, to: in_progress, requires: active_assignee}
+    - {from: in_progress, command: request_review, to: in_review, requires: evidence}
+    - {from: in_review, command: bounce, to: in_progress, requires: actionable_finding}
+    - {from: in_review, command: accept, to: done, requires: linked_outcome_evidence}
+    - {from: open, command: cancel, to: cancelled, requires: cancel_reason}
+    - {from: in_progress, command: cancel, to: cancelled, requires: cancel_reason}
+    - {from: in_review, command: cancel, to: cancelled, requires: cancel_reason}
+  progress_rule: work_item_done_never_substitutes_for_deliverable_acceptance

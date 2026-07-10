@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-RANDBETWEEN-001"
+desc = "RANDBETWEEN maps the default RNG into an inclusive positive range"
+setup = {}
+formula = "=RANDBETWEEN(1,10)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-RANDBETWEEN-002"
+desc = "RANDBETWEEN maps the default RNG across a negative-to-positive range"
+setup = {}
+formula = "=RANDBETWEEN(-1,1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-RANDBETWEEN-003"
+desc = "RANDBETWEEN returns the only value in a degenerate range"
+setup = {}
+formula = "=RANDBETWEEN(5,5)"
+expect = { number = 5 }
+
+[[case]]
+id = "FN-RANDBETWEEN-004"
+desc = "RANDBETWEEN returns NUM when the bottom bound is greater than the top bound"
+setup = {}
+formula = "=RANDBETWEEN(10,1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-RANDBETWEEN-005"
+desc = "RANDBETWEEN coerces scalar numeric text bounds before truncating them"
+setup = {}
+formula = '=RANDBETWEEN("1.9","3.2")'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-RANDBETWEEN-006"
+desc = "RANDBETWEEN coerces scalar boolean bounds"
+setup = {}
+formula = "=RANDBETWEEN(FALSE,TRUE)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-RANDBETWEEN-007"
+desc = "RANDBETWEEN coerces blank bound references to zero"
+setup = {}
+formula = "=RANDBETWEEN(A1,A1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-RANDBETWEEN-008"
+desc = "RANDBETWEEN propagates an error from the bottom argument"
+setup = {}
+formula = "=RANDBETWEEN(1/0,10)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RANDBETWEEN-009"
+desc = "RANDBETWEEN propagates an error from the top argument"
+setup = {}
+formula = "=RANDBETWEEN(1,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-RANDBETWEEN-010"
+desc = "RANDBETWEEN returns VALUE for wrong arity"
+setup = {}
+formula = "=RANDBETWEEN(1)"
+expect = { error = "#VALUE!" }

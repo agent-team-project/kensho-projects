@@ -1,0 +1,76 @@
+[[case]]
+id = "FN-N-EL300-001"
+desc = "N returns a number unchanged"
+setup = {}
+formula = "=N(7)"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-N-EL300-002"
+desc = "N converts TRUE to 1"
+setup = {}
+formula = "=N(TRUE)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-N-EL300-003"
+desc = "N converts FALSE to 0"
+setup = {}
+formula = "=N(FALSE)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-N-EL300-004"
+desc = "N returns 0 for numeric-looking text"
+setup = {}
+formula = '=N("7")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-N-EL300-005"
+desc = "N returns 0 for ordinary text"
+setup = {}
+formula = '=N("text")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-N-EL300-006"
+desc = "N returns 0 for a blank cell reference"
+setup = {}
+formula = "=N(A1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-N-EL300-007"
+desc = "N returns DIV/0 errors unchanged"
+setup = {}
+formula = "=N(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-N-EL300-008"
+desc = "N returns NA errors unchanged"
+setup = {}
+formula = "=N(MODE(1,2))"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-N-EL300-009"
+desc = "N uses the top-left scalar value for range arguments"
+setup = { A1 = 7, B1 = "=1/0" }
+formula = "=N(A1:B1)"
+expect = { number = 7 }
+
+[[case]]
+id = "FN-N-EL300-010"
+desc = "N returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=N()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-N-EL300-011"
+desc = "N returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=N(1,2)"
+expect = { error = "#VALUE!" }

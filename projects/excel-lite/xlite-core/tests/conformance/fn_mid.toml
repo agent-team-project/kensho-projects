@@ -1,0 +1,111 @@
+[[case]]
+id = "FN-MID-001"
+desc = "MID extracts a middle substring"
+setup = {}
+formula = '=MID("abcdef", 3, 2)'
+expect = { text = "cd" }
+
+[[case]]
+id = "FN-MID-002"
+desc = "MID start_num one extracts from the first character"
+setup = {}
+formula = '=MID("abcdef", 1, 3)'
+expect = { text = "abc" }
+
+[[case]]
+id = "FN-MID-003"
+desc = "MID returns empty text when start_num is beyond text length"
+setup = {}
+formula = '=MID("abc", 5, 2)'
+expect = { text = "" }
+
+[[case]]
+id = "FN-MID-004"
+desc = "MID returns empty text for zero num_chars"
+setup = {}
+formula = '=MID("abc", 2, 0)'
+expect = { text = "" }
+
+[[case]]
+id = "FN-MID-005"
+desc = "MID overlong num_chars returns through the end"
+setup = {}
+formula = '=MID("abcdef", 4, 99)'
+expect = { text = "def" }
+
+[[case]]
+id = "FN-MID-006"
+desc = "MID truncates fractional start_num and num_chars toward zero"
+setup = {}
+formula = '=MID("abcdef", 2.9, 3.9)'
+expect = { text = "bcd" }
+
+[[case]]
+id = "FN-MID-007"
+desc = "MID coerces number, boolean, and blank text arguments before slicing"
+setup = {}
+formula = '=CONCAT(MID(12345, 2, 3), ":", MID(TRUE, 2, 3), ":", MID(A1, 1, 1))'
+expect = { text = "234:RUE:" }
+
+[[case]]
+id = "FN-MID-008"
+desc = "MID returns VALUE for negative num_chars"
+setup = {}
+formula = '=MID("abc", 1, -1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MID-009"
+desc = "MID returns VALUE when start_num is less than one before truncation"
+setup = {}
+formula = '=MID("abc", 0.9, 1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MID-010"
+desc = "MID propagates errors from text coercion"
+setup = {}
+formula = "=MID(1/0, 1, 1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MID-011"
+desc = "MID returns VALUE for start_num coercion errors"
+setup = {}
+formula = '=MID("abc", "apple", 1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MID-012"
+desc = "MID propagates errors from start_num coercion"
+setup = {}
+formula = '=MID("abc", 1/0, 1)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MID-013"
+desc = "MID returns VALUE for num_chars coercion errors"
+setup = {}
+formula = '=MID("abc", 1, "apple")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MID-014"
+desc = "MID propagates errors from num_chars coercion"
+setup = {}
+formula = '=MID("abc", 1, 1/0)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MID-015"
+desc = "MID returns VALUE for too few arguments"
+setup = {}
+formula = '=MID("abc", 1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MID-016"
+desc = "MID returns VALUE for too many arguments"
+setup = {}
+formula = '=MID("abc", 1, 1, 1)'
+expect = { error = "#VALUE!" }

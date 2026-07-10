@@ -1,0 +1,118 @@
+[[case]]
+id = "FN-LARGE-001"
+desc = "LARGE returns the kth largest range value with duplicates preserved"
+setup = { A1 = 4, A2 = 9, A3 = 9, A4 = 2 }
+formula = "=LARGE(A1:A4,2)"
+expect = { number = 9 }
+
+[[case]]
+id = "FN-LARGE-002"
+desc = "LARGE counts duplicate values as separate positions"
+setup = { A1 = 4, A2 = 9, A3 = 9, A4 = 2 }
+formula = "=LARGE(A1:A4,3)"
+expect = { number = 4 }
+
+[[case]]
+id = "FN-LARGE-003"
+desc = "LARGE with k one returns the maximum"
+setup = { A1 = 5, A2 = -3, A3 = 12 }
+formula = "=LARGE(A1:A3,1)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-LARGE-004"
+desc = "LARGE with k equal to the data count returns the minimum"
+setup = { A1 = 5, A2 = -3, A3 = 12 }
+formula = "=LARGE(A1:A3,3)"
+expect = { number = -3 }
+
+[[case]]
+id = "FN-LARGE-005"
+desc = "LARGE treats direct scalar array input as a one item data set"
+setup = {}
+formula = '=LARGE("7.5",1)'
+expect = { number = 7.5 }
+
+[[case]]
+id = "FN-LARGE-006"
+desc = "LARGE ignores range text booleans and blanks while including zero"
+setup = { A1 = "skip", A2 = true, A3 = 0, A5 = -2 }
+formula = "=LARGE(A1:A5,1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-LARGE-007"
+desc = "LARGE returns NUM when a range has no numeric values"
+setup = { A1 = "x", A2 = true }
+formula = "=LARGE(A1:A3,1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LARGE-008"
+desc = "LARGE returns NUM when k is zero"
+setup = {}
+formula = "=LARGE(1,0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LARGE-009"
+desc = "LARGE returns NUM when k is negative"
+setup = {}
+formula = "=LARGE(1,-1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LARGE-010"
+desc = "LARGE returns NUM when k is fractional"
+setup = {}
+formula = "=LARGE(1,1.5)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LARGE-011"
+desc = "LARGE returns NUM when k is greater than the numeric data count"
+setup = { A1 = 2, A2 = 3 }
+formula = "=LARGE(A1:A2,3)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-LARGE-012"
+desc = "LARGE returns VALUE for direct array text that cannot be coerced"
+setup = {}
+formula = '=LARGE("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LARGE-013"
+desc = "LARGE returns VALUE for k text that cannot be coerced"
+setup = {}
+formula = '=LARGE(1,"apple")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LARGE-014"
+desc = "LARGE propagates direct array errors"
+setup = {}
+formula = "=LARGE(1/0,1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LARGE-015"
+desc = "LARGE propagates direct k errors before coercion"
+setup = {}
+formula = "=LARGE(1,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LARGE-016"
+desc = "LARGE returns VALUE for too few arguments"
+setup = {}
+formula = "=LARGE(1)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LARGE-017"
+desc = "LARGE returns VALUE for too many arguments"
+setup = {}
+formula = "=LARGE(1,1,1)"
+expect = { error = "#VALUE!" }

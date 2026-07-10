@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-MODE-001"
+desc = "MODE returns the most frequently occurring duplicate value"
+setup = {}
+formula = "=MODE(1,2,2,3)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-MODE-002"
+desc = "MODE range input ignores text booleans and blanks while counting numeric zero"
+setup = { A1 = 0, A2 = "0", A3 = true, A5 = 0 }
+formula = "=MODE(A1:A5)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MODE-003"
+desc = "MODE direct scalar input coerces numeric text booleans and blanks"
+setup = {}
+formula = '=MODE("2",TRUE,A1,2,FALSE)'
+expect = { number = 2 }
+
+[[case]]
+id = "FN-MODE-004"
+desc = "MODE returns NA when no numeric value is duplicated"
+setup = {}
+formula = "=MODE(1,2,3)"
+expect = { error = "#N/A" }
+
+[[case]]
+id = "FN-MODE-005"
+desc = "MODE tie behavior returns the first value to reach the highest frequency"
+setup = {}
+formula = "=MODE(1,2,2,1)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-MODE-006"
+desc = "MODE propagates direct non-numeric text"
+setup = {}
+formula = '=MODE("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MODE-007"
+desc = "MODE propagates direct error values"
+setup = {}
+formula = "=MODE(1/0,1)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-MODE-008"
+desc = "MODE returns VALUE for wrong arity"
+setup = {}
+formula = "=MODE()"
+expect = { error = "#VALUE!" }

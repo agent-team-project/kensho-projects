@@ -1,0 +1,22 @@
+[package]
+name = "local-board"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "local-board"
+path = "src/main.rs"
+
+[dependencies]
+chess-core.workspace = true
+eframe = "0.35.0"
+
+[lints]
+workspace = true

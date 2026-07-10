@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-FALSE-001"
+desc = "FALSE returns the boolean FALSE value"
+setup = {}
+formula = "=FALSE()"
+expect = { bool = false }
+
+[[case]]
+id = "FN-FALSE-002"
+desc = "FALSE drives IF to the false branch"
+setup = {}
+formula = "=IF(FALSE(),1,2)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-FALSE-003"
+desc = "FALSE coerces to zero in arithmetic"
+setup = {}
+formula = "=FALSE()+1"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-FALSE-004"
+desc = "FALSE coerces to text in concatenation"
+setup = {}
+formula = '=FALSE()&"x"'
+expect = { text = "FALSEx" }
+
+[[case]]
+id = "FN-FALSE-005"
+desc = "FALSE rejects arguments"
+setup = {}
+formula = "=FALSE(1)"
+expect = { error = "#VALUE!" }

@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-SUMSQ-001"
+desc = "SUMSQ sums squares for scalar numbers"
+setup = {}
+formula = "=SUMSQ(3,4)"
+expect = { number = 25 }
+
+[[case]]
+id = "FN-SUMSQ-002"
+desc = "SUMSQ squares negative values as positive contributions"
+setup = {}
+formula = "=SUMSQ(-3,4)"
+expect = { number = 25 }
+
+[[case]]
+id = "FN-SUMSQ-003"
+desc = "SUMSQ handles decimal values"
+setup = {}
+formula = "=SUMSQ(1.5,2)"
+expect = { number = 6.25 }
+
+[[case]]
+id = "FN-SUMSQ-004"
+desc = "SUMSQ coerces scalar text, booleans, and blanks with arithmetic rules"
+setup = {}
+formula = '=SUMSQ("2",TRUE,A1)'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-SUMSQ-005"
+desc = "SUMSQ aggregates numeric range cells and ignores range text, booleans, and blanks"
+setup = { A1 = 2, B1 = "skip", A2 = true, B2 = -3 }
+formula = "=SUMSQ(A1:B3)"
+expect = { number = 13 }
+
+[[case]]
+id = "FN-SUMSQ-006"
+desc = "SUMSQ returns zero for a blank-only range"
+setup = {}
+formula = "=SUMSQ(A1:A3)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SUMSQ-007"
+desc = "SUMSQ propagates errors from scalar arguments"
+setup = {}
+formula = "=SUMSQ(2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SUMSQ-008"
+desc = "SUMSQ propagates errors from range arguments"
+setup = { A1 = 2, A2 = "=1/0" }
+formula = "=SUMSQ(A1:A2)"
+expect = { error = "#DIV/0!" }

@@ -1,0 +1,38 @@
+# UCI smoke transcript.
+# Lines beginning with ">" are sent to the engine.
+# Lines beginning with "<" are required output tokens in order, not exact full lines.
+> uci
+< id name
+< id author
+< option name Hash
+< option name Threads
+< option name Move Overhead
+< uciok
+> setoption name Hash value 16
+> setoption name Threads value 1
+> setoption name Move Overhead value 25
+> unknown-command
+< info string
+> isready
+< readyok
+> ucinewgame
+> position startpos moves e2e4 e7e5 g1f3 b8c6
+> go depth 3
+< info depth
+< bestmove
+> position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
+> go movetime 100
+< bestmove
+> go movetime 5000
+> stop
+< bestmove
+> go wtime 5000 btime 5000 movestogo 20
+> stop
+< bestmove
+> position fen 4k3/P6p/8/8/8/8/7P/4K3 w - - 0 1 moves a7a8q
+> go depth 1
+< bestmove
+> go infinite
+> stop
+< bestmove
+> quit

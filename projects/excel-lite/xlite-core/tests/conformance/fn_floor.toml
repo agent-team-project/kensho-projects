@@ -1,0 +1,76 @@
+[[case]]
+id = "FN-FLOOR-001"
+desc = "FLOOR rounds a positive number down to a positive significance"
+setup = {}
+formula = "=FLOOR(7.5,2)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-FLOOR-002"
+desc = "FLOOR leaves exact multiples unchanged"
+setup = {}
+formula = "=FLOOR(8,2)"
+expect = { number = 8 }
+
+[[case]]
+id = "FN-FLOOR-003"
+desc = "FLOOR rounds negative numbers away from zero with positive significance"
+setup = {}
+formula = "=FLOOR(-7,2)"
+expect = { number = -8 }
+
+[[case]]
+id = "FN-FLOOR-004"
+desc = "FLOOR rounds negative numbers toward zero with negative significance"
+setup = {}
+formula = "=FLOOR(-7,-2)"
+expect = { number = -6 }
+
+[[case]]
+id = "FN-FLOOR-005"
+desc = "FLOOR returns NUM for positive numbers with negative significance"
+setup = {}
+formula = "=FLOOR(7,-2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-FLOOR-006"
+desc = "FLOOR returns zero for zero significance"
+setup = {}
+formula = "=FLOOR(7,0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-FLOOR-007"
+desc = "FLOOR coerces scalar numeric text and booleans"
+setup = {}
+formula = '=FLOOR("8.7",TRUE)'
+expect = { number = 8 }
+
+[[case]]
+id = "FN-FLOOR-008"
+desc = "FLOOR coerces a blank number reference to zero"
+setup = {}
+formula = "=FLOOR(A1,2)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-FLOOR-009"
+desc = "FLOOR coerces a blank significance reference to zero"
+setup = {}
+formula = "=FLOOR(7,A1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-FLOOR-010"
+desc = "FLOOR propagates an error from the number argument"
+setup = {}
+formula = "=FLOOR(1/0,2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-FLOOR-011"
+desc = "FLOOR propagates an error from the significance argument"
+setup = {}
+formula = "=FLOOR(8,1/0)"
+expect = { error = "#DIV/0!" }

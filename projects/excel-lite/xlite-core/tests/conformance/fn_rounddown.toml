@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-ROUNDDOWN-001"
+desc = "ROUNDDOWN rounds positive values toward zero at positive precision"
+setup = {}
+formula = "=ROUNDDOWN(12.987, 2)"
+expect = { number = 12.98 }
+
+[[case]]
+id = "FN-ROUNDDOWN-002"
+desc = "ROUNDDOWN rounds negative values toward zero at positive precision"
+setup = {}
+formula = "=ROUNDDOWN(-12.987, 2)"
+expect = { number = -12.98 }
+
+[[case]]
+id = "FN-ROUNDDOWN-003"
+desc = "ROUNDDOWN preserves values exact at the requested precision"
+setup = {}
+formula = "=ROUNDDOWN(12.34, 2)"
+expect = { number = 12.34 }
+
+[[case]]
+id = "FN-ROUNDDOWN-004"
+desc = "ROUNDDOWN rounds toward zero with zero digits"
+setup = {}
+formula = "=ROUNDDOWN(-12.9, 0)"
+expect = { number = -12 }
+
+[[case]]
+id = "FN-ROUNDDOWN-005"
+desc = "ROUNDDOWN rounds left of the decimal for negative digits"
+setup = {}
+formula = "=ROUNDDOWN(987.65, -1)"
+expect = { number = 980 }
+
+[[case]]
+id = "FN-ROUNDDOWN-006"
+desc = "ROUNDDOWN truncates fractional digit counts toward zero"
+setup = {}
+formula = "=ROUNDDOWN(12.987, 1.9)"
+expect = { number = 12.9 }
+
+[[case]]
+id = "FN-ROUNDDOWN-007"
+desc = "ROUNDDOWN coerces scalar numeric text arguments"
+setup = {}
+formula = '=ROUNDDOWN("8.765", "2")'
+expect = { number = 8.76 }
+
+[[case]]
+id = "FN-ROUNDDOWN-008"
+desc = "ROUNDDOWN coerces direct booleans and blank cell references"
+setup = {}
+formula = "=ROUNDDOWN(TRUE, A1)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-ROUNDDOWN-009"
+desc = "ROUNDDOWN propagates an error from its number argument"
+setup = {}
+formula = "=ROUNDDOWN(1/0, 2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-ROUNDDOWN-010"
+desc = "ROUNDDOWN propagates an error from its num_digits argument"
+setup = {}
+formula = "=ROUNDDOWN(12.34, 1/0)"
+expect = { error = "#DIV/0!" }

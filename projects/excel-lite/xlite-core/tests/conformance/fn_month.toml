@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-MONTH-001"
+desc = "MONTH returns January for 2020-01-01 serial"
+setup = {}
+formula = "=MONTH(43831)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-MONTH-002"
+desc = "MONTH returns March for a non-January date serial"
+setup = {}
+formula = "=MONTH(45352)"
+expect = { number = 3 }
+
+[[case]]
+id = "FN-MONTH-003"
+desc = "MONTH uses the date portion of a positive fractional serial"
+setup = {}
+formula = "=MONTH(43831.75)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-MONTH-004"
+desc = "MONTH preserves the Excel 1900 phantom day"
+setup = {}
+formula = "=MONTH(60)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-MONTH-005"
+desc = "MONTH coerces numeric text through the serial date helper"
+setup = {}
+formula = '=MONTH("45352")'
+expect = { number = 3 }
+
+[[case]]
+id = "FN-MONTH-006"
+desc = "MONTH returns NUM for negative serials"
+setup = {}
+formula = "=MONTH(-1)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-MONTH-007"
+desc = "MONTH returns NUM for zero serials"
+setup = {}
+formula = "=MONTH(0)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-MONTH-008"
+desc = "MONTH returns VALUE for date text until DATEVALUE parsing exists"
+setup = {}
+formula = '=MONTH("2020-01-01")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MONTH-009"
+desc = "MONTH returns VALUE for too few arguments"
+setup = {}
+formula = "=MONTH()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MONTH-010"
+desc = "MONTH returns VALUE for too many arguments"
+setup = {}
+formula = "=MONTH(43831,1)"
+expect = { error = "#VALUE!" }

@@ -1,0 +1,220 @@
+{
+  "format_version": 1,
+  "app": "excel-lite",
+  "date_system": "1900",
+  "sheets": [
+    {
+      "name": "Sample",
+      "cells": {
+        "A1": {
+          "raw": "Item",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": true
+          },
+          "cached": {
+            "type": "text",
+            "value": "Item"
+          }
+        },
+        "A2": {
+          "raw": "Pencils",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "text",
+            "value": "Pencils"
+          }
+        },
+        "A3": {
+          "raw": "Notebooks",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "text",
+            "value": "Notebooks"
+          }
+        },
+        "A5": {
+          "raw": "Grand Total",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": true
+          },
+          "cached": {
+            "type": "text",
+            "value": "Grand Total"
+          }
+        },
+        "B1": {
+          "raw": "Units",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": true
+          },
+          "cached": {
+            "type": "text",
+            "value": "Units"
+          }
+        },
+        "B2": {
+          "raw": "12",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "number",
+            "value": 12.0
+          }
+        },
+        "B3": {
+          "raw": "4",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "number",
+            "value": 4.0
+          }
+        },
+        "C1": {
+          "raw": "Price",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": true
+          },
+          "cached": {
+            "type": "text",
+            "value": "Price"
+          }
+        },
+        "C2": {
+          "raw": "0.75",
+          "format": {
+            "number": {
+              "type": "currency",
+              "dp": 2
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "number",
+            "value": 0.75
+          }
+        },
+        "C3": {
+          "raw": "2.5",
+          "format": {
+            "number": {
+              "type": "currency",
+              "dp": 2
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "number",
+            "value": 2.5
+          }
+        },
+        "D1": {
+          "raw": "Line Total",
+          "format": {
+            "number": {
+              "type": "general"
+            },
+            "align": "default",
+            "bold": true
+          },
+          "cached": {
+            "type": "text",
+            "value": "Line Total"
+          }
+        },
+        "D2": {
+          "raw": "=B2*C2",
+          "format": {
+            "number": {
+              "type": "currency",
+              "dp": 2
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "number",
+            "value": 9.0
+          }
+        },
+        "D3": {
+          "raw": "=B3*C3",
+          "format": {
+            "number": {
+              "type": "currency",
+              "dp": 2
+            },
+            "align": "default",
+            "bold": false
+          },
+          "cached": {
+            "type": "number",
+            "value": 10.0
+          }
+        },
+        "D5": {
+          "raw": "=SUM(D2:D3)",
+          "format": {
+            "number": {
+              "type": "currency",
+              "dp": 2
+            },
+            "align": "default",
+            "bold": true
+          },
+          "cached": {
+            "type": "number",
+            "value": 19.0
+          }
+        }
+      },
+      "col_widths": {
+        "A": 160.0,
+        "B": 80.0,
+        "C": 90.0,
+        "D": 110.0
+      },
+      "row_heights": {}
+    }
+  ]
+}

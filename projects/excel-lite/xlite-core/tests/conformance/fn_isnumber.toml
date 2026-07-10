@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-ISNUMBER-EL291-001"
+desc = "ISNUMBER returns TRUE for a numeric literal"
+setup = {}
+formula = "=ISNUMBER(42)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-002"
+desc = "ISNUMBER returns TRUE for a numeric expression"
+setup = {}
+formula = "=ISNUMBER(1+2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-003"
+desc = "ISNUMBER returns FALSE for numeric text without coercion"
+setup = {}
+formula = '=ISNUMBER("19")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-004"
+desc = "ISNUMBER returns FALSE for text"
+setup = {}
+formula = '=ISNUMBER("text")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-005"
+desc = "ISNUMBER returns FALSE for booleans"
+setup = {}
+formula = "=ISNUMBER(TRUE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-006"
+desc = "ISNUMBER returns FALSE for a blank cell reference"
+setup = {}
+formula = "=ISNUMBER(A1)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-007"
+desc = "ISNUMBER returns FALSE for a DIV/0 error expression"
+setup = {}
+formula = "=ISNUMBER(1/0)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-008"
+desc = "ISNUMBER returns FALSE for NA"
+setup = {}
+formula = "=ISNUMBER(NA())"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-009"
+desc = "ISNUMBER range scalar convention returns TRUE when top-left is numeric"
+setup = { A1 = 42, A2 = "text" }
+formula = "=ISNUMBER(A1:A2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-010"
+desc = "ISNUMBER range scalar convention ignores later numbers when top-left is nonnumeric"
+setup = { A1 = "text", A2 = 42 }
+formula = "=ISNUMBER(A1:A2)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-011"
+desc = "ISNUMBER returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ISNUMBER()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ISNUMBER-EL291-012"
+desc = "ISNUMBER returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ISNUMBER(1,2)"
+expect = { error = "#VALUE!" }

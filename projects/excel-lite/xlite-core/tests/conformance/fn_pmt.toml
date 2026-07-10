@@ -1,0 +1,81 @@
+[[case]]
+id = "FN-PMT-001"
+desc = "PMT returns the Microsoft monthly loan payment example"
+setup = {}
+formula = "=PMT(8%/12,10,10000)"
+expect = { number = -1037.0320893591636 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PMT-002"
+desc = "PMT returns the Microsoft beginning-of-period loan payment example"
+setup = {}
+formula = "=PMT(8%/12,10,10000,0,1)"
+expect = { number = -1030.1643271779772 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PMT-003"
+desc = "PMT returns the Microsoft savings payment example"
+setup = {}
+formula = "=PMT(6%/12,18*12,0,50000)"
+expect = { number = -129.0811608679954 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PMT-004"
+desc = "PMT handles the zero-rate case"
+setup = {}
+formula = "=PMT(0,10,1000)"
+expect = { number = -100 }
+
+[[case]]
+id = "FN-PMT-005"
+desc = "PMT explicit zero future value and type match omitted defaults"
+setup = {}
+formula = "=PMT(8%/12,10,10000,0,0)"
+expect = { number = -1037.0320893591636 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PMT-006"
+desc = "PMT truncates the type argument toward zero"
+setup = {}
+formula = "=PMT(8%/12,10,10000,0,1.9)"
+expect = { number = -1030.1643271779772 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PMT-007"
+desc = "PMT returns NUM for an invalid type argument"
+setup = {}
+formula = "=PMT(8%/12,10,10000,0,2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PMT-008"
+desc = "PMT returns NUM when nper is zero"
+setup = {}
+formula = "=PMT(8%/12,0,10000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PMT-009"
+desc = "PMT returns NUM for a non-finite numeric argument"
+setup = {}
+formula = "=PMT(1E309,10,10000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PMT-010"
+desc = "PMT propagates numeric coercion errors"
+setup = {}
+formula = '=PMT("not numeric",10,10000)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-PMT-011"
+desc = "PMT returns VALUE for too few arguments"
+setup = {}
+formula = "=PMT(0,10)"
+expect = { error = "#VALUE!" }

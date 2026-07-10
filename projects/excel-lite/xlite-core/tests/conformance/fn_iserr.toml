@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-ISERR-EL295-001"
+desc = "ISERR returns TRUE for DIV/0 errors"
+setup = {}
+formula = "=ISERR(1/0)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISERR-EL295-002"
+desc = "ISERR returns FALSE for NA errors"
+setup = {}
+formula = "=ISERR(MODE(1,2))"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISERR-EL295-003"
+desc = "ISERR returns FALSE for numbers"
+setup = {}
+formula = "=ISERR(42)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISERR-EL295-004"
+desc = "ISERR returns FALSE for text without conversion"
+setup = {}
+formula = '=ISERR("text")'
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISERR-EL295-005"
+desc = "ISERR returns FALSE for booleans"
+setup = {}
+formula = "=ISERR(TRUE)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISERR-EL295-006"
+desc = "ISERR returns FALSE for a blank cell reference"
+setup = {}
+formula = "=ISERR(A1)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISERR-EL295-007"
+desc = "ISERR returns TRUE when a range top-left cell is DIV/0"
+setup = { A1 = "=1/0", A2 = "=MODE(1,2)" }
+formula = "=ISERR(A1:A2)"
+expect = { bool = true }
+
+[[case]]
+id = "FN-ISERR-EL295-008"
+desc = "ISERR returns FALSE when a range top-left cell is NA"
+setup = { A1 = "=MODE(1,2)", A2 = "=1/0" }
+formula = "=ISERR(A1:A2)"
+expect = { bool = false }
+
+[[case]]
+id = "FN-ISERR-EL295-009"
+desc = "ISERR returns VALUE when too few arguments are supplied"
+setup = {}
+formula = "=ISERR()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-ISERR-EL295-010"
+desc = "ISERR returns VALUE when too many arguments are supplied"
+setup = {}
+formula = "=ISERR(1,2)"
+expect = { error = "#VALUE!" }

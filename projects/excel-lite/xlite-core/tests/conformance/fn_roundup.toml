@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-ROUNDUP-001"
+desc = "ROUNDUP rounds positive values away from zero at positive precision"
+setup = {}
+formula = "=ROUNDUP(12.341, 2)"
+expect = { number = 12.35 }
+
+[[case]]
+id = "FN-ROUNDUP-002"
+desc = "ROUNDUP rounds negative values away from zero at positive precision"
+setup = {}
+formula = "=ROUNDUP(-12.341, 2)"
+expect = { number = -12.35 }
+
+[[case]]
+id = "FN-ROUNDUP-003"
+desc = "ROUNDUP leaves values already exact at the requested precision unchanged"
+setup = {}
+formula = "=ROUNDUP(12.34, 2)"
+expect = { number = 12.34 }
+
+[[case]]
+id = "FN-ROUNDUP-004"
+desc = "ROUNDUP rounds away from zero to integer magnitude with zero digits"
+setup = {}
+formula = "=ROUNDUP(-12.1, 0)"
+expect = { number = -13 }
+
+[[case]]
+id = "FN-ROUNDUP-005"
+desc = "ROUNDUP rounds left of the decimal point with negative digits"
+setup = {}
+formula = "=ROUNDUP(987.65, -1)"
+expect = { number = 990 }
+
+[[case]]
+id = "FN-ROUNDUP-006"
+desc = "ROUNDUP truncates fractional digit counts toward zero"
+setup = {}
+formula = "=ROUNDUP(12.341, 1.9)"
+expect = { number = 12.4 }
+
+[[case]]
+id = "FN-ROUNDUP-007"
+desc = "ROUNDUP coerces scalar numeric text arguments"
+setup = {}
+formula = '=ROUNDUP("8.121", "2")'
+expect = { number = 8.13 }
+
+[[case]]
+id = "FN-ROUNDUP-008"
+desc = "ROUNDUP coerces a boolean number argument"
+setup = {}
+formula = "=ROUNDUP(TRUE, 0)"
+expect = { number = 1 }
+
+[[case]]
+id = "FN-ROUNDUP-009"
+desc = "ROUNDUP coerces a blank number reference to zero"
+setup = {}
+formula = "=ROUNDUP(A1, 1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-ROUNDUP-010"
+desc = "ROUNDUP coerces a blank num_digits reference to zero"
+setup = {}
+formula = "=ROUNDUP(1.2, A1)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-ROUNDUP-011"
+desc = "ROUNDUP propagates an error from its number argument"
+setup = {}
+formula = "=ROUNDUP(1/0, 0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-ROUNDUP-012"
+desc = "ROUNDUP propagates an error from its num_digits argument"
+setup = {}
+formula = "=ROUNDUP(12.34, 1/0)"
+expect = { error = "#DIV/0!" }

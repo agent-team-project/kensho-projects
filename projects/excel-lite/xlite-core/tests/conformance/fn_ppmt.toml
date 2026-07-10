@@ -1,0 +1,110 @@
+[[case]]
+id = "FN-PPMT-001"
+desc = "PPMT returns the Microsoft monthly loan first-period principal example"
+setup = {}
+formula = "=PPMT(10%/12,1,2*12,2000)"
+expect = { number = -75.62318600836664 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PPMT-002"
+desc = "PPMT returns the Microsoft annual loan final-period principal example"
+setup = {}
+formula = "=PPMT(8%,10,10,200000)"
+expect = { number = -27598.053462421365 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PPMT-003"
+desc = "PPMT returns the full first beginning-of-period payment as principal"
+setup = {}
+formula = "=PPMT(8%/12,1,24,2000,0,1)"
+expect = { number = -89.85554593943958 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PPMT-004"
+desc = "PPMT handles the zero-rate case"
+setup = {}
+formula = "=PPMT(0,1,10,1000)"
+expect = { number = -100 }
+
+[[case]]
+id = "FN-PPMT-005"
+desc = "PPMT explicit zero future value and type match omitted defaults"
+setup = {}
+formula = "=PPMT(10%/12,1,2*12,2000,0,0)"
+expect = { number = -75.62318600836664 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PPMT-006"
+desc = "PPMT truncates a fractional beginning-of-period type argument toward one"
+setup = {}
+formula = "=PPMT(8%/12,2,24,2000,0,1.9)"
+expect = { number = -77.12124957903583 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PPMT-007"
+desc = "PPMT truncates a negative fractional type argument toward zero"
+setup = {}
+formula = "=PPMT(8%/12,2,24,2000,0,-0.9)"
+expect = { number = -77.63539124289606 }
+tol = 1e-12
+
+[[case]]
+id = "FN-PPMT-008"
+desc = "PPMT rejects payment types other than zero or one after truncation"
+setup = {}
+formula = "=PPMT(8%/12,2,24,2000,0,2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PPMT-009"
+desc = "PPMT returns NUM when period is less than one"
+setup = {}
+formula = "=PPMT(8%/12,0,24,2000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PPMT-010"
+desc = "PPMT returns NUM when period exceeds number of periods"
+setup = {}
+formula = "=PPMT(8%/12,25,24,2000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PPMT-011"
+desc = "PPMT returns NUM when number of periods is zero"
+setup = {}
+formula = "=PPMT(8%/12,1,0,2000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PPMT-012"
+desc = "PPMT returns NUM for a non-finite numeric argument"
+setup = {}
+formula = '=PPMT("1E309",1,24,2000)'
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-PPMT-013"
+desc = "PPMT propagates the first numeric coercion error"
+setup = {}
+formula = '=PPMT(1%,1/0,"not numeric",2000)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-PPMT-014"
+desc = "PPMT returns VALUE for too few arguments"
+setup = {}
+formula = "=PPMT(1%,1,24)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-PPMT-015"
+desc = "PPMT returns VALUE for too many arguments"
+setup = {}
+formula = "=PPMT(1%,1,24,2000,0,0,0)"
+expect = { error = "#VALUE!" }

@@ -1,0 +1,48 @@
+[project]
+  id = "465d4bed-9e64-430d-819b-a4e6f711c87a"
+  name = "local-chess-engine-kensho-evaluation"
+  spec = "SPEC.md"
+
+[pm]
+  provider = "none"
+
+[team]
+  pm_tool = "none"
+  local_dir = ".agent_team"
+  default_pipeline = "local_slice"
+
+[runtime]
+  kind = "codex"
+  binary = "scripts/codex-chatgpt-only.sh"
+
+[otel]
+  enabled = false
+  endpoint = ""
+
+[health]
+  job_stale_after = "24h"
+  status_stale_after = "10m"
+  terminal_retention = "14d"
+
+[notifications]
+  idle_renotify = "0"
+  phase_transitions = ["blocked"]
+
+[feedback]
+  upstream = "local"
+
+[feedback.routes.local]
+  type = "local"
+  root = "."
+
+[skills]
+  team = []
+
+[worktree]
+  path = ".agent_team/worktrees"
+  branch_prefix = "kensho/chess/"
+
+[acceptance]
+  spec = "SPEC.md"
+  perft_fixture = "tests/fixtures/perft.epd"
+  uci_smoke = "tests/fixtures/uci-smoke.txt"

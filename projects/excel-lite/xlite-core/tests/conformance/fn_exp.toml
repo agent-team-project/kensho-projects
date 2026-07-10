@@ -1,0 +1,46 @@
+[[case]]
+id = "FN-EXP-001"
+desc = "EXP returns e raised to a nominal positive input"
+setup = {}
+formula = "=EXP(1)"
+expect = { number = 2.718281828459045 }
+tol = 1e-12
+
+[[case]]
+id = "FN-EXP-002"
+desc = "EXP of zero returns one"
+setup = {}
+formula = "=EXP(0)"
+expect = { number = 1 }
+tol = 1e-12
+
+[[case]]
+id = "FN-EXP-003"
+desc = "EXP supports a negative exponent"
+setup = {}
+formula = "=EXP(-1)"
+expect = { number = 0.36787944117144233 }
+tol = 1e-12
+
+[[case]]
+id = "FN-EXP-004"
+desc = "EXP propagates an error input"
+setup = {}
+formula = "=EXP(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-EXP-005"
+desc = "EXP coerces numeric text through scalar numeric rules"
+setup = {}
+formula = '=EXP("2")'
+expect = { number = 7.38905609893065 }
+tol = 1e-12
+
+[[case]]
+id = "FN-EXP-006"
+desc = "EXP treats a blank cell reference as zero"
+setup = {}
+formula = "=EXP(A1)"
+expect = { number = 1 }
+tol = 1e-12

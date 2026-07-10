@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-VARP-001"
+desc = "VARP returns population variance for the Microsoft example data set"
+setup = { A1 = 1345, A2 = 1301, A3 = 1368, A4 = 1322, A5 = 1310, A6 = 1370, A7 = 1318, A8 = 1350, A9 = 1303, A10 = 1299 }
+formula = "=VARP(A1:A10)"
+expect = { number = 678.84 }
+
+[[case]]
+id = "FN-VARP-002"
+desc = "VARP combines range values and direct scalar values"
+setup = { A1 = 1, A2 = 2 }
+formula = "=VARP(A1:A2,3)"
+expect = { number = 0.6666666666666666 }
+
+[[case]]
+id = "FN-VARP-003"
+desc = "VARP coerces direct numeric text booleans and blank references"
+setup = {}
+formula = '=VARP("3",TRUE,FALSE,A1)'
+expect = { number = 1.5 }
+
+[[case]]
+id = "FN-VARP-004"
+desc = "VARP ignores range text booleans and blanks while including zero"
+setup = { A1 = 2, A2 = "skip", A3 = true, A4 = 0, A6 = 4 }
+formula = "=VARP(A1:A6)"
+expect = { number = 2.6666666666666665 }
+
+[[case]]
+id = "FN-VARP-005"
+desc = "VARP returns zero for a single numeric value"
+setup = {}
+formula = "=VARP(5)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-VARP-006"
+desc = "VARP returns DIV0 when no numeric values remain"
+setup = { A1 = "x", A2 = true }
+formula = "=VARP(A1:A3)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-VARP-007"
+desc = "VARP propagates direct non-numeric text"
+setup = {}
+formula = '=VARP("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-VARP-008"
+desc = "VARP propagates direct errors"
+setup = {}
+formula = "=VARP(1,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-VARP-009"
+desc = "VARP returns VALUE for wrong arity"
+setup = {}
+formula = "=VARP()"
+expect = { error = "#VALUE!" }

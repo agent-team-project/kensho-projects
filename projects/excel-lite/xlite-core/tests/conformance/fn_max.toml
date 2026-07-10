@@ -1,0 +1,48 @@
+[[case]]
+id = "FN-MAX-001"
+desc = "MAX returns the largest number from a mixed numeric range"
+setup = { A1 = 1, B1 = 3.5, A2 = -5, B2 = 2 }
+formula = "=MAX(A1:B2)"
+expect = { number = 3.5 }
+
+[[case]]
+id = "FN-MAX-002"
+desc = "MAX combines ranges and direct scalar values"
+setup = { A1 = 4, A2 = 9, B1 = 12, B2 = -1 }
+formula = "=MAX(A1:A2,10,B1:B2)"
+expect = { number = 12 }
+
+[[case]]
+id = "FN-MAX-003"
+desc = "MAX coerces direct numeric text and booleans"
+setup = {}
+formula = '=MAX("7",TRUE,FALSE)'
+expect = { number = 7 }
+
+[[case]]
+id = "FN-MAX-004"
+desc = "MAX ignores range text booleans and blanks"
+setup = { A1 = 1, A2 = "skip", A3 = true, A5 = 6 }
+formula = "=MAX(A1:A5)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-MAX-005"
+desc = "MAX returns zero for a text-only or blank-only range"
+setup = { A1 = "x", A2 = "twelve" }
+formula = "=MAX(A1:A3)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-MAX-006"
+desc = "MAX propagates direct non-numeric text"
+setup = {}
+formula = '=MAX("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-MAX-007"
+desc = "MAX returns VALUE for wrong arity"
+setup = {}
+formula = "=MAX()"
+expect = { error = "#VALUE!" }

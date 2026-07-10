@@ -1,0 +1,83 @@
+[[case]]
+id = "FN-PROPER-001"
+desc = "PROPER capitalizes ordinary words"
+setup = {}
+formula = '=PROPER("hello world")'
+expect = { text = "Hello World" }
+
+[[case]]
+id = "FN-PROPER-002"
+desc = "PROPER lowercases remaining letters"
+setup = {}
+formula = '=PROPER("mIxEd CaSe")'
+expect = { text = "Mixed Case" }
+
+[[case]]
+id = "FN-PROPER-003"
+desc = "PROPER capitalizes after spaces and punctuation"
+setup = {}
+formula = "=PROPER(\"rock'n'roll, next.word\")"
+expect = { text = "Rock'N'Roll, Next.Word" }
+
+[[case]]
+id = "FN-PROPER-004"
+desc = "PROPER capitalizes after digits and hyphens"
+setup = {}
+formula = '=PROPER("2-way street")'
+expect = { text = "2-Way Street" }
+
+[[case]]
+id = "FN-PROPER-005"
+desc = "PROPER capitalizes letters after leading digits"
+setup = {}
+formula = '=PROPER("76BudGet")'
+expect = { text = "76Budget" }
+
+[[case]]
+id = "FN-PROPER-006"
+desc = "PROPER preserves numbers punctuation and spaces"
+setup = {}
+formula = '=PROPER("  123!?  abc  ")'
+expect = { text = "  123!?  Abc  " }
+
+[[case]]
+id = "FN-PROPER-007"
+desc = "PROPER coerces number text argument"
+setup = {}
+formula = "=PROPER(123.45)"
+expect = { text = "123.45" }
+
+[[case]]
+id = "FN-PROPER-008"
+desc = "PROPER coerces boolean text argument"
+setup = {}
+formula = "=PROPER(TRUE)"
+expect = { text = "True" }
+
+[[case]]
+id = "FN-PROPER-009"
+desc = "PROPER coerces blank text argument"
+setup = {}
+formula = "=PROPER(A1)"
+expect = { text = "" }
+
+[[case]]
+id = "FN-PROPER-010"
+desc = "PROPER propagates error values"
+setup = {}
+formula = "=PROPER(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-PROPER-011"
+desc = "PROPER returns VALUE for too few arguments"
+setup = {}
+formula = "=PROPER()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-PROPER-012"
+desc = "PROPER returns VALUE for too many arguments"
+setup = {}
+formula = '=PROPER("abc", "extra")'
+expect = { error = "#VALUE!" }

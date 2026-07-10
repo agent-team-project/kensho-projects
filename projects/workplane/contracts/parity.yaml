@@ -1,0 +1,70 @@
+schema_version: 1
+contract: workplane-human-agent-parity
+default: fail_unmapped
+
+principles:
+  - every_authoritative_ui_mutation_uses_public_api
+  - equivalent_scope_produces_equivalent_domain_result_and_event_group
+  - no_authoritative_state_exists_only_in_browser_or_agent_private_files
+  - machine_only_operations_require_written_rationale
+
+columns:
+  required:
+    - capability_id
+    - requirement_id
+    - public_operation_id
+    - ui_surface
+    - agent_example
+    - permission_action
+    - parity_case_id
+    - status
+
+seed_capabilities:
+  - capability_id: create-project
+    requirement_id: PR-CORE-01
+    public_operation_id: createProject
+    ui_surface: project-create-dialog
+    agent_example: examples/agent/create-project
+    permission_action: project.create
+    parity_case_id: PARITY-PROJECT-001
+    status: specified
+  - capability_id: record-decision
+    requirement_id: PR-DEC-01
+    public_operation_id: recordDecision
+    ui_surface: judgment-decision-sheet
+    agent_example: examples/agent/record-decision
+    permission_action: decision.record
+    parity_case_id: PARITY-DECISION-001
+    status: specified
+  - capability_id: reforecast-project
+    requirement_id: PR-FC-01
+    public_operation_id: reforecastProject
+    ui_surface: forecast-dialog
+    agent_example: examples/agent/reforecast
+    permission_action: project.reforecast
+    parity_case_id: PARITY-FORECAST-001
+    status: specified
+  - capability_id: apply-brief-section
+    requirement_id: PR-BRIEF-01
+    public_operation_id: applyBriefSection
+    ui_surface: brief-editor
+    agent_example: examples/agent/apply-brief-section
+    permission_action: brief.write
+    parity_case_id: PARITY-BRIEF-001
+    status: specified
+  - capability_id: submit-deliverable
+    requirement_id: PR-EXE-03
+    public_operation_id: submitDeliverable
+    ui_surface: deliverable-submit-sheet
+    agent_example: examples/agent/submit-deliverable
+    permission_action: deliverable.submit
+    parity_case_id: PARITY-DELIVERABLE-001
+    status: specified
+
+ci_failures:
+  - ui_mutation_without_operation
+  - operation_without_permission_action
+  - agent_essential_operation_without_example
+  - equivalent_actor_results_diverge
+  - private_endpoint_or_direct_database_mutation
+  - undocumented_machine_only_capability

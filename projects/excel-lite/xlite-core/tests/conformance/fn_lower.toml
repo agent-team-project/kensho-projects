@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-LOWER-001"
+desc = "LOWER converts uppercase text to lowercase"
+setup = {}
+formula = '=LOWER("EXCEL")'
+expect = { text = "excel" }
+
+[[case]]
+id = "FN-LOWER-002"
+desc = "LOWER converts mixed case text to lowercase"
+setup = {}
+formula = '=LOWER("MiXeD Case")'
+expect = { text = "mixed case" }
+
+[[case]]
+id = "FN-LOWER-003"
+desc = "LOWER leaves numbers punctuation and spaces unchanged"
+setup = {}
+formula = '=LOWER("123 - ! ?")'
+expect = { text = "123 - ! ?" }
+
+[[case]]
+id = "FN-LOWER-004"
+desc = "LOWER coerces numbers to text before lowercasing"
+setup = {}
+formula = "=LOWER(123)"
+expect = { text = "123" }
+
+[[case]]
+id = "FN-LOWER-005"
+desc = "LOWER coerces booleans to text before lowercasing"
+setup = {}
+formula = "=LOWER(TRUE)"
+expect = { text = "true" }
+
+[[case]]
+id = "FN-LOWER-006"
+desc = "LOWER coerces blanks to empty text before lowercasing"
+setup = {}
+formula = "=LOWER(A1)"
+expect = { text = "" }
+
+[[case]]
+id = "FN-LOWER-007"
+desc = "LOWER propagates error values"
+setup = {}
+formula = "=LOWER(1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-LOWER-008"
+desc = "LOWER returns VALUE for too few arguments"
+setup = {}
+formula = "=LOWER()"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-LOWER-009"
+desc = "LOWER returns VALUE for too many arguments"
+setup = {}
+formula = '=LOWER("abc", "extra")'
+expect = { error = "#VALUE!" }

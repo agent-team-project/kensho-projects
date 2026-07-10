@@ -1,0 +1,55 @@
+[[case]]
+id = "FN-AVERAGEIF-001"
+desc = "AVERAGEIF averages explicit average range cells for a nominal numeric criteria"
+setup = { A1 = 1, A2 = 2, A3 = 1, B1 = 10, B2 = 20, B3 = 30 }
+formula = "=AVERAGEIF(A1:A3,1,B1:B3)"
+expect = { number = 20 }
+
+[[case]]
+id = "FN-AVERAGEIF-002"
+desc = "AVERAGEIF with omitted average range averages matching cells from the criteria range"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 2 }
+formula = "=AVERAGEIF(A1:A4,2)"
+expect = { number = 2 }
+
+[[case]]
+id = "FN-AVERAGEIF-003"
+desc = "AVERAGEIF supports comparison criteria"
+setup = { A1 = 1, A2 = 2, A3 = 3, A4 = 4 }
+formula = '=AVERAGEIF(A1:A4,">2")'
+expect = { number = 3.5 }
+
+[[case]]
+id = "FN-AVERAGEIF-004"
+desc = "AVERAGEIF supports text wildcard criteria"
+setup = { A1 = "apple", A2 = "apricot", A3 = "banana", B1 = 10, B2 = 20, B3 = 30 }
+formula = '=AVERAGEIF(A1:A3,"ap*",B1:B3)'
+expect = { number = 15 }
+
+[[case]]
+id = "FN-AVERAGEIF-005"
+desc = "AVERAGEIF returns DIV/0 when no cells match"
+setup = { A1 = "apple", A2 = "apricot", A3 = "banana", B1 = 10, B2 = 20, B3 = 30 }
+formula = '=AVERAGEIF(A1:A3,"z*",B1:B3)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-AVERAGEIF-006"
+desc = "AVERAGEIF ignores average range text, blanks, and booleans"
+setup = { A1 = "x", A2 = "x", A3 = "x", A4 = "x", B1 = 5, B2 = "skip", B3 = true }
+formula = '=AVERAGEIF(A1:A4,"x",B1:B4)'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-AVERAGEIF-007"
+desc = "AVERAGEIF propagates errors from the criteria argument"
+setup = { A1 = 1, A2 = 2, B1 = 10, B2 = 20 }
+formula = "=AVERAGEIF(A1:A2,1/0,B1:B2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-AVERAGEIF-008"
+desc = "AVERAGEIF returns VALUE for wrong arity"
+setup = { A1 = 1, A2 = 2 }
+formula = "=AVERAGEIF(A1:A2)"
+expect = { error = "#VALUE!" }

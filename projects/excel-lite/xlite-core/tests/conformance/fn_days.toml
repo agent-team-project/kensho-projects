@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-DAYS-001"
+desc = "DAYS subtracts start_date from end_date"
+setup = {}
+formula = "=DAYS(DATE(2020,1,31), DATE(2020,1,1))"
+expect = { number = 30 }
+
+[[case]]
+id = "FN-DAYS-002"
+desc = "DAYS counts a leap-year February span"
+setup = {}
+formula = "=DAYS(DATE(2024,3,1), DATE(2024,2,1))"
+expect = { number = 29 }
+
+[[case]]
+id = "FN-DAYS-003"
+desc = "DAYS returns a negative number when end_date is before start_date"
+setup = {}
+formula = "=DAYS(DATE(2020,1,1), DATE(2020,1,31))"
+expect = { number = -30 }
+
+[[case]]
+id = "FN-DAYS-004"
+desc = "DAYS preserves fractional serial differences"
+setup = {}
+formula = "=DAYS(43832.75,43831.25)"
+expect = { number = 1.5 }
+
+[[case]]
+id = "FN-DAYS-005"
+desc = "DAYS coerces numeric text through the serial date helper"
+setup = {}
+formula = '=DAYS("43832","43831")'
+expect = { number = 1 }
+
+[[case]]
+id = "FN-DAYS-006"
+desc = "DAYS returns VALUE for date text until DATEVALUE parsing exists"
+setup = {}
+formula = '=DAYS("2020-01-31",DATE(2020,1,1))'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DAYS-007"
+desc = "DAYS propagates scalar error values"
+setup = {}
+formula = "=DAYS(1/0,DATE(2020,1,1))"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-DAYS-008"
+desc = "DAYS returns VALUE for too few arguments"
+setup = {}
+formula = "=DAYS(DATE(2020,1,1))"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-DAYS-009"
+desc = "DAYS returns VALUE for too many arguments"
+setup = {}
+formula = "=DAYS(DATE(2020,1,2),DATE(2020,1,1),0)"
+expect = { error = "#VALUE!" }

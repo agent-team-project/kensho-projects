@@ -1,0 +1,69 @@
+[[case]]
+id = "FN-CEILING-001"
+desc = "CEILING rounds positive numbers up to the next positive significance"
+setup = {}
+formula = "=CEILING(4.42,0.05)"
+expect = { number = 4.45 }
+
+[[case]]
+id = "FN-CEILING-002"
+desc = "CEILING leaves exact multiples unchanged"
+setup = {}
+formula = "=CEILING(6,3)"
+expect = { number = 6 }
+
+[[case]]
+id = "FN-CEILING-003"
+desc = "CEILING rounds negative numbers with positive significance toward zero"
+setup = {}
+formula = "=CEILING(-2.5,2)"
+expect = { number = -2 }
+
+[[case]]
+id = "FN-CEILING-004"
+desc = "CEILING rounds negative numbers with negative significance away from zero"
+setup = {}
+formula = "=CEILING(-2.5,-2)"
+expect = { number = -4 }
+
+[[case]]
+id = "FN-CEILING-005"
+desc = "CEILING returns NUM for a positive number with negative significance"
+setup = {}
+formula = "=CEILING(2.5,-2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-CEILING-006"
+desc = "CEILING returns zero for zero significance"
+setup = {}
+formula = "=CEILING(2.5,0)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-CEILING-007"
+desc = "CEILING coerces scalar numeric text and booleans"
+setup = {}
+formula = '=CEILING("4.2",TRUE)'
+expect = { number = 5 }
+
+[[case]]
+id = "FN-CEILING-008"
+desc = "CEILING coerces a blank reference to zero"
+setup = {}
+formula = "=CEILING(A1,3)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-CEILING-009"
+desc = "CEILING propagates an error from the number argument"
+setup = {}
+formula = "=CEILING(1/0,2)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-CEILING-010"
+desc = "CEILING propagates an error from the significance argument"
+setup = {}
+formula = "=CEILING(2,1/0)"
+expect = { error = "#DIV/0!" }

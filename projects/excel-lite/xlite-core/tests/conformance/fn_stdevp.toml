@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-STDEVP-001"
+desc = "STDEVP returns population standard deviation for the Microsoft example data set"
+setup = { A1 = 1345, A2 = 1301, A3 = 1368, A4 = 1322, A5 = 1310, A6 = 1370, A7 = 1318, A8 = 1350, A9 = 1303, A10 = 1299 }
+formula = "=STDEVP(A1:A10)"
+expect = { number = 26.054558142482477 }
+
+[[case]]
+id = "FN-STDEVP-002"
+desc = "STDEVP combines range values and direct scalar values"
+setup = { A1 = 1, A2 = 2 }
+formula = "=STDEVP(A1:A2,3)"
+expect = { number = 0.816496580927726 }
+
+[[case]]
+id = "FN-STDEVP-003"
+desc = "STDEVP coerces direct numeric text booleans and blank references"
+setup = {}
+formula = '=STDEVP("3",TRUE,FALSE,A1)'
+expect = { number = 1.224744871391589 }
+
+[[case]]
+id = "FN-STDEVP-004"
+desc = "STDEVP ignores range text booleans and blanks while including zero"
+setup = { A1 = 2, A2 = "skip", A3 = true, A4 = 0, A6 = 4 }
+formula = "=STDEVP(A1:A6)"
+expect = { number = 1.632993161855452 }
+
+[[case]]
+id = "FN-STDEVP-005"
+desc = "STDEVP returns zero for a single numeric value"
+setup = {}
+formula = "=STDEVP(5)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-STDEVP-006"
+desc = "STDEVP returns DIV0 when no numeric values remain"
+setup = { A1 = "x", A2 = true }
+formula = "=STDEVP(A1:A3)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-STDEVP-007"
+desc = "STDEVP propagates direct non-numeric text"
+setup = {}
+formula = '=STDEVP("apple",1)'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-STDEVP-008"
+desc = "STDEVP propagates direct errors"
+setup = {}
+formula = "=STDEVP(1,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-STDEVP-009"
+desc = "STDEVP returns VALUE for wrong arity"
+setup = {}
+formula = "=STDEVP()"
+expect = { error = "#VALUE!" }

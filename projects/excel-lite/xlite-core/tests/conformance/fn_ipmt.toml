@@ -1,0 +1,109 @@
+[[case]]
+id = "FN-IPMT-001"
+desc = "IPMT returns the Microsoft monthly loan first-period interest example"
+setup = {}
+formula = "=IPMT(10%/12,1,3*12,8000)"
+expect = { number = -66.66666666666667 }
+tol = 1e-12
+
+[[case]]
+id = "FN-IPMT-002"
+desc = "IPMT returns the Microsoft annual loan final-period interest example"
+setup = {}
+formula = "=IPMT(10%,3,3,8000)"
+expect = { number = -292.4471299093658 }
+tol = 1e-12
+
+[[case]]
+id = "FN-IPMT-003"
+desc = "IPMT returns zero for the first beginning-of-period payment"
+setup = {}
+formula = "=IPMT(8%/12,1,24,2000,0,1)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-IPMT-004"
+desc = "IPMT returns zero when the rate is zero"
+setup = {}
+formula = "=IPMT(0,5,12,1200)"
+expect = { number = 0 }
+
+[[case]]
+id = "FN-IPMT-005"
+desc = "IPMT explicit zero future value and type match omitted defaults"
+setup = {}
+formula = "=IPMT(10%/12,1,3*12,8000,0,0)"
+expect = { number = -66.66666666666667 }
+tol = 1e-12
+
+[[case]]
+id = "FN-IPMT-006"
+desc = "IPMT truncates a fractional beginning-of-period type argument toward one"
+setup = {}
+formula = "=IPMT(8%/12,2,24,2000,0,1.9)"
+expect = { number = -12.734296360403743 }
+tol = 1e-12
+
+[[case]]
+id = "FN-IPMT-007"
+desc = "IPMT truncates a negative fractional type argument toward zero"
+setup = {}
+formula = "=IPMT(8%/12,2,24,2000,0,-0.9)"
+expect = { number = -12.819191669473101 }
+tol = 1e-12
+
+[[case]]
+id = "FN-IPMT-008"
+desc = "IPMT rejects payment types other than zero or one after truncation"
+setup = {}
+formula = "=IPMT(8%/12,2,24,2000,0,2)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IPMT-009"
+desc = "IPMT returns NUM when period is less than one"
+setup = {}
+formula = "=IPMT(8%/12,0,24,2000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IPMT-010"
+desc = "IPMT returns NUM when period exceeds number of periods"
+setup = {}
+formula = "=IPMT(8%/12,25,24,2000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IPMT-011"
+desc = "IPMT returns NUM when number of periods is zero"
+setup = {}
+formula = "=IPMT(8%/12,1,0,2000)"
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IPMT-012"
+desc = "IPMT returns NUM for a non-finite numeric argument"
+setup = {}
+formula = '=IPMT("1E309",1,24,2000)'
+expect = { error = "#NUM!" }
+
+[[case]]
+id = "FN-IPMT-013"
+desc = "IPMT propagates the first numeric coercion error"
+setup = {}
+formula = '=IPMT(1%,1/0,"not numeric",2000)'
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-IPMT-014"
+desc = "IPMT returns VALUE for too few arguments"
+setup = {}
+formula = "=IPMT(1%,1,24)"
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-IPMT-015"
+desc = "IPMT returns VALUE for too many arguments"
+setup = {}
+formula = "=IPMT(1%,1,24,2000,0,0,0)"
+expect = { error = "#VALUE!" }

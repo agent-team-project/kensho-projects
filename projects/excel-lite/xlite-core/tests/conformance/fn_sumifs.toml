@@ -1,0 +1,62 @@
+[[case]]
+id = "FN-SUMIFS-001"
+desc = "SUMIFS sums cells matching one criteria range"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "fruit", B2 = "veg", B3 = "fruit" }
+formula = '=SUMIFS(A1:A3,B1:B3,"fruit")'
+expect = { number = 40 }
+
+[[case]]
+id = "FN-SUMIFS-002"
+desc = "SUMIFS requires all criteria ranges to match at the same position"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "fruit", B2 = "fruit", B3 = "veg", C1 = "west", C2 = "east", C3 = "east" }
+formula = '=SUMIFS(A1:A3,B1:B3,"fruit",C1:C3,"east")'
+expect = { number = 20 }
+
+[[case]]
+id = "FN-SUMIFS-003"
+desc = "SUMIFS supports comparison criteria"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = 1, B2 = 2, B3 = 3 }
+formula = '=SUMIFS(A1:A3,B1:B3,">=2")'
+expect = { number = 50 }
+
+[[case]]
+id = "FN-SUMIFS-004"
+desc = "SUMIFS supports text wildcard criteria"
+setup = { A1 = 10, A2 = 20, A3 = 30, B1 = "alpha", B2 = "alpine", B3 = "beta" }
+formula = '=SUMIFS(A1:A3,B1:B3,"al*")'
+expect = { number = 30 }
+
+[[case]]
+id = "FN-SUMIFS-005"
+desc = "SUMIFS returns zero when no rows match"
+setup = { A1 = 10, A2 = 20, B1 = "fruit", B2 = "veg" }
+formula = '=SUMIFS(A1:A2,B1:B2,"meat")'
+expect = { number = 0 }
+
+[[case]]
+id = "FN-SUMIFS-006"
+desc = "SUMIFS treats matching text and blank sum cells as zero and booleans as one or zero"
+setup = { A1 = 10, A2 = "skip", A4 = true, A5 = false, B1 = "x", B2 = "x", B3 = "x", B4 = "x", B5 = "x" }
+formula = '=SUMIFS(A1:A5,B1:B5,"x")'
+expect = { number = 11 }
+
+[[case]]
+id = "FN-SUMIFS-007"
+desc = "SUMIFS returns VALUE for criteria range shape mismatch"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", B3 = "x" }
+formula = '=SUMIFS(A1:A2,B1:B3,"x")'
+expect = { error = "#VALUE!" }
+
+[[case]]
+id = "FN-SUMIFS-008"
+desc = "SUMIFS propagates an error from a criteria argument"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x" }
+formula = "=SUMIFS(A1:A2,B1:B2,1/0)"
+expect = { error = "#DIV/0!" }
+
+[[case]]
+id = "FN-SUMIFS-009"
+desc = "SUMIFS returns VALUE for an incomplete criteria range and criteria pair"
+setup = { A1 = 10, A2 = 20, B1 = "x", B2 = "x", C1 = "y", C2 = "y" }
+formula = '=SUMIFS(A1:A2,B1:B2,"x",C1:C2)'
+expect = { error = "#VALUE!" }

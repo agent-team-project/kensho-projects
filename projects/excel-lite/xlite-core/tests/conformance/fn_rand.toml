@@ -1,0 +1,34 @@
+[[case]]
+id = "FN-RAND-001"
+desc = "RAND returns the deterministic default value"
+setup = {}
+formula = "=RAND()"
+expect = { number = 0.5 }
+
+[[case]]
+id = "FN-RAND-002"
+desc = "RAND can be used in arithmetic"
+setup = {}
+formula = "=RAND()*100"
+expect = { number = 50 }
+
+[[case]]
+id = "FN-RAND-003"
+desc = "RAND returns a value greater than or equal to zero"
+setup = {}
+formula = "=RAND()>=0"
+expect = { bool = true }
+
+[[case]]
+id = "FN-RAND-004"
+desc = "RAND returns a value less than one"
+setup = {}
+formula = "=RAND()<1"
+expect = { bool = true }
+
+[[case]]
+id = "FN-RAND-005"
+desc = "RAND rejects arguments"
+setup = {}
+formula = "=RAND(1)"
+expect = { error = "#VALUE!" }

@@ -1,0 +1,37 @@
+[[case]]
+id = "FN-PI-001"
+desc = "PI returns the mathematical constant"
+setup = {}
+formula = "=PI()"
+expect = { number = 3.141592653589793 }
+tol = 1e-15
+
+[[case]]
+id = "FN-PI-002"
+desc = "PI can be used in arithmetic"
+setup = {}
+formula = "=PI()*2"
+expect = { number = 6.283185307179586 }
+tol = 1e-15
+
+[[case]]
+id = "FN-PI-003"
+desc = "PI can be used in comparisons"
+setup = {}
+formula = "=PI()>3"
+expect = { bool = true }
+
+[[case]]
+id = "FN-PI-004"
+desc = "PI participates in arithmetic with blank cells"
+setup = {}
+formula = "=A1+PI()"
+expect = { number = 3.141592653589793 }
+tol = 1e-15
+
+[[case]]
+id = "FN-PI-005"
+desc = "PI rejects arguments"
+setup = {}
+formula = "=PI(1)"
+expect = { error = "#VALUE!" }
