@@ -5,6 +5,13 @@
 **Environment:** macOS 26.4.1 arm64, Node 22.23.1, npm 10.9.8, Rust/Cargo 1.96.1, Python 3.13.7
 **Purpose:** determine whether Excel Lite is ready for a local demonstration, a public macOS release, and the v1 claim defined by `SPEC.md`.
 
+## Project context
+
+- **Motivation.** Excel Lite was chosen as a demanding, legible demonstration of Kensho's autonomous parallel-engineering model: users can judge the product immediately by entering a formula, while a broad function library creates substantial independent implementation and review work.
+- **Requirements.** The v1 specification calls for a fully local macOS spreadsheet with a headless Rust calculation engine, 148 documented worksheet functions, automatic recalculation, lossless native files, CSV interchange, undo/redo, a responsive million-row grid, objective conformance gates, and a signed offline `.app`/`.dmg`.
+- **Goal.** Deliver a useful single-sheet desktop product while proving that many agents can build disjoint features concurrently behind stable interfaces without trading away correctness, reviewability, or reproducibility.
+- **Outcome.** The project produced a strong calculation core and a functioning native application that is ready for a controlled local demo: 148 functions, 1,585 conformance cases, 1,341 Rust tests, 38 frontend tests, and 96.29% measured core coverage. It did not complete the full public-release goal because grid reachability, unsaved-work protection, native CI, signing, and notarization remain unresolved.
+
 ## Shareable summary
 
 Excel Lite has a substantial, unusually well-tested calculation core and is ready for a controlled local demonstration. Current `main` passes 1,585 conformance cases, 1,341 Rust tests, 38 frontend tests, a 96.29% function/evaluator coverage gate, offline verification, a fresh Tauri package build, and DMG integrity verification. The packaged app launches and its native calculation, file-dialog, and offline paths have direct evidence.
