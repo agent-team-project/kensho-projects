@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/jamesaud/kensho-projects/projects/workplane/internal/app"
+	"github.com/agent-team-project/kensho-projects/projects/workplane/internal/app"
 )
 
 func main() {

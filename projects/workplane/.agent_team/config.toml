@@ -4,7 +4,7 @@
 provider = "github"
 
 [github]
-owner = "jamesaud"
+owner = "agent-team-project"
 repo = "kensho-projects"
 
 [project]
