@@ -50,6 +50,12 @@ type TransportResponse = {
 };
 
 const versionETagPattern = /^"[1-9][0-9]*"$/;
+const contractOwnedRequestHeaders = new Set([
+  "authorization",
+  "idempotency-key",
+  "if-match",
+  "x-csrf-token"
+]);
 
 export const operationIds = [
   "createProject",
@@ -70,9 +76,9 @@ export class WorkplaneClient {
     return (await this.request(`/api/v1/orgs/${encodeURIComponent(params.org_id)}/projects`, {
       method: "POST",
       headers: {
+        ...this.extensionHeaders(options.headers),
       'Idempotency-Key': options.idempotencyKey,
         ...this.securityHeaders(options.security),
-        ...options.headers,
       },
     body: JSON.stringify(body),
     })).body;
@@ -81,8 +87,8 @@ export class WorkplaneClient {
     return (await this.request(`/api/v1/projects/${encodeURIComponent(params.project_id)}`, {
       method: "GET",
       headers: {
+        ...this.extensionHeaders(options.headers),
         ...this.securityHeaders(options.security),
-        ...options.headers,
       },
     })).body;
   }
@@ -90,8 +96,8 @@ export class WorkplaneClient {
     return (await this.request(`/api/v1/projects/${encodeURIComponent(params.project_id)}/activity`, {
       method: "GET",
       headers: {
+        ...this.extensionHeaders(options.headers),
         ...this.securityHeaders(options.security),
-        ...options.headers,
       },
     })).body;
   }
@@ -99,8 +105,8 @@ export class WorkplaneClient {
     return (await this.request(`/api/v1/session/login`, {
       method: "POST",
       headers: {
+        ...this.extensionHeaders(options.headers),
         ...this.securityHeaders(options.security),
-        ...options.headers,
       },
     body: JSON.stringify(body),
     })).body as Session;
@@ -109,10 +115,10 @@ export class WorkplaneClient {
     const response = await this.request(`/api/v1/projects/${encodeURIComponent(params.project_id)}/decisions`, {
       method: "POST",
       headers: {
+        ...this.extensionHeaders(options.headers),
       'Idempotency-Key': options.idempotencyKey,
       'If-Match': options.expectedVersion,
         ...this.securityHeaders(options.security),
-        ...options.headers,
       },
     body: JSON.stringify(body),
     });
@@ -142,6 +148,14 @@ export class WorkplaneClient {
       return { "X-CSRF-Token": security.csrfToken };
     }
     return {};
+  }
+
+  private extensionHeaders(headers?: Record<string, string>): Record<string, string> {
+    return Object.fromEntries(
+      Object.entries(headers ?? {}).filter(
+        ([name]) => !contractOwnedRequestHeaders.has(name.toLowerCase()),
+      ),
+    );
   }
 }
 
