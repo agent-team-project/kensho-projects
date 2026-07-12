@@ -1,4 +1,4 @@
-module github.com/jamesaud/kensho-projects/projects/workplane
+module github.com/agent-team-project/kensho-projects/projects/workplane
 
 go 1.25.0
 
