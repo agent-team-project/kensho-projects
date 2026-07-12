@@ -1,7 +1,7 @@
 schema_version: 1
 contract: workplane-permissions
 source_of_truth: true
-generated_views: [docs/SECURITY.md]
+generated_views: [docs/generated/permissions.md]
 default: deny
 
 principals:

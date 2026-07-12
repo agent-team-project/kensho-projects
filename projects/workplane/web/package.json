@@ -1,0 +1,30 @@
+{
+  "name": "@workplane/web",
+  "version": "0.1.0-m0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
+  "scripts": {
+    "build": "tsc -b && vite build",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "10.7.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0",
+    "vite": "8.1.4",
+    "vitest": "4.1.10"
+  }
+}

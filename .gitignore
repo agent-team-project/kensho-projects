@@ -13,10 +13,15 @@
 **/target/
 **/node_modules/
 **/ui/dist/
+**/web/dist/
+**/*.tsbuildinfo
 **/xlite-app/gen/
 **/.worker_agent/
 **/output/
 **/tmp/
+**/__pycache__/
+*.pyc
+**/.venv/
 
 **/.agent_team/budget/
 **/.agent_team/daemon/

@@ -2,8 +2,8 @@ schema_version = 1
 name = "Workplane"
 slug = "workplane"
 kind = "product-study"
-status = "specified-pre-slice"
-mode = "exploration"
+status = "m0-contract-freeze"
+mode = "exploitation"
 owner = "Kensho research track"
 dogfood_strategy = "conditional preferred treatment with post-v0.5 fallback; never hold v0.5 for Workplane"
 
@@ -20,14 +20,17 @@ must_be_harder = true
 basis = "created at exploitation kickoff from current fleet throughput, integration capacity, and observed uncertainty"
 calendar_values_precommitted = false
 set_at_kickoff = true
+kickoff_recorded = true
+values_source = "durable exploitation kickoff record; not duplicated as static source claims"
 reforecast_after_each_gate = true
 best_effort = true
 quality_override = false
 
 [delivery]
-max_parallel_tracks_initial = 2
-max_parallel_tracks_after_slice = 3
-max_release_bearing_units_initial = 4
+max_parallel_tracks_initial = 1
+max_parallel_tracks_after_slice = 2
+max_release_bearing_units_initial = 1
+max_release_bearing_units_after_slice = 4
 max_release_bearing_units_after_health_gate = 6
 max_recursive_depth = 1
 merge_only_on_green = true

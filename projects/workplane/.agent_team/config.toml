@@ -1,0 +1,26 @@
+# Public Workplane definitions only. Runtime state and credentials are not published.
+
+[pm]
+provider = "github"
+
+[github]
+owner = "jamesaud"
+repo = "kensho-projects"
+
+[project]
+id = "workplane-study-002"
+
+[runtime]
+kind = "codex"
+
+[authority]
+enforcement = "audit"
+
+[authority.agents.research-worker]
+allow = ["budget.status", "inbox.*", "job.show", "job.gate.*:own", "job.step:own", "status.*"]
+
+[authority.agents.research-verifier]
+allow = ["budget.status", "inbox.*", "job.show", "job.gate.*:own", "job.step:own", "status.*"]
+
+[authority.agents.research-reviewer]
+allow = ["budget.status", "inbox.*", "job.show", "job.gate.*:own", "status.*"]

@@ -1,0 +1,8 @@
+id: FC-DATE-GATE-001
+requirement: PR-FC-10
+layer: contract
+title: Elapsed time has no gate-approval command
+given: {lifecycle_contract: canonical}
+when: {command: expand_dates_never_transition_rule}
+then: {approve: forbidden, waive: forbidden}
+evidence: [contract-validation.log]

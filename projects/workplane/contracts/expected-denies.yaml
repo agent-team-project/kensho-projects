@@ -1,0 +1,30 @@
+schema_version: 1
+contract: workplane-permission-expected-denies
+coverage: every_action_and_openapi_operation
+templates:
+  - id: DENY-UNAUTHENTICATED
+    applies_to: all_actions
+    dimensions: {principal_status: unauthenticated}
+    expected: deny
+    rationale: Authentication is required before any action evaluation.
+  - id: DENY-REVOKED
+    applies_to: all_actions
+    dimensions: {principal_status: revoked}
+    expected: deny
+    rationale: Revocation precedes roles and token scope.
+  - id: DENY-CROSS-ORG
+    applies_to: all_resource_actions
+    dimensions: {organization_boundary: cross_organization}
+    expected: deny
+    rationale: No role or token can cross the organization boundary.
+  - id: DENY-OUT-OF-SCOPE-AGENT
+    applies_to: all_actions
+    dimensions: {principal_kind: agent, token_scope: excludes_action}
+    expected: deny
+    rationale: Agent token scope can only restrict delegated authority.
+  - id: DENY-HUMAN-REQUIRED
+    applies_to: human_required_actions
+    dimensions: {principal_kind: agent}
+    expected: deny
+    rationale: Human-required policy is server-side authorization data.
+operation_expectation: every_openapi_operation_inherits_all_action_denies

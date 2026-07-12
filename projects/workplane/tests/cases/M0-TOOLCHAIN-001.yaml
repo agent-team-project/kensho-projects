@@ -1,0 +1,8 @@
+id: M0-TOOLCHAIN-001
+requirement: M0-TOOLCHAIN-001
+layer: contract
+title: Pinned toolchain commands run from a clean checkout
+given: {checkout: clean, network: local_only}
+when: {command: make check}
+then: {result: pass, versions_are_exact: true}
+evidence: [gate-check.log]

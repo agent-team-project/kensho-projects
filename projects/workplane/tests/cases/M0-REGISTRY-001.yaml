@@ -1,0 +1,11 @@
+id: M0-REGISTRY-001
+requirement: M0-REGISTRY-001
+layer: contract
+title: Unknown requirement references fail the case registry
+given: {registry: valid}
+when: {mutation: replace_requirement_with_UNKNOWN-999}
+then: {result: fail, error_contains: unknown requirement id}
+evidence: [registry-mutation.log]
+mutation:
+  operation: unknown_requirement
+  expected_error: unknown requirement id

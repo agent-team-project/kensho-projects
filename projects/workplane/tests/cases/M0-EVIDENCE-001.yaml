@@ -1,0 +1,8 @@
+id: M0-EVIDENCE-001
+requirement: M0-EVIDENCE-001
+layer: contract
+title: Evidence generation rejects dirty source and incomplete gate records
+given: {source: dirty}
+when: {command: python3 scripts/evidence.py smoke}
+then: {result: fail, error_contains: source tree is dirty}
+evidence: [evidence-dirty-source.log]

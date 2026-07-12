@@ -1,0 +1,8 @@
+id: FC-DEADLINE-001
+requirement: PR-FC-12
+layer: contract
+title: Deadline pressure can only create attention
+given: {deadline: elapsed}
+when: {command: expand_dates_never_transition_rule}
+then: {effect: attention_only, lifecycle_transition: forbidden}
+evidence: [contract-validation.log]

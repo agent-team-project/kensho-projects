@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workplane.local/schemas/domain-event-v1.json",
+  "title": "Workplane domain event envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id", "event_type", "schema_version", "organization_id",
+    "aggregate_type", "aggregate_id", "aggregate_version", "command_id",
+    "request_id", "actor", "occurred_at", "payload"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {"type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"},
+    "schema_version": {"const": 1},
+    "organization_id": {"type": "string", "format": "uuid"},
+    "aggregate_type": {"type": "string", "enum": ["project", "decision"]},
+    "aggregate_id": {"type": "string", "format": "uuid"},
+    "aggregate_version": {"type": "integer", "minimum": 1},
+    "command_id": {"type": "string", "format": "uuid"},
+    "request_id": {"type": "string", "minLength": 1},
+    "idempotency_key": {"type": ["string", "null"], "minLength": 16, "maxLength": 128},
+    "causation_event_id": {"type": ["string", "null"], "format": "uuid"},
+    "correlation_id": {"type": "string", "format": "uuid"},
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "actor_kind", "principal_id", "origin"],
+      "properties": {
+        "actor_id": {"type": "string", "format": "uuid"},
+        "actor_kind": {"type": "string", "enum": ["human", "agent"]},
+        "principal_id": {"type": "string", "format": "uuid"},
+        "origin": {"type": "string", "enum": ["browser", "api", "system"]}
+      }
+    },
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "payload": {"type": "object"},
+    "metadata": {"type": "object"}
+  }
+}

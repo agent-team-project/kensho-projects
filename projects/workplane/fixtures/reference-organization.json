@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "fixture_id": "reference-organization-v1",
+  "frozen_at": "2026-07-10T00:00:00Z",
+  "organization": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "slug": "reference",
+    "name": "Reference Organization"
+  },
+  "catalogs": {
+    "principal_kinds": ["human", "agent"],
+    "organization_roles": ["owner", "admin", "member", "observer"],
+    "project_roles": ["owner", "steward", "contributor", "reviewer", "viewer"],
+    "project_modes": ["exploration", "exploitation"],
+    "project_states": ["proposed", "active", "held", "completed", "stopped", "cancelled"]
+  },
+  "principals": [
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "kind": "human",
+      "display_name": "Reference Owner",
+      "status": "active",
+      "human_principal_id": null,
+      "organization_role": "owner"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "kind": "human",
+      "display_name": "Reference Reviewer",
+      "status": "active",
+      "human_principal_id": null,
+      "organization_role": "member"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "kind": "agent",
+      "display_name": "Reference Agent",
+      "status": "active",
+      "human_principal_id": "00000000-0000-4000-8000-000000000010",
+      "organization_role": "member"
+    }
+  ],
+  "expected_counts": {
+    "organizations": 1,
+    "principals": 3,
+    "organization_memberships": 3
+  }
+}

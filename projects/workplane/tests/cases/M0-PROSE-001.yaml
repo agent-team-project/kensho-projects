@@ -1,0 +1,11 @@
+id: M0-PROSE-001
+requirement: M0-PROSE-001
+layer: contract
+title: Hand-edited generated contract prose is rejected
+given: {generated_views: clean}
+when: {mutation: append_twin_author_text}
+then: {result: fail, error_contains: generated artifact drift}
+evidence: [prose-drift-mutation.log]
+mutation:
+  operation: generated_prose_drift
+  expected_error: generated artifact drift

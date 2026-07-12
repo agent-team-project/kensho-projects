@@ -15,7 +15,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 MAX_PUBLIC_FILE_BYTES = 5 * 1024 * 1024
 
-SKIP_PARTS = {".git", "node_modules", "target"}
+SKIP_PARTS = {".git", ".venv", "node_modules", "target"}
 FORBIDDEN_PARTS = {
     ".claude",
     "budget",

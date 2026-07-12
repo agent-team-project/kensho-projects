@@ -1,0 +1,8 @@
+id: FC-DELIVERABLE-SCOPE-001
+requirement: PR-FC-13
+layer: contract
+title: Deliverable forecasts remain outside project calibration
+given: {forecast_scope: deliverable}
+when: {command: validate_requirement_registry}
+then: {project_calibration_count_change: 0}
+evidence: [contract-validation.log]

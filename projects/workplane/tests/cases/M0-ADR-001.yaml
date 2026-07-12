@@ -1,0 +1,8 @@
+id: M0-ADR-001
+requirement: M0-ADR-001
+layer: contract
+title: Foundational ADR set is complete and accepted
+given: {adr_directory: docs/adr}
+when: {command: python3 scripts/validate_contracts.py}
+then: {result: pass, required_decisions: 5}
+evidence: [contract-validation.log]

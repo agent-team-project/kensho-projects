@@ -1,0 +1,8 @@
+id: M0-TOPOLOGY-001
+requirement: M0-TOPOLOGY-001
+layer: contract
+title: Public topology contains reproducible definitions but no runtime state
+given: {topology: .agent_team}
+when: {command: python3 scripts/check_hygiene.py}
+then: {result: pass, credentials: absent, runtime_state: absent}
+evidence: [hygiene.log]

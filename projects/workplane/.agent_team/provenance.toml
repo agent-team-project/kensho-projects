@@ -1,0 +1,11 @@
+schema = "workplane-kensho-provenance.v1"
+project = "workplane-study-002"
+source_archive_commit = "40517a9f161432aae31ecca0c194a33a664a9a35"
+pipeline = "research_slice"
+implementation_wip = 1
+recursive_depth = 0
+integration_owner = "research-manager"
+required_gate = "smoke"
+gate_command = "cd projects/workplane && make bootstrap && make smoke"
+runtime_state_published = false
+credentials_required_to_review = false

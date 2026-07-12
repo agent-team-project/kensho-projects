@@ -1,0 +1,23 @@
+{
+  "event_id": "00000000-0000-4000-8000-000000000101",
+  "event_type": "project.created",
+  "schema_version": 1,
+  "organization_id": "00000000-0000-4000-8000-000000000001",
+  "aggregate_type": "project",
+  "aggregate_id": "00000000-0000-4000-8000-000000000201",
+  "aggregate_version": 1,
+  "command_id": "00000000-0000-4000-8000-000000000301",
+  "request_id": "reference-request-1",
+  "idempotency_key": "reference-key-0001",
+  "causation_event_id": null,
+  "correlation_id": "00000000-0000-4000-8000-000000000401",
+  "actor": {
+    "actor_id": "00000000-0000-4000-8000-000000000012",
+    "actor_kind": "agent",
+    "principal_id": "00000000-0000-4000-8000-000000000010",
+    "origin": "api"
+  },
+  "occurred_at": "2026-07-10T00:00:00Z",
+  "payload": {"title": "Reference exploration"},
+  "metadata": {}
+}
