@@ -6,3 +6,6 @@ given: {source: dirty}
 when: {command: python3 scripts/evidence.py smoke}
 then: {result: fail, error_contains: source tree is dirty}
 evidence: [evidence-dirty-source.log]
+mutation:
+  operation: dirty_source
+  expected_error: source tree is dirty

@@ -70,7 +70,14 @@ token_budget = "15M"
 time_budget = "30m"
 max_attempts = 1
 retry_on_crash = true
-instructions = "Run: cd projects/workplane && make bootstrap && make smoke. Record commands and artifact digests against the exact worker commit. Never edit product code."
+instructions = """
+Reproduce the exact worker/PR commit without editing product code. Record
+commands, environment, timestamps, counts, and artifact digests.
+
+```agent-team-verify-gates
+workplane-smoke :: cd projects/workplane && make bootstrap && make smoke
+```
+"""
 
 [[pipelines.research_slice.steps]]
 id = "review"

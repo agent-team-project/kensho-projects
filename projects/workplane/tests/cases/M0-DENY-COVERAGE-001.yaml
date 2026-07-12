@@ -1,0 +1,11 @@
+id: M0-DENY-COVERAGE-001
+requirement: M0-CONTRACT-001
+layer: contract
+title: Removing cross-organization denial fails exact expected-deny coverage
+given: {expected_deny_registry: generated_current}
+when: {command: python3 scripts/validate_contracts.py, mutation: remove_cross_org_denial}
+then: {result: fail, error_contains: deny template mismatch}
+evidence: [cross-org-deny-mutation.log]
+mutation:
+  operation: remove_cross_org_denial
+  expected_error: deny template mismatch

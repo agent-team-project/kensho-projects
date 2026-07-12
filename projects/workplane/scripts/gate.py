@@ -19,6 +19,7 @@ GATES: dict[str, list[tuple[str, str]]] = {
     "contract": [
         ("contracts", f"{PYTHON} scripts/validate_contracts.py"),
         ("registry-mutations", f"{PYTHON} scripts/contract_selftest.py"),
+        ("evidence-manifest-self-test", f"{PYTHON} scripts/evidence_selftest.py"),
         ("gate-tier-self-test", f"{PYTHON} scripts/gate_selftest.py"),
         ("generated-zero-diff", f"{PYTHON} scripts/generate.py --check"),
         ("generated-drift-mutation", f"{PYTHON} scripts/generate.py --self-test"),
@@ -76,7 +77,7 @@ def run(suite: str, evidence: bool) -> int:
                 "started_at": gate_started,
                 "finished_at": now(),
                 "result": "pass" if completed.returncode == 0 else "fail",
-                "tests": 1,
+                "command_executions": 1,
                 "artifacts": [{"path": str(log.relative_to(ROOT)), "sha256": sha256(log)}],
             })
             if completed.returncode:

@@ -27,7 +27,9 @@ widen its delegated authority.
    contract and an **idempotency** key.
 3. `GET /api/v1/projects/{project_id}` returns the committed projection.
 4. `POST /api/v1/projects/{project_id}/decisions` records the universal
-   decision shape with an idempotency key.
+   decision shape with an idempotency key and required `If-Match: "<version>"`;
+   stale or missing versions deny before mutation and success returns the new
+   version as `ETag`.
 5. `GET /api/v1/projects/{project_id}/activity` returns immutable events in
    commit order.
 
@@ -36,6 +38,12 @@ The decision command atomically writes the immutable decision and
 `decision.recorded` event. Aggregate versions are contiguous. An identical
 retry returns the original status/body/version/event group; a different body
 under the same key returns a typed conflict and writes nothing.
+
+Every protected browser mutation combines the `workplane_session` cookie with
+`X-CSRF-Token`; reads use the session cookie. The equivalent agent calls use
+`Authorization: Bearer <token>` and never a browser cookie or CSRF substitute.
+These alternatives and the expected-version header are authoritative OpenAPI
+surfaces carried by both checked-in generated clients.
 
 ## Required boundaries and denies
 

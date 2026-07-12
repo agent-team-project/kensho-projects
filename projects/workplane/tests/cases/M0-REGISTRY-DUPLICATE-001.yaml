@@ -1,0 +1,11 @@
+id: M0-REGISTRY-DUPLICATE-001
+requirement: M0-REGISTRY-001
+layer: contract
+title: Duplicate requirement identifiers fail the production registry validator
+given: {registry: valid}
+when: {command: python3 scripts/validate_contracts.py, mutation: duplicate_requirement_id}
+then: {result: fail, error_contains: duplicate id}
+evidence: [registry-duplicate-mutation.log]
+mutation:
+  operation: duplicate_requirement_id
+  expected_error: duplicate id

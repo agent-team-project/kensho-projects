@@ -10,6 +10,7 @@ from stage_status import OMISSIONS
 REQUIRED_SMOKE_GATES = {
     "contracts",
     "registry-mutations",
+    "evidence-manifest-self-test",
     "gate-tier-self-test",
     "generated-zero-diff",
     "generated-drift-mutation",

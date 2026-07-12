@@ -1,6 +1,26 @@
 schema_version: 1
 contract: workplane-permission-expected-denies
 coverage: every_action_and_openapi_operation
+resource_action_classification:
+  resource_families:
+    - organization
+    - identity
+    - portfolio
+    - project
+    - exploration
+    - brief
+    - deliverable
+    - work
+    - dependency
+    - evidence
+    - review
+    - decision
+    - comment
+    - attention
+    - optional_automation
+    - other
+  resource_actions: [session.read, session.revoke]
+  non_resource_actions: [session.login, session.logout]
 templates:
   - id: DENY-UNAUTHENTICATED
     applies_to: all_actions

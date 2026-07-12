@@ -9,6 +9,7 @@ paths:
   /api/v1/session/login:
     post:
       operationId: login
+      security: []
       x-permission-actions: [session.login]
       requestBody:
         required: true
@@ -27,6 +28,10 @@ paths:
       - {$ref: '#/components/parameters/OrgId'}
     post:
       operationId: createProject
+      security:
+        - HumanSession: []
+          CsrfToken: []
+        - AgentBearer: []
       x-permission-actions: [project.create]
       parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
       requestBody:
@@ -46,6 +51,9 @@ paths:
       - {$ref: '#/components/parameters/ProjectId'}
     get:
       operationId: getProject
+      security:
+        - HumanSession: []
+        - AgentBearer: []
       x-permission-actions: [project.read]
       responses:
         '200':
@@ -59,8 +67,14 @@ paths:
       - {$ref: '#/components/parameters/ProjectId'}
     post:
       operationId: recordDecision
+      security:
+        - HumanSession: []
+          CsrfToken: []
+        - AgentBearer: []
       x-permission-actions: [decision.record]
-      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/ExpectedVersion'}
       requestBody:
         required: true
         content:
@@ -69,6 +83,11 @@ paths:
       responses:
         '201':
           description: Decision recorded
+          headers:
+            ETag:
+              description: Quoted aggregate version returned by the committed mutation.
+              required: true
+              schema: {$ref: '#/components/schemas/VersionETag'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Decision'}
@@ -78,6 +97,9 @@ paths:
       - {$ref: '#/components/parameters/ProjectId'}
     get:
       operationId: listProjectActivity
+      security:
+        - HumanSession: []
+        - AgentBearer: []
       x-permission-actions: [project.read]
       responses:
         '200':
@@ -89,6 +111,22 @@ paths:
                 items: {$ref: '#/components/schemas/Activity'}
         default: {$ref: '#/components/responses/Problem'}
 components:
+  securitySchemes:
+    HumanSession:
+      type: apiKey
+      in: cookie
+      name: workplane_session
+      description: HttpOnly, Secure, SameSite session cookie for human browser requests.
+    CsrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Required with the human session cookie for every protected mutation.
+    AgentBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: WorkplaneAgentToken
+      description: Scoped agent token carrying the agent identity and delegated human principal.
   parameters:
     OrgId:
       name: org_id
@@ -105,6 +143,12 @@ components:
       in: header
       required: true
       schema: {type: string, minLength: 16, maxLength: 128}
+    ExpectedVersion:
+      name: If-Match
+      in: header
+      required: true
+      description: Quoted current aggregate version; stale or missing values deny before mutation.
+      schema: {$ref: '#/components/schemas/VersionETag'}
   responses:
     Problem:
       description: Typed problem response
@@ -166,14 +210,24 @@ components:
         evidence: {type: array, items: {type: string}}
         consequences: {type: array, items: {type: string}}
     Decision:
-      allOf:
-        - {$ref: '#/components/schemas/RecordDecision'}
-        - type: object
-          required: [id, actor_id, recorded_at]
-          properties:
-            id: {type: string, format: uuid}
-            actor_id: {type: string, format: uuid}
-            recorded_at: {type: string, format: date-time}
+      type: object
+      additionalProperties: false
+      required: [id, actor_id, recorded_at, kind, question, choice, alternatives, rationale, evidence, consequences]
+      properties:
+        id: {type: string, format: uuid}
+        actor_id: {type: string, format: uuid}
+        recorded_at: {type: string, format: date-time}
+        kind: {type: string, enum: [continue, pivot, stop, promote, scope, forecast, waiver, risk-acceptance, complete, cancel]}
+        question: {type: string, minLength: 1}
+        choice: {type: string, minLength: 1}
+        alternatives: {type: array, items: {type: string}}
+        rationale: {type: string, minLength: 1}
+        evidence: {type: array, items: {type: string}}
+        consequences: {type: array, items: {type: string}}
+    VersionETag:
+      type: string
+      pattern: '^"[1-9][0-9]*"$'
+      examples: ['"7"']
     Activity:
       type: object
       additionalProperties: false

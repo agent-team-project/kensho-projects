@@ -20,6 +20,7 @@ generated-check:
 test-contract:
 	$(PYTHON) scripts/validate_contracts.py
 	$(PYTHON) scripts/contract_selftest.py
+	$(PYTHON) scripts/evidence_selftest.py
 	$(PYTHON) scripts/gate_selftest.py
 	$(PYTHON) scripts/generate.py --check
 	$(PYTHON) scripts/generate.py --self-test

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import platform
@@ -10,6 +11,8 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from jsonschema import Draft202012Validator, FormatChecker
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,23 +65,52 @@ def tool_version(command: list[str]) -> str:
         return "unavailable"
 
 
-def validate_manifest(manifest: dict[str, Any]) -> None:
-    required = {"schema_version", "source_commit", "dirty", "suite", "environment", "started_at", "finished_at", "gates"}
-    missing = required - set(manifest)
-    if missing:
-        raise ValueError(f"incomplete evidence manifest; missing {sorted(missing)}")
-    if manifest["dirty"] is not False or not manifest["source_commit"]:
-        raise ValueError("evidence manifest must identify a clean exact commit")
-    if not manifest["gates"]:
-        raise ValueError("evidence manifest must contain at least one gate")
-    gate_required = {"name", "command", "started_at", "finished_at", "result", "tests", "artifacts"}
-    for gate in manifest["gates"]:
-        gate_missing = gate_required - set(gate)
-        if gate_missing:
-            raise ValueError(f"incomplete gate {gate.get('name')}; missing {sorted(gate_missing)}")
+def parse_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def validate_manifest(manifest: dict[str, Any], artifact_root: Path = ROOT) -> None:
+    schema = json.loads((ROOT / "evidence/manifest.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    errors = sorted(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(manifest),
+        key=lambda error: [str(part) for part in error.absolute_path],
+    )
+    if errors:
+        details = "; ".join(
+            f"{'/'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"
+            for error in errors
+        )
+        raise ValueError(f"evidence manifest schema violation: {details}")
+
+    started = parse_timestamp(manifest["started_at"])
+    finished = parse_timestamp(manifest["finished_at"])
+    if finished < started:
+        raise ValueError("evidence manifest finished_at precedes started_at")
+
+    gates = manifest["gates"]
+    for gate in gates:
+        if parse_timestamp(gate["finished_at"]) < parse_timestamp(gate["started_at"]):
+            raise ValueError(f"evidence gate {gate['name']} finished_at precedes started_at")
         for artifact in gate["artifacts"]:
-            if set(artifact) != {"path", "sha256"}:
-                raise ValueError(f"incomplete artifact record in gate {gate['name']}")
+            path = (artifact_root / artifact["path"]).resolve()
+            try:
+                path.relative_to(artifact_root.resolve())
+            except ValueError as error:
+                raise ValueError(f"evidence artifact escapes root: {artifact['path']}") from error
+            if not path.is_file():
+                raise ValueError(f"evidence artifact is missing: {artifact['path']}")
+            if sha256(path) != artifact["sha256"]:
+                raise ValueError(f"evidence artifact digest mismatch: {artifact['path']}")
+
+    expected_summary = {
+        "gates": len(gates),
+        "command_executions": sum(gate["command_executions"] for gate in gates),
+        "passed": sum(gate["result"] == "pass" for gate in gates),
+        "failed": sum(gate["result"] == "fail" for gate in gates),
+    }
+    if manifest["summary"] != expected_summary:
+        raise ValueError(f"evidence manifest summary mismatch: expected {expected_summary}")
 
 
 def write_manifest(suite: str, started_at: str, gates: list[dict[str, Any]], commit: str) -> Path:
@@ -90,6 +122,12 @@ def write_manifest(suite: str, started_at: str, gates: list[dict[str, Any]], com
         "environment": environment(),
         "started_at": started_at,
         "finished_at": now(),
+        "summary": {
+            "gates": len(gates),
+            "command_executions": sum(gate["command_executions"] for gate in gates),
+            "passed": sum(gate["result"] == "pass" for gate in gates),
+            "failed": sum(gate["result"] == "fail" for gate in gates),
+        },
         "gates": gates,
     }
     validate_manifest(manifest)
@@ -97,3 +135,16 @@ def write_manifest(suite: str, started_at: str, gates: list[dict[str, Any]], com
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return output
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate clean-source evidence preconditions.")
+    parser.add_argument("suite", choices=("smoke", "acceptance", "release"))
+    args = parser.parse_args()
+    commit = source_commit()
+    print(f"evidence preflight passed: suite={args.suite} source_commit={commit}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

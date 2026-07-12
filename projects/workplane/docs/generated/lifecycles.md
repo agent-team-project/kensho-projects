@@ -9,60 +9,62 @@ Default policy: **deny**.
 
 States: `proposed, active, held, completed, stopped, cancelled`.
 
-| From | Command | To | Mode/kind | Requires |
-| --- | --- | --- | --- | --- |
-| proposed | activate | active | all | mode_contract_complete |
-| active | hold | held | all | hold_reason |
-| held | resume | active | all | resume_decision |
-| active | stop | stopped | exploration | stop_decision |
-| active | promote | active | exploration | promotion_contract |
-| active | complete | completed | exploitation | completion_contract |
-| proposed | cancel | cancelled | all | cancel_decision |
-| active | cancel | cancelled | all | cancel_decision |
-| held | cancel | cancelled | all | cancel_decision |
+| From | Command | To | Mode | Mode to | Kind | Requires |
+| --- | --- | --- | --- | --- | --- | --- |
+| proposed | activate | active | all | unchanged | all | mode_contract_complete |
+| active | hold | held | all | unchanged | all | hold_reason |
+| held | resume | active | all | unchanged | all | resume_decision |
+| active | stop | stopped | exploration | unchanged | all | stop_decision |
+| active | promote | active | exploration | exploitation | all | promotion_contract |
+| active | complete | completed | exploitation | unchanged | all | completion_contract |
+| proposed | cancel | cancelled | all | unchanged | all | cancel_decision |
+| active | cancel | cancelled | all | unchanged | all | cancel_decision |
+| held | cancel | cancelled | all | unchanged | all | cancel_decision |
 
 ## Deliverable
 
 States: `draft, ready, submitted, bounced, accepted, waived, cancelled`.
 
-| From | Command | To | Mode/kind | Requires |
-| --- | --- | --- | --- | --- |
-| draft | mark_ready | ready | all | criteria_and_gates |
-| ready | submit | submitted | all | evidence_contract |
-| submitted | bounce | bounced | all | actionable_finding |
-| bounced | resubmit | submitted | all | resolution_evidence |
-| submitted | approve | accepted | all | all_findings_resolved_and_all_hard_gates_passed |
-| ready | waive | waived | all | human_deliverable_waiver_contract |
-| submitted | waive | waived | all | human_deliverable_waiver_contract |
-| bounced | waive | waived | all | human_deliverable_waiver_contract |
-| draft | cancel | cancelled | all | project_cancel_or_optional_deliverable_cancel |
-| ready | cancel | cancelled | all | project_cancel_or_optional_deliverable_cancel |
+| From | Command | To | Mode | Mode to | Kind | Requires |
+| --- | --- | --- | --- | --- | --- | --- |
+| draft | mark_ready | ready | all | unchanged | all | criteria_and_gates |
+| ready | submit | submitted | all | unchanged | all | evidence_contract |
+| submitted | bounce | bounced | all | unchanged | all | actionable_finding |
+| bounced | resubmit | submitted | all | unchanged | all | resolution_evidence |
+| submitted | approve | accepted | all | unchanged | all | all_findings_resolved_and_all_hard_gates_passed |
+| ready | waive | waived | all | unchanged | all | human_deliverable_waiver_contract |
+| submitted | waive | waived | all | unchanged | all | human_deliverable_waiver_contract |
+| bounced | waive | waived | all | unchanged | all | human_deliverable_waiver_contract |
+| draft | cancel | cancelled | all | unchanged | all | project_cancel_or_optional_deliverable_cancel |
+| ready | cancel | cancelled | all | unchanged | all | project_cancel_or_optional_deliverable_cancel |
 
 ## Gate
 
 States: `pending, passed, failed, waived`.
 
-| From | Command | To | Mode/kind | Requires |
-| --- | --- | --- | --- | --- |
-| pending | pass | passed | all | verdict_or_automated_evidence |
-| pending | fail | failed | all | verdict_or_automated_evidence |
-| failed | pass | passed | all | superseding_verdict_or_automated_evidence |
-| pending | waive | waived | all | human_soft_gate_waiver_contract |
-| failed | waive | waived | all | human_soft_gate_waiver_contract |
+Hard gate waiver: **forbidden**.
+
+| From | Command | To | Mode | Mode to | Kind | Requires |
+| --- | --- | --- | --- | --- | --- | --- |
+| pending | pass | passed | all | unchanged | all | verdict_or_automated_evidence |
+| pending | fail | failed | all | unchanged | all | verdict_or_automated_evidence |
+| failed | pass | passed | all | unchanged | all | superseding_verdict_or_automated_evidence |
+| pending | waive | waived | all | unchanged | soft | human_soft_gate_waiver_contract |
+| failed | waive | waived | all | unchanged | soft | human_soft_gate_waiver_contract |
 
 ## Work Item
 
 States: `open, in_progress, in_review, done, cancelled`.
 
-| From | Command | To | Mode/kind | Requires |
-| --- | --- | --- | --- | --- |
-| open | start | in_progress | all | active_assignee |
-| in_progress | request_review | in_review | all | evidence |
-| in_review | bounce | in_progress | all | actionable_finding |
-| in_review | accept | done | all | linked_outcome_evidence |
-| open | cancel | cancelled | all | cancel_reason |
-| in_progress | cancel | cancelled | all | cancel_reason |
-| in_review | cancel | cancelled | all | cancel_reason |
+| From | Command | To | Mode | Mode to | Kind | Requires |
+| --- | --- | --- | --- | --- | --- | --- |
+| open | start | in_progress | all | unchanged | all | active_assignee |
+| in_progress | request_review | in_review | all | unchanged | all | evidence |
+| in_review | bounce | in_progress | all | unchanged | all | actionable_finding |
+| in_review | accept | done | all | unchanged | all | linked_outcome_evidence |
+| open | cancel | cancelled | all | unchanged | all | cancel_reason |
+| in_progress | cancel | cancelled | all | unchanged | all | cancel_reason |
+| in_review | cancel | cancelled | all | unchanged | all | cancel_reason |
 
 ## Date rule
 
