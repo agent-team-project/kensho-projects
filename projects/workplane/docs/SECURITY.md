@@ -109,31 +109,9 @@ public transports.
 
 ### 5.3 Action vocabulary
 
-Actions are stable strings grouped by resource:
-
-```text
-session.login, session.logout, session.read, session.revoke
-org.read, org.manage, membership.manage
-org.delete, membership.read
-service_identity.read, service_identity.manage, token.read, token.issue, token.revoke
-portfolio.read, portfolio.manage, priority.decide
-project.read, project.create, project.edit, project.activate, project.hold,
-project.resume, project.promote, project.complete, project.stop, project.cancel,
-project.reforecast, project.target.write, project.deadline.write
-hypothesis.read, hypothesis.write, experiment.read, experiment.write, observation.create
-brief.read, brief.write, brief.comment, brief.restore, brief.export, brief.grant
-deliverable.read, deliverable.edit, deliverable.submit, deliverable.waive,
-deliverable.cancel, deliverable.reforecast
-work.read, work.edit, work.transition, work.assign, dependency.read, dependency.edit
-evidence.read, evidence.create, evidence.supersede
-review.request, review.verdict, finding.resolve, finding.withdraw, gate.soft_waive
-decision.read, decision.record
-comment.read, comment.create, comment.edit
-inbox.read, inbox.ack, judgment.read, judgment.claim, judgment.resolve
-automation.read, automation.manage, automation.retry
-search.read, export.create, export.download
-audit.read, research.read, realtime.subscribe, event.subscribe
-```
+Actions are stable strings grouped by resource. The complete checked-in prose
+view is generated at `docs/generated/permissions.md` from the canonical
+`contracts/permissions.yaml`; CI rejects any generated diff.
 
 Unknown actions deny. Action strings have no colon-qualified variants; each
 privileged operation is a closed action of its own. Renamed actions are clean

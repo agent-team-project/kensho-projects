@@ -1,0 +1,2292 @@
+{
+  "actions": [
+    {
+      "action": "audit.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "automation.manage",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "automation.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "automation.retry",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "brief.comment",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "brief.export",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "brief.grant",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "brief.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "brief.restore",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "brief.write",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "comment.create",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "comment.edit",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "comment.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "decision.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "decision.record",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "deliverable.cancel",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "deliverable.edit",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "deliverable.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "deliverable.reforecast",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "deliverable.submit",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "deliverable.waive",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "dependency.edit",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "dependency.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "event.subscribe",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "evidence.create",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "evidence.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "evidence.supersede",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "experiment.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "experiment.write",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "export.create",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "export.download",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "finding.resolve",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "finding.withdraw",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "gate.soft_waive",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "hypothesis.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "hypothesis.write",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "inbox.ack",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "inbox.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "judgment.claim",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "judgment.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "judgment.resolve",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "membership.manage",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "membership.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "observation.create",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "org.delete",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "org.manage",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "org.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "portfolio.manage",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "portfolio.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "priority.decide",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.activate",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.cancel",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.complete",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.create",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.deadline.write",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.edit",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.hold",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.promote",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.reforecast",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.resume",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.stop",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "project.target.write",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "realtime.subscribe",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "research.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "review.request",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "review.verdict",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "risk.accept",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "search.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "service_identity.manage",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "service_identity.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "session.login",
+      "deny_templates": [
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "session.logout",
+      "deny_templates": [
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "session.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "session.revoke",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "token.issue",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "token.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "token.revoke",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "work.assign",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "work.edit",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "work.read",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    },
+    {
+      "action": "work.transition",
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "actions": [
+        "org.delete"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "DELETE /api/v1/orgs/{org_id}"
+    },
+    {
+      "actions": [
+        "token.revoke"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "DELETE /api/v1/orgs/{org_id}/service-identities/{id}/tokens/{token_id}"
+    },
+    {
+      "actions": [
+        "session.revoke"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "DELETE /api/v1/sessions/{session_id}"
+    },
+    {
+      "actions": [
+        "dependency.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "DELETE /api/v1/work-items/{id}/dependencies/{dependency_id}"
+    },
+    {
+      "actions": [
+        "deliverable.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/deliverables/{deliverable_id}/forecasts"
+    },
+    {
+      "actions": [
+        "deliverable.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/deliverables/{id}"
+    },
+    {
+      "actions": [
+        "event.subscribe"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/events?cursor=<opaque>&types=review.requested,work_item.assigned"
+    },
+    {
+      "actions": [
+        "export.download"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/exports/{id}"
+    },
+    {
+      "actions": [
+        "deliverable.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/gates/{gate_id}/verdicts"
+    },
+    {
+      "actions": [
+        "inbox.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/inbox"
+    },
+    {
+      "actions": [
+        "judgment.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/judgment-queue"
+    },
+    {
+      "actions": [
+        "org.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}"
+    },
+    {
+      "actions": [
+        "audit.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}/audit"
+    },
+    {
+      "actions": [
+        "membership.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}/members"
+    },
+    {
+      "actions": [
+        "portfolio.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}/portfolios"
+    },
+    {
+      "actions": [
+        "project.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}/projects"
+    },
+    {
+      "actions": [
+        "automation.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}/rules"
+    },
+    {
+      "actions": [
+        "service_identity.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}/service-identities"
+    },
+    {
+      "actions": [
+        "token.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/orgs/{org_id}/service-identities/{id}/tokens"
+    },
+    {
+      "actions": [
+        "portfolio.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/portfolios/{portfolio_id}"
+    },
+    {
+      "actions": [
+        "portfolio.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/portfolios/{portfolio_id}/capacity"
+    },
+    {
+      "actions": [
+        "portfolio.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/portfolios/{portfolio_id}/projects"
+    },
+    {
+      "actions": [
+        "research.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/portfolios/{portfolio_id}/research-metrics"
+    },
+    {
+      "actions": [
+        "portfolio.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/portfolios/{portfolio_id}/timeline"
+    },
+    {
+      "actions": [
+        "project.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}"
+    },
+    {
+      "actions": [
+        "project.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/activity"
+    },
+    {
+      "actions": [
+        "brief.export"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/brief/export"
+    },
+    {
+      "actions": [
+        "brief.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/brief/metadata"
+    },
+    {
+      "actions": [
+        "brief.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/brief/revisions"
+    },
+    {
+      "actions": [
+        "brief.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/brief/sections"
+    },
+    {
+      "actions": [
+        "brief.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/brief/snapshots"
+    },
+    {
+      "actions": [
+        "project.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/context-brief"
+    },
+    {
+      "actions": [
+        "decision.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/decisions"
+    },
+    {
+      "actions": [
+        "deliverable.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/deliverables"
+    },
+    {
+      "actions": [
+        "dependency.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/dependency-graph"
+    },
+    {
+      "actions": [
+        "evidence.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/evidence"
+    },
+    {
+      "actions": [
+        "experiment.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/experiments"
+    },
+    {
+      "actions": [
+        "project.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/forecasts"
+    },
+    {
+      "actions": [
+        "project.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/health"
+    },
+    {
+      "actions": [
+        "hypothesis.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/hypotheses"
+    },
+    {
+      "actions": [
+        "research.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/research-metrics"
+    },
+    {
+      "actions": [
+        "work.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/projects/{project_id}/work-items"
+    },
+    {
+      "actions": [
+        "realtime.subscribe"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/realtime?cursor=<opaque>"
+    },
+    {
+      "actions": [
+        "automation.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/rules/{id}"
+    },
+    {
+      "actions": [
+        "automation.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/rules/{id}/executions"
+    },
+    {
+      "actions": [
+        "search.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/search?q=...&types=project,decision,evidence&portfolio_id=..."
+    },
+    {
+      "actions": [
+        "session.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/session"
+    },
+    {
+      "actions": [
+        "session.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/sessions"
+    },
+    {
+      "actions": [
+        "work.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/work-items/{id}"
+    },
+    {
+      "actions": [
+        "comment.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/{resource_type}/{resource_id}/comments"
+    },
+    {
+      "actions": [
+        "comment.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/comments/{id}"
+    },
+    {
+      "actions": [
+        "deliverable.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/deliverables/{id}"
+    },
+    {
+      "actions": [
+        "experiment.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/experiments/{id}"
+    },
+    {
+      "actions": [
+        "org.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/orgs/{org_id}"
+    },
+    {
+      "actions": [
+        "membership.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/orgs/{org_id}/members/{actor_id}"
+    },
+    {
+      "actions": [
+        "service_identity.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/orgs/{org_id}/service-identities/{id}"
+    },
+    {
+      "actions": [
+        "portfolio.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/portfolios/{portfolio_id}"
+    },
+    {
+      "actions": [
+        "project.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/projects/{project_id}"
+    },
+    {
+      "actions": [
+        "brief.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/projects/{project_id}/brief/sections/{section_id}"
+    },
+    {
+      "actions": [
+        "automation.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/rules/{id}"
+    },
+    {
+      "actions": [
+        "work.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "PATCH /api/v1/work-items/{id}"
+    },
+    {
+      "actions": [
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/decisions/{id}/supersede"
+    },
+    {
+      "actions": [
+        "deliverable.reforecast"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{deliverable_id}/forecasts"
+    },
+    {
+      "actions": [
+        "deliverable.cancel",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/cancel"
+    },
+    {
+      "actions": [
+        "deliverable.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/criteria"
+    },
+    {
+      "actions": [
+        "deliverable.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/gates"
+    },
+    {
+      "actions": [
+        "deliverable.submit",
+        "review.request"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/submit"
+    },
+    {
+      "actions": [
+        "deliverable.waive",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/waive"
+    },
+    {
+      "actions": [
+        "evidence.supersede"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/evidence/{id}/supersede"
+    },
+    {
+      "actions": [
+        "observation.create"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/experiments/{id}/observations"
+    },
+    {
+      "actions": [
+        "finding.resolve"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/findings/{finding_id}/resolve"
+    },
+    {
+      "actions": [
+        "finding.withdraw"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/findings/{finding_id}/withdraw"
+    },
+    {
+      "actions": [
+        "review.verdict"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/gates/{gate_id}/verdicts"
+    },
+    {
+      "actions": [
+        "gate.soft_waive",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/gates/{gate_id}/waive"
+    },
+    {
+      "actions": [
+        "hypothesis.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/hypotheses/{id}/supersede"
+    },
+    {
+      "actions": [
+        "inbox.ack"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/inbox/ack-batch"
+    },
+    {
+      "actions": [
+        "inbox.ack"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/inbox/{item_id}/ack"
+    },
+    {
+      "actions": [
+        "judgment.claim"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/judgment-queue/{item_id}/claim"
+    },
+    {
+      "actions": [
+        "judgment.resolve"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/judgment-queue/{item_id}/resolve"
+    },
+    {
+      "actions": [
+        "export.create"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/orgs/{org_id}/exports"
+    },
+    {
+      "actions": [
+        "membership.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/orgs/{org_id}/members"
+    },
+    {
+      "actions": [
+        "portfolio.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/orgs/{org_id}/portfolios"
+    },
+    {
+      "actions": [
+        "project.create"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/orgs/{org_id}/projects"
+    },
+    {
+      "actions": [
+        "automation.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/orgs/{org_id}/rules"
+    },
+    {
+      "actions": [
+        "service_identity.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/orgs/{org_id}/service-identities"
+    },
+    {
+      "actions": [
+        "token.issue"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-HUMAN-REQUIRED",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/orgs/{org_id}/service-identities/{id}/tokens"
+    },
+    {
+      "actions": [
+        "priority.decide",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/portfolios/{portfolio_id}/rank"
+    },
+    {
+      "actions": [
+        "project.activate"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/activate"
+    },
+    {
+      "actions": [
+        "brief.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/brief/apply"
+    },
+    {
+      "actions": [
+        "brief.grant"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/brief/grant"
+    },
+    {
+      "actions": [
+        "brief.restore"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/brief/restore"
+    },
+    {
+      "actions": [
+        "brief.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/brief/snapshots"
+    },
+    {
+      "actions": [
+        "project.cancel",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/cancel"
+    },
+    {
+      "actions": [
+        "project.complete",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/complete"
+    },
+    {
+      "actions": [
+        "project.deadline.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/deadline"
+    },
+    {
+      "actions": [
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/decisions"
+    },
+    {
+      "actions": [
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/decisions/continue"
+    },
+    {
+      "actions": [
+        "decision.record",
+        "hypothesis.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/decisions/pivot"
+    },
+    {
+      "actions": [
+        "deliverable.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/deliverables"
+    },
+    {
+      "actions": [
+        "evidence.create"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/evidence"
+    },
+    {
+      "actions": [
+        "experiment.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/experiments"
+    },
+    {
+      "actions": [
+        "project.reforecast"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/forecasts"
+    },
+    {
+      "actions": [
+        "project.hold",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/hold"
+    },
+    {
+      "actions": [
+        "hypothesis.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/hypotheses"
+    },
+    {
+      "actions": [
+        "project.promote",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/promote"
+    },
+    {
+      "actions": [
+        "project.resume",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/resume"
+    },
+    {
+      "actions": [
+        "project.stop",
+        "decision.record"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/stop"
+    },
+    {
+      "actions": [
+        "project.target.write"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/target"
+    },
+    {
+      "actions": [
+        "work.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/work-items"
+    },
+    {
+      "actions": [
+        "work.transition"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/projects/{project_id}/work-items/batch-transition"
+    },
+    {
+      "actions": [
+        "automation.retry"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/rule-executions/{id}/retry"
+    },
+    {
+      "actions": [
+        "automation.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/rules/{id}/disable"
+    },
+    {
+      "actions": [
+        "automation.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/rules/{id}/dry-run"
+    },
+    {
+      "actions": [
+        "automation.manage"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/rules/{id}/enable"
+    },
+    {
+      "actions": [
+        "session.login"
+      ],
+      "deny_templates": [
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/session/login"
+    },
+    {
+      "actions": [
+        "session.logout"
+      ],
+      "deny_templates": [
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/session/logout"
+    },
+    {
+      "actions": [
+        "work.assign"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/work-items/{id}/assign"
+    },
+    {
+      "actions": [
+        "dependency.edit"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/work-items/{id}/dependencies"
+    },
+    {
+      "actions": [
+        "work.transition"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/work-items/{id}/transition"
+    },
+    {
+      "actions": [
+        "comment.create"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/{resource_type}/{resource_id}/comments"
+    }
+  ],
+  "resource_actions": [
+    "audit.read",
+    "automation.manage",
+    "automation.read",
+    "automation.retry",
+    "brief.comment",
+    "brief.export",
+    "brief.grant",
+    "brief.read",
+    "brief.restore",
+    "brief.write",
+    "comment.create",
+    "comment.edit",
+    "comment.read",
+    "decision.read",
+    "decision.record",
+    "deliverable.cancel",
+    "deliverable.edit",
+    "deliverable.read",
+    "deliverable.reforecast",
+    "deliverable.submit",
+    "deliverable.waive",
+    "dependency.edit",
+    "dependency.read",
+    "event.subscribe",
+    "evidence.create",
+    "evidence.read",
+    "evidence.supersede",
+    "experiment.read",
+    "experiment.write",
+    "export.create",
+    "export.download",
+    "finding.resolve",
+    "finding.withdraw",
+    "gate.soft_waive",
+    "hypothesis.read",
+    "hypothesis.write",
+    "inbox.ack",
+    "inbox.read",
+    "judgment.claim",
+    "judgment.read",
+    "judgment.resolve",
+    "membership.manage",
+    "membership.read",
+    "observation.create",
+    "org.delete",
+    "org.manage",
+    "org.read",
+    "portfolio.manage",
+    "portfolio.read",
+    "priority.decide",
+    "project.activate",
+    "project.cancel",
+    "project.complete",
+    "project.create",
+    "project.deadline.write",
+    "project.edit",
+    "project.hold",
+    "project.promote",
+    "project.read",
+    "project.reforecast",
+    "project.resume",
+    "project.stop",
+    "project.target.write",
+    "realtime.subscribe",
+    "research.read",
+    "review.request",
+    "review.verdict",
+    "risk.accept",
+    "search.read",
+    "service_identity.manage",
+    "service_identity.read",
+    "session.read",
+    "session.revoke",
+    "token.issue",
+    "token.read",
+    "token.revoke",
+    "work.assign",
+    "work.edit",
+    "work.read",
+    "work.transition"
+  ],
+  "schema_version": 1,
+  "sources": {
+    "expected_denies": "853adc4afc73e28142cd65199f33995d2aceab4ad5a8ad178fa655a5e5043989",
+    "operation_permissions": "510b0a5a5d558a98bde7cef9a50352cfc6a1ccfb491f9c463e6bd786c0aa5bc5",
+    "permissions": "eac6199b62bc009cc609249cee53e0f4fe1679965e8a96f21e9166d8f48c8214"
+  }
+}

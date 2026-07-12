@@ -1,0 +1,104 @@
+[instances.research-manager]
+agent = "research-manager"
+ephemeral = false
+description = "Sole Workplane Track A integration owner."
+
+[[instances.research-manager.triggers]]
+event = "agent.dispatch"
+match.target = "research-manager"
+
+[instances.research-worker]
+agent = "research-worker"
+ephemeral = true
+replicas = 1
+reap_worktree = "on_merge"
+token_budget = "80M"
+time_budget = "1h30m"
+description = "Serialized Workplane M0/M1 implementation owner."
+
+[[instances.research-worker.triggers]]
+event = "agent.dispatch"
+match.target = "research-worker"
+
+[instances.research-verifier]
+agent = "research-verifier"
+ephemeral = true
+replicas = 1
+token_budget = "15M"
+time_budget = "30m"
+description = "Exact-commit deterministic gate verifier."
+
+[[instances.research-verifier.triggers]]
+event = "agent.dispatch"
+match.target = "research-verifier"
+
+[instances.research-reviewer]
+agent = "research-reviewer"
+ephemeral = true
+replicas = 1
+token_budget = "30M"
+time_budget = "45m"
+description = "Independent semantic, security, and authority reviewer."
+
+[[instances.research-reviewer.triggers]]
+event = "agent.dispatch"
+match.target = "research-reviewer"
+
+[pipelines.research_slice]
+trigger.event = "ticket.status_changed"
+trigger.match.status = "Ready for Agent"
+auto_advance = true
+redispatch_on_reentry = false
+
+[[pipelines.research_slice.steps]]
+id = "implement"
+target = "research-worker"
+workspace = "worktree"
+timeout = "1h30m"
+token_budget = "80M"
+time_budget = "1h30m"
+max_attempts = 1
+instructions = "Implement one preregistered slice and produce exact-commit evidence."
+
+[[pipelines.research_slice.steps]]
+id = "verify"
+target = "research-verifier"
+after = ["implement"]
+workspace = "repo"
+timeout = "30m"
+token_budget = "15M"
+time_budget = "30m"
+max_attempts = 1
+retry_on_crash = true
+instructions = """
+Reproduce the exact worker/PR commit without editing product code. Record
+commands, environment, timestamps, counts, and artifact digests.
+
+```agent-team-verify-gates
+workplane-smoke :: cd projects/workplane && make bootstrap && make smoke
+```
+"""
+
+[[pipelines.research_slice.steps]]
+id = "review"
+target = "research-reviewer"
+after = ["verify"]
+workspace = "repo"
+timeout = "45m"
+token_budget = "30M"
+time_budget = "45m"
+max_attempts = 1
+retry_on_crash = true
+instructions = "Review requirement/case authority, semantics, security, mutation sensitivity, evidence integrity, and scope after verifier success. Never push."
+
+[[pipelines.research_slice.steps]]
+id = "integrate"
+target = "research-manager"
+after = ["review"]
+gate = "manual"
+instructions = "Integrate only when exact-commit verifier and independent reviewer are green; record accepted evidence and reforecast before M1."
+
+[teams.workplane]
+description = "Single Track A Workplane research slice with independent verification."
+instances = ["research-manager", "research-worker", "research-verifier", "research-reviewer"]
+pipelines = ["research_slice"]

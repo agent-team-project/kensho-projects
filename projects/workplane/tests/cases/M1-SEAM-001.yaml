@@ -1,0 +1,8 @@
+id: M1-SEAM-001
+requirement: M1-SEAM-001
+layer: contract
+title: Walking-slice seam names every required real boundary
+given: {seam_document: docs/walking-slice-m1.md}
+when: {command: python3 scripts/validate_contracts.py}
+then: {result: pass, product_behavior: explicitly_unimplemented}
+evidence: [contract-validation.log]

@@ -1,0 +1,8 @@
+id: M0-SCHEMA-001
+requirement: M0-SCHEMA-001
+layer: contract
+title: OpenAPI and event schemas generate zero-diff consumers
+given: {contracts: canonical_checked_in}
+when: {command: make generated-check}
+then: {result: pass, working_tree_diff: empty}
+evidence: [generated-check.log]

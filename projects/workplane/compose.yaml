@@ -1,0 +1,25 @@
+name: workplane
+
+services:
+  postgres:
+    image: postgres:17.5-alpine@sha256:6567bca8d7bc8c82c5922425a0baee57be8402df92bae5eacad5f01ae9544daa
+    environment:
+      POSTGRES_DB: workplane
+      POSTGRES_USER: workplane
+      POSTGRES_PASSWORD: workplane-local-only
+    ports:
+      - "127.0.0.1:${WORKPLANE_POSTGRES_PORT:-54329}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workplane -d workplane"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - workplane-postgres:/var/lib/postgresql/data
+
+networks:
+  default:
+    internal: true
+
+volumes:
+  workplane-postgres: {}

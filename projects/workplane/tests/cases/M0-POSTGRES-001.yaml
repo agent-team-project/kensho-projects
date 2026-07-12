@@ -1,0 +1,8 @@
+id: M0-POSTGRES-001
+requirement: M0-POSTGRES-001
+layer: integration
+title: Empty PostgreSQL migrates and loads the deterministic reference organization
+given: {database: empty_postgresql, fixture: reference-organization-v1}
+when: {command: make test-integration}
+then: {result: pass, fixture_digest_matches: true}
+evidence: [postgres-migration.log, reference-organization.sha256]

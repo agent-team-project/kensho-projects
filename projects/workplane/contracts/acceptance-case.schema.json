@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workplane.local/schemas/acceptance-case-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "requirement", "layer", "title", "given", "when", "then", "evidence"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Z0-9]+(?:-[A-Z0-9]+)+$"},
+    "requirement": {"type": "string"},
+    "layer": {"type": "string", "enum": ["contract", "unit", "integration", "system", "browser"]},
+    "title": {"type": "string", "minLength": 1},
+    "given": {"type": "object"},
+    "when": {"type": "object"},
+    "then": {"type": "object"},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "expected_error"],
+      "properties": {
+        "operation": {"type": "string"},
+        "expected_error": {"type": "string"}
+      }
+    }
+  }
+}

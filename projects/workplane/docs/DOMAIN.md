@@ -33,10 +33,10 @@
 epic, workspace, or instance.
 
 `contracts/lifecycles.yaml` is the canonical closed vocabulary for lifecycle
-states, transitions, and activation predicates. The state tables in this file
-are generated documentation views of that contract. M0 CI regenerates and
-diffs them; prose here remains authoritative for invariants not expressible in
-the contract schema.
+states, transitions, and activation predicates. The checked-in
+`docs/generated/lifecycles.md` file is its generated documentation view. M0 CI
+regenerates and diffs that view; prose here remains authoritative for
+invariants not expressible in the contract schema.
 
 ## 2. Identifiers and tenancy
 

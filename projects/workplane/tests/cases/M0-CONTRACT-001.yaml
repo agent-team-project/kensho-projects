@@ -1,0 +1,8 @@
+id: M0-CONTRACT-001
+requirement: M0-CONTRACT-001
+layer: contract
+title: Closed contract vocabularies reconcile without unmapped entries
+given: {contracts: canonical_checked_in}
+when: {command: python3 scripts/validate_contracts.py}
+then: {result: pass, default_policy: deny}
+evidence: [contract-validation.log]

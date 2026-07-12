@@ -1,7 +1,7 @@
 schema_version: 1
 contract: workplane-lifecycles
 source_of_truth: true
-generated_views: [docs/DOMAIN.md]
+generated_views: [docs/generated/lifecycles.md]
 default: deny
 
 rules:

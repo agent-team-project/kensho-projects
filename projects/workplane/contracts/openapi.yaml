@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: Workplane Walking Slice API
+  version: 0.1.0-m0
+  description: Contract-only M0 surface. Operations are implemented in M1.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/session/login:
+    post:
+      operationId: login
+      security: []
+      x-permission-actions: [session.login]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: Authenticated human session
+          headers:
+            Set-Cookie:
+              description: >-
+                Issues the HttpOnly workplane_session credential. Secure is
+                required outside explicit localhost development; Path=/ and
+                SameSite=Lax are always required.
+              required: true
+              schema:
+                type: string
+                pattern: '^workplane_session=[^;]+; Path=/; HttpOnly; SameSite=Lax(?:; Secure)?$'
+                examples:
+                  - 'workplane_session=opaque; Path=/; HttpOnly; SameSite=Lax; Secure'
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/orgs/{org_id}/projects:
+    parameters:
+      - {$ref: '#/components/parameters/OrgId'}
+    post:
+      operationId: createProject
+      security:
+        - HumanSession: []
+          CsrfToken: []
+        - AgentBearer: []
+      x-permission-actions: [project.create]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateExplorationProject'}
+      responses:
+        '201':
+          description: Exploration project created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}:
+    parameters:
+      - {$ref: '#/components/parameters/ProjectId'}
+    get:
+      operationId: getProject
+      security:
+        - HumanSession: []
+        - AgentBearer: []
+      x-permission-actions: [project.read]
+      responses:
+        '200':
+          description: Project projection
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/decisions:
+    parameters:
+      - {$ref: '#/components/parameters/ProjectId'}
+    post:
+      operationId: recordDecision
+      security:
+        - HumanSession: []
+          CsrfToken: []
+        - AgentBearer: []
+      x-permission-actions: [decision.record]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/ExpectedVersion'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RecordDecision'}
+      responses:
+        '201':
+          description: Decision recorded
+          headers:
+            ETag:
+              description: Quoted aggregate version returned by the committed mutation.
+              required: true
+              schema: {$ref: '#/components/schemas/VersionETag'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Decision'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/activity:
+    parameters:
+      - {$ref: '#/components/parameters/ProjectId'}
+    get:
+      operationId: listProjectActivity
+      security:
+        - HumanSession: []
+        - AgentBearer: []
+      x-permission-actions: [project.read]
+      responses:
+        '200':
+          description: Immutable activity entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Activity'}
+        default: {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    HumanSession:
+      type: apiKey
+      in: cookie
+      name: workplane_session
+      description: HttpOnly, Secure, SameSite session cookie for human browser requests.
+    CsrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Required with the human session cookie for every protected mutation.
+    AgentBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: WorkplaneAgentToken
+      description: Scoped agent token carrying the agent identity and delegated human principal.
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 128}
+    ExpectedVersion:
+      name: If-Match
+      in: header
+      required: true
+      description: Quoted current aggregate version; stale or missing values deny before mutation.
+      schema: {$ref: '#/components/schemas/VersionETag'}
+  responses:
+    Problem:
+      description: Typed problem response
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 1}
+    Session:
+      type: object
+      additionalProperties: false
+      required: [actor_id, actor_kind, expires_at, csrf_token]
+      properties:
+        actor_id: {type: string, format: uuid}
+        actor_kind: {type: string, enum: [human]}
+        expires_at: {type: string, format: date-time}
+        csrf_token:
+          type: string
+          minLength: 32
+          maxLength: 256
+          description: Submit as X-CSRF-Token with the issued session cookie on protected mutations.
+    CreateExplorationProject:
+      type: object
+      additionalProperties: false
+      required: [title, outcome, hypothesis, falsifier, decision_criteria, experiment_bound]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200}
+        outcome: {type: string, minLength: 1, maxLength: 2000}
+        hypothesis: {type: string, minLength: 1, maxLength: 2000}
+        falsifier: {type: string, minLength: 1, maxLength: 2000}
+        decision_criteria:
+          type: array
+          minItems: 1
+          items: {type: string, minLength: 1}
+        experiment_bound: {type: string, minLength: 1}
+    Project:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, title, outcome, mode, state, version]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        title: {type: string}
+        outcome: {type: string}
+        mode: {type: string, enum: [exploration, exploitation]}
+        state: {type: string, enum: [proposed, active, held, completed, stopped, cancelled]}
+        version: {type: integer, minimum: 1}
+    RecordDecision:
+      type: object
+      additionalProperties: false
+      required: [kind, question, choice, alternatives, rationale, evidence, consequences]
+      properties:
+        kind: {type: string, enum: [continue, pivot, stop, promote, scope, forecast, waiver, risk-acceptance, complete, cancel]}
+        question: {type: string, minLength: 1}
+        choice: {type: string, minLength: 1}
+        alternatives: {type: array, items: {type: string}}
+        rationale: {type: string, minLength: 1}
+        evidence: {type: array, items: {type: string}}
+        consequences: {type: array, items: {type: string}}
+    Decision:
+      type: object
+      additionalProperties: false
+      required: [id, actor_id, recorded_at, kind, question, choice, alternatives, rationale, evidence, consequences]
+      properties:
+        id: {type: string, format: uuid}
+        actor_id: {type: string, format: uuid}
+        recorded_at: {type: string, format: date-time}
+        kind: {type: string, enum: [continue, pivot, stop, promote, scope, forecast, waiver, risk-acceptance, complete, cancel]}
+        question: {type: string, minLength: 1}
+        choice: {type: string, minLength: 1}
+        alternatives: {type: array, items: {type: string}}
+        rationale: {type: string, minLength: 1}
+        evidence: {type: array, items: {type: string}}
+        consequences: {type: array, items: {type: string}}
+    VersionETag:
+      type: string
+      pattern: '^"[1-9][0-9]*"$'
+      examples: ['"7"']
+    Activity:
+      type: object
+      additionalProperties: false
+      required: [event_id, event_type, actor_id, occurred_at]
+      properties:
+        event_id: {type: string, format: uuid}
+        event_type: {type: string}
+        actor_id: {type: string, format: uuid}
+        occurred_at: {type: string, format: date-time}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, request_id]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string}
+        status: {type: integer, minimum: 400, maximum: 599}
+        code: {type: string}
+        request_id: {type: string}

@@ -1,0 +1,196 @@
+schema_version: 1
+contract: workplane-requirement-registry
+authority_commit: 40517a9f161432aae31ecca0c194a33a664a9a35
+requirements:
+  - id: M0-TOOLCHAIN-001
+    source: DELIVERY:6/M0
+    title: Pinned local-first Go and React toolchains
+    begins_at: contract-freeze
+  - id: M0-REGISTRY-001
+    source: VERIFICATION:2-3
+    title: Executable requirement and acceptance registries fail closed
+    begins_at: contract-freeze
+  - id: M0-CONTRACT-001
+    source: SPEC:9.8
+    title: Lifecycle permission parity traceability and staged contracts execute
+    begins_at: contract-freeze
+  - id: M0-SCHEMA-001
+    source: DELIVERY:5-6/M0
+    title: OpenAPI and domain-event schemas generate deterministic consumers
+    begins_at: contract-freeze
+  - id: M0-PROSE-001
+    source: DOMAIN:1;SECURITY:5.3
+    title: Canonical lifecycle and permission contracts generate prose views
+    begins_at: contract-freeze
+  - id: M0-POSTGRES-001
+    source: SPEC:5.8;VERIFICATION:4
+    title: Migrations and deterministic fixtures execute on real PostgreSQL
+    begins_at: contract-freeze
+  - id: M0-EVIDENCE-001
+    source: VERIFICATION:19-20
+    title: Tiered gates emit complete exact-source evidence manifests
+    begins_at: contract-freeze
+  - id: M0-ADR-001
+    source: ARCHITECTURE:2;API:19
+    title: Foundational architectural choices are durable and reviewable
+    begins_at: contract-freeze
+  - id: M0-TOPOLOGY-001
+    source: DELIVERY:1-5
+    title: Public Kensho provenance reproduces the serialized research slice
+    begins_at: contract-freeze
+  - id: M1-SEAM-001
+    source: DELIVERY:6/M1
+    title: The next human and agent walking-slice transaction is pinned
+    begins_at: contract-freeze
+  - id: PR-CORE-01
+    source: PRODUCT:4.5
+    title: Actor-neutral public project creation records attributable events
+    begins_at: walking-slice
+  - id: PR-CORE-02
+    source: PRODUCT:4.5
+    title: Authoritative UI mutations use public operations
+    begins_at: walking-slice
+  - id: PR-DEC-01
+    source: PRODUCT:4.5
+    title: Consequential judgments use the universal decision shape
+    begins_at: walking-slice
+  - id: PR-FC-01
+    source: PRODUCT:7
+    title: Forecasts carry basis assumptions quantiles and review interval
+    begins_at: durable-core
+  - id: PR-BRIEF-01
+    source: PRODUCT:4.5
+    title: Human and agent brief edits share a versioned contract
+    begins_at: durable-core
+  - id: PR-EXE-03
+    source: PRODUCT:6
+    title: Deliverable gates distinguish submission bounce and acceptance
+    begins_at: durable-core
+  - id: PR-BRIEF-02
+    source: PRODUCT:4.5
+    title: Revision restore retains complete attributed history
+    begins_at: durable-core
+  - id: PR-EXP-01
+    source: PRODUCT:5
+    title: Exploration requires a falsifiable hypothesis or explicit unknown
+    begins_at: durable-core
+  - id: PR-EXP-02
+    source: PRODUCT:5
+    title: Exploration defines evidence decision criteria and bounds
+    begins_at: durable-core
+  - id: PR-EXP-03
+    source: PRODUCT:5
+    title: Experiments separate method observation evidence and conclusion
+    begins_at: durable-core
+  - id: PR-EXP-04
+    source: PRODUCT:5
+    title: Review checkpoints expose uncertainty and information value
+    begins_at: durable-core
+  - id: PR-EXP-05
+    source: PRODUCT:5
+    title: Continue pivot stop and promote are explicit decisions
+    begins_at: durable-core
+  - id: PR-EXP-06
+    source: PRODUCT:5
+    title: Pivot supersedes hypotheses without deletion
+    begins_at: durable-core
+  - id: PR-EXP-07
+    source: PRODUCT:5
+    title: Promotion retains uncertainty and creates exploitation contract
+    begins_at: durable-core
+  - id: PR-EXP-08
+    source: PRODUCT:5
+    title: Exploration never reports completion percentage
+    begins_at: durable-core
+  - id: PR-EXP-09
+    source: PRODUCT:5
+    title: Bounds emit attention and never auto-stop work
+    begins_at: durable-core
+  - id: PR-EXP-10
+    source: PRODUCT:5
+    title: Stopped exploration remains searchable and citable
+    begins_at: durable-core
+  - id: PR-EXE-01
+    source: PRODUCT:6
+    title: Exploitation activation requires a required deliverable
+    begins_at: durable-core
+  - id: PR-EXE-02
+    source: PRODUCT:6
+    title: Required deliverables have objective acceptance criteria
+    begins_at: durable-core
+  - id: PR-EXE-04
+    source: PRODUCT:6
+    title: Reviewer findings are durable and explicitly resolved
+    begins_at: durable-core
+  - id: PR-EXE-05
+    source: PRODUCT:6
+    title: Progress derives from accepted deliverables
+    begins_at: durable-core
+  - id: PR-EXE-06
+    source: PRODUCT:6
+    title: Blocking dependency cycles are rejected
+    begins_at: durable-core
+  - id: PR-EXE-07
+    source: PRODUCT:6
+    title: Completion requires every required deliverable and gate
+    begins_at: durable-core
+  - id: PR-EXE-08
+    source: PRODUCT:6
+    title: Completion records outcome residual risk and follow-up
+    begins_at: durable-core
+  - id: PR-EXE-09
+    source: PRODUCT:6
+    title: Cancellation records reason and accepted-work disposition
+    begins_at: durable-core
+  - id: PR-EXE-10
+    source: PRODUCT:6
+    title: Release readiness is an evidence gate only
+    begins_at: dogfood-ready
+  - id: PR-FC-02
+    source: PRODUCT:7
+    title: Reforecasting never mutates history
+    begins_at: durable-core
+  - id: PR-FC-03
+    source: PRODUCT:7
+    title: Reforecasting records typed reasons and impact
+    begins_at: durable-core
+  - id: PR-FC-04
+    source: PRODUCT:7
+    title: Target misses create attention only
+    begins_at: durable-core
+  - id: PR-FC-05
+    source: PRODUCT:7
+    title: Forecasts are not promises or quality verdicts
+    begins_at: durable-core
+  - id: PR-FC-06
+    source: PRODUCT:7
+    title: Scope removal is a linked decision
+    begins_at: durable-core
+  - id: PR-FC-07
+    source: PRODUCT:7
+    title: Forecast calibration is reported across projects
+    begins_at: dogfood-ready
+  - id: PR-FC-08
+    source: PRODUCT:7
+    title: Forecast accuracy reports held intervals separately
+    begins_at: dogfood-ready
+  - id: PR-FC-09
+    source: PRODUCT:7
+    title: Forecast history and actual dates are immutable
+    begins_at: durable-core
+  - id: PR-FC-10
+    source: PRODUCT:7
+    title: Elapsed time cannot approve a gate
+    begins_at: contract-freeze
+  - id: PR-FC-11
+    source: PRODUCT:7
+    title: Stale forecasts create attention
+    begins_at: durable-core
+  - id: PR-FC-12
+    source: PRODUCT:7
+    title: Deadline pressure cannot transition or waive a gate
+    begins_at: contract-freeze
+  - id: PR-FC-13
+    source: PRODUCT:7
+    title: Deliverable forecasts do not inflate project calibration
+    begins_at: contract-freeze

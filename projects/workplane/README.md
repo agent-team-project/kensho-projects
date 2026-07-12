@@ -3,7 +3,8 @@
 An agent-native project and portfolio system for humans and autonomous software
 organizations.
 
-**Status:** specified, pre-slice; implementation not started.
+**Status:** M0 contract substrate implemented; M1 product transaction remains
+explicitly unimplemented pending exact-commit verification and integration.
 
 Workplane is not a Jira or Notion clone. It joins project briefs, deliverables,
 work, evidence, decisions, forecasts, and portfolio priority in one shared
@@ -34,6 +35,30 @@ automation, calibrated forecasting, and an empirical research protocol.
   registries.
 - `backlog/README.md` - seeded epics and independently deliverable issues.
 - `docs/advisor/` - durable advisor consultations and dispositions.
+- `docs/adr/` - foundational stack, event, authorization, collaboration, and
+  migration decisions.
+- `docs/walking-slice-m1.md` - the pinned next vertical transaction.
+- `Makefile` - stable local smoke, acceptance, release, and evidence commands.
+
+## M0 local verification
+
+Install the pinned development dependencies, then run the same gate used by
+the Workplane verifier:
+
+```sh
+make bootstrap
+make smoke
+```
+
+`make smoke` validates all executable registries and generated artifacts,
+runs Go and frontend format/lint/type/unit/build gates, migrates an empty real
+PostgreSQL service and checks the deterministic fixture, validates Compose,
+and runs repository publication hygiene. `make evidence-smoke` runs the same
+commands from clean tracked source and emits a complete exact-commit manifest
+under `evidence/runs/`.
+
+M0's web/API shells deliberately advertise only the contract substrate. They
+do not fake the M1 transaction or substitute in-memory persistence.
 
 ## Authority
 
