@@ -19,6 +19,18 @@ paths:
       responses:
         '200':
           description: Authenticated human session
+          headers:
+            Set-Cookie:
+              description: >-
+                Issues the HttpOnly workplane_session credential. Secure is
+                required outside explicit localhost development; Path=/ and
+                SameSite=Lax are always required.
+              required: true
+              schema:
+                type: string
+                pattern: '^workplane_session=[^;]+; Path=/; HttpOnly; SameSite=Lax(?:; Secure)?$'
+                examples:
+                  - 'workplane_session=opaque; Path=/; HttpOnly; SameSite=Lax; Secure'
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Session'}
@@ -166,11 +178,16 @@ components:
     Session:
       type: object
       additionalProperties: false
-      required: [actor_id, actor_kind, expires_at]
+      required: [actor_id, actor_kind, expires_at, csrf_token]
       properties:
         actor_id: {type: string, format: uuid}
         actor_kind: {type: string, enum: [human]}
         expires_at: {type: string, format: date-time}
+        csrf_token:
+          type: string
+          minLength: 32
+          maxLength: 256
+          description: Submit as X-CSRF-Token with the issued session cookie on protected mutations.
     CreateExplorationProject:
       type: object
       additionalProperties: false

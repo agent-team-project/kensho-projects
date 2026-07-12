@@ -21,8 +21,11 @@
 ### 2.1 Human session
 
 Browser requests use a secure, HttpOnly, SameSite session cookie and CSRF token
-for mutations. Login, logout, session listing, and session revocation are the
-only unauthenticated/authentication routes.
+for mutations. A successful login issues `workplane_session` in `Set-Cookie`
+and returns the corresponding non-secret `csrf_token` in the JSON session body;
+the browser client accepts the cookie with same-origin credentials and sends
+that token as `X-CSRF-Token`. Login, logout, session listing, and session
+revocation are the only unauthenticated/authentication routes.
 
 ### 2.2 Agent token
 

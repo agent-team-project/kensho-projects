@@ -22,7 +22,9 @@ widen its delegated authority.
 
 ## Frozen command group
 
-1. `POST /api/v1/session/login` establishes the human session.
+1. `POST /api/v1/session/login` establishes the human session by issuing the
+   HttpOnly `workplane_session` cookie and returning the mutation CSRF token in
+   the session response body.
 2. `POST /api/v1/orgs/{org_id}/projects` accepts a complete exploration
    contract and an **idempotency** key.
 3. `GET /api/v1/projects/{project_id}` returns the committed projection.

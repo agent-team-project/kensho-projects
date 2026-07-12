@@ -89,9 +89,17 @@ def validate_manifest(manifest: dict[str, Any], artifact_root: Path = ROOT) -> N
         raise ValueError("evidence manifest finished_at precedes started_at")
 
     gates = manifest["gates"]
+    previous_finished = started
     for gate in gates:
-        if parse_timestamp(gate["finished_at"]) < parse_timestamp(gate["started_at"]):
+        gate_started = parse_timestamp(gate["started_at"])
+        gate_finished = parse_timestamp(gate["finished_at"])
+        if gate_finished < gate_started:
             raise ValueError(f"evidence gate {gate['name']} finished_at precedes started_at")
+        if gate_started < started or gate_finished > finished:
+            raise ValueError(f"evidence gate {gate['name']} falls outside the suite interval")
+        if gate_started < previous_finished:
+            raise ValueError(f"evidence gate {gate['name']} overlaps or precedes the prior gate")
+        previous_finished = gate_finished
         for artifact in gate["artifacts"]:
             path = (artifact_root / artifact["path"]).resolve()
             try:

@@ -1,0 +1,8 @@
+id: M0-SESSION-BOOTSTRAP-001
+requirement: M0-SCHEMA-001
+layer: integration
+title: Declared login responses bootstrap a cookie-authenticated mutation
+given: {client: generated_go_adapter, credentials: [Set-Cookie, csrf_token]}
+when: {command: go test ./internal/api/generated -run TestHumanSessionBootstrap -count=1}
+then: {result: pass, mutation_authentication: [workplane_session, X-CSRF-Token]}
+evidence: [go-test.log]

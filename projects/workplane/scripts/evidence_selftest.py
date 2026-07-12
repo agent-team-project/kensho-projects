@@ -48,6 +48,17 @@ def changed(base: dict[str, Any], mutation: Callable[[dict[str, Any]], None]) ->
     return manifest
 
 
+def add_overlapping_gate(manifest: dict[str, Any]) -> None:
+    overlapping = copy.deepcopy(manifest["gates"][0])
+    overlapping.update(
+        name="overlapping-gate",
+        started_at="2026-07-12T19:00:00.500000Z",
+        finished_at="2026-07-12T19:00:01Z",
+    )
+    manifest["gates"].append(overlapping)
+    manifest["summary"] = {"gates": 2, "command_executions": 2, "passed": 2, "failed": 0}
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="workplane-evidence-selftest-") as directory:
         root = Path(directory)
@@ -93,6 +104,11 @@ def main() -> int:
             ("empty environment", lambda item: item.update(environment={})),
             ("invalid timestamp", lambda item: item.update(started_at="yesterday")),
             ("reversed manifest timestamps", lambda item: item.update(finished_at="2026-07-12T18:59:59Z")),
+            ("gate outside suite interval", lambda item: item["gates"][0].update(
+                started_at="2026-07-12T20:00:00Z",
+                finished_at="2026-07-12T20:00:01Z",
+            )),
+            ("overlapping sequential gates", add_overlapping_gate),
             ("invalid result", lambda item: item["gates"][0].update(result="banana")),
             ("invalid command count", lambda item: item["gates"][0].update(command_executions=-9)),
             ("empty artifacts", lambda item: item["gates"][0].update(artifacts=[])),

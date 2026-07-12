@@ -112,6 +112,7 @@ def validate() -> dict[str, int]:
         check(isinstance(case.get("evidence"), list), f"{path.relative_to(ROOT)}: evidence must be a list")
         cases.append(case)
     case_ids = unique_ids(cases, "id", "acceptance cases")
+    cases_by_id = {case["id"]: case for case in cases}
     unknown_requirements = sorted({case.get("requirement") for case in cases} - requirement_ids)
     check(not unknown_requirements, f"acceptance cases: unknown requirement id(s): {unknown_requirements}")
     covered_requirements = {case.get("requirement") for case in cases}
@@ -125,6 +126,12 @@ def validate() -> dict[str, int]:
         "remove_cross_org_denial",
     }
     check(required_mutations == mutation_ops, f"acceptance cases: fail-without-fix mutation drift missing={sorted(required_mutations - mutation_ops)} extra={sorted(mutation_ops - required_mutations)}")
+    bootstrap_case = cases_by_id.get("M0-SESSION-BOOTSTRAP-001", {})
+    check(
+        bootstrap_case.get("when", {}).get("command")
+        == "go test ./internal/api/generated -run TestHumanSessionBootstrap -count=1",
+        "acceptance cases: human session bootstrap must execute the generated Go adapter test",
+    )
 
     lifecycles = load_yaml(ROOT / "contracts/lifecycles.yaml")
     check(lifecycles.get("source_of_truth") is True and lifecycles.get("default") == "deny", "lifecycles: must be deny-default source of truth")
@@ -173,6 +180,17 @@ def validate() -> dict[str, int]:
     check(security_schemes.get("HumanSession", {}).get("in") == "cookie" and security_schemes.get("HumanSession", {}).get("name") == "workplane_session", "OpenAPI: human session must be a named cookie contract")
     check(security_schemes.get("CsrfToken", {}).get("in") == "header" and security_schemes.get("CsrfToken", {}).get("name") == "X-CSRF-Token", "OpenAPI: CSRF must be an explicit header contract")
     check(security_schemes.get("AgentBearer", {}).get("type") == "http" and security_schemes.get("AgentBearer", {}).get("scheme") == "bearer", "OpenAPI: agent authentication must be HTTP bearer")
+    login_operation = openapi.get("paths", {}).get("/api/v1/session/login", {}).get("post", {})
+    login_response = login_operation.get("responses", {}).get("200", {})
+    login_headers = login_response.get("headers", {})
+    set_cookie = login_headers.get("Set-Cookie", {})
+    check(set(login_headers) == {"Set-Cookie"}, "OpenAPI: login must issue exactly the declared Set-Cookie credential header")
+    check(set_cookie.get("required") is True, "OpenAPI: login Set-Cookie response header must be required")
+    check("workplane_session=" in str(set_cookie.get("schema", {}).get("pattern", "")), "OpenAPI: login Set-Cookie must name workplane_session")
+    session_schema = openapi.get("components", {}).get("schemas", {}).get("Session", {})
+    csrf_schema = session_schema.get("properties", {}).get("csrf_token", {})
+    check("csrf_token" in session_schema.get("required", []), "OpenAPI: login session body must return csrf_token")
+    check(csrf_schema.get("type") == "string" and csrf_schema.get("minLength", 0) >= 32, "OpenAPI: login CSRF token must be a nontrivial typed response field")
     read_security = [{"HumanSession": []}, {"AgentBearer": []}]
     mutation_security = [{"HumanSession": [], "CsrfToken": []}, {"AgentBearer": []}]
     operation_ids: list[str] = []
@@ -216,11 +234,15 @@ def validate() -> dict[str, int]:
 
     generated_go = (ROOT / "internal/api/generated/server.gen.go").read_text(encoding="utf-8")
     generated_ts = (ROOT / "web/src/api/client.gen.ts").read_text(encoding="utf-8")
-    for surface in ("SessionCookie", "CSRFToken", "BearerToken", "ExpectedVersion"):
+    for surface in ("SessionCookie", "CSRFToken", "BearerToken", "ExpectedVersion", "ResponseHeaders", "type Session struct"):
         check(surface in generated_go, f"generated Go: missing typed security/version surface {surface}")
-    for surface in ("HumanMutationSecurity", "AgentBearerSecurity", "X-CSRF-Token", "Authorization", "expectedVersion", "If-Match"):
+    check('CSRFToken string `json:"csrf_token"`' in generated_go, "generated Go: login session body drops the CSRF token source")
+    check(bool(re.search(r"SetCookie\s+string", generated_go)) and 'Header().Set("Set-Cookie"' in generated_go, "generated Go: login response cannot emit Set-Cookie")
+    check(bool(re.search(r"ETag\s+VersionETag", generated_go)) and 'Header().Set("ETag"' in generated_go, "generated Go: versioned response cannot emit ETag")
+    for surface in ("HumanMutationSecurity", "AgentBearerSecurity", "X-CSRF-Token", "Authorization", "expectedVersion", "If-Match", "csrf_token", "VersionedResponse"):
         check(surface in generated_ts, f"generated TypeScript: missing typed security/version surface {surface}")
     check("options: VersionedMutationOptions" in generated_ts, "generated TypeScript: recordDecision does not require versioned mutation options")
+    check('response.headers.get("ETag")' in generated_ts and "version: version as VersionETag" in generated_ts, "generated TypeScript: recordDecision drops the committed response version")
 
     event_schema = load_json(ROOT / "contracts/domain-event.schema.json")
     required_event_fields = {"event_id", "event_type", "schema_version", "organization_id", "aggregate_id", "aggregate_version", "request_id", "actor", "occurred_at", "payload"}

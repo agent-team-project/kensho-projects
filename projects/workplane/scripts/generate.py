@@ -40,11 +40,18 @@ def operations(openapi: dict[str, Any]) -> list[dict[str, Any]]:
                 for parameter in operation.get("parameters", [])
                 if isinstance(parameter, dict) and "$ref" in parameter
             }
+            success_responses = [
+                response
+                for status, response in sorted(operation.get("responses", {}).items())
+                if str(status).isdigit() and 200 <= int(status) < 300
+            ]
+            success_response = success_responses[0] if success_responses else {}
             result.append({
                 "id": operation["operationId"],
                 "method": method.upper(),
                 "path": path,
                 "parameter_refs": parameter_refs,
+                "response_headers": set(success_response.get("headers", {})),
                 "security": operation.get("security", []),
             })
     return sorted(result, key=lambda item: item["id"])
@@ -54,8 +61,52 @@ def go_name(operation_id: str) -> str:
     return operation_id[:1].upper() + operation_id[1:]
 
 
+def go_property_name(property_name: str) -> str:
+    acronyms = {"csrf": "CSRF", "id": "ID"}
+    return "".join(acronyms.get(part, part.title()) for part in property_name.split("_"))
+
+
+def go_schema_type(schema: dict[str, Any]) -> str:
+    if schema.get("type") == "string":
+        return "string"
+    if schema.get("type") == "integer":
+        return "int64"
+    if schema.get("type") == "boolean":
+        return "bool"
+    if schema.get("type") == "array":
+        return f"[]{go_schema_type(schema.get('items', {}))}"
+    return "any"
+
+
+def generate_go_struct(name: str, schema: dict[str, Any]) -> str:
+    required = set(schema.get("required", []))
+    fields = "\n".join(
+        f'''    {go_property_name(property_name)} {'*' if property_name not in required else ''}{go_schema_type(property_schema)} `json:"{property_name}{',omitempty' if property_name not in required else ''}"`'''
+        for property_name, property_schema in schema.get("properties", {}).items()
+    )
+    return f"type {name} struct {{\n{fields}\n}}"
+
+
 def generate_go(openapi: dict[str, Any]) -> str:
     ops = operations(openapi)
+    response_headers = sorted({header for op in ops for header in op["response_headers"]})
+
+    def header_field(header: str) -> str:
+        if header == "ETag":
+            return "ETag"
+        return "".join(part.title() for part in header.split("-"))
+
+    header_fields = "\n".join(
+        f"    {header_field(header)} {'VersionETag' if header == 'ETag' else 'string'}"
+        for header in response_headers
+    )
+    header_writes = "\n".join(
+        f'''        if response.Headers.{header_field(header)} != "" {{
+            writer.Header().Set("{header}", {'string(' if header == 'ETag' else ''}response.Headers.{header_field(header)}{')' if header == 'ETag' else ''})
+        }}'''
+        for header in response_headers
+    )
+    session_struct = generate_go_struct("Session", openapi["components"]["schemas"]["Session"])
     constants = "\n".join(f'\tOperation{go_name(op["id"])} OperationID = "{op["id"]}"' for op in ops)
     interface = "\n".join(
         f"\t{go_name(op['id'])}(context.Context, Request) (Response, error)" for op in ops
@@ -89,6 +140,8 @@ type RequestSecurity struct {{
 
 type VersionETag string
 
+{session_struct}
+
 type Request struct {{
     HTTPRequest *http.Request
     Body json.RawMessage
@@ -97,8 +150,13 @@ type Request struct {{
     Security RequestSecurity
 }}
 
+type ResponseHeaders struct {{
+{header_fields}
+}}
+
 type Response struct {{
     Status int
+    Headers ResponseHeaders
     Body any
 }}
 
@@ -147,6 +205,7 @@ func adapt(handler operationHandler) http.HandlerFunc {{
             return
         }}
         writer.Header().Set("Content-Type", "application/json")
+{header_writes}
         writer.WriteHeader(response.Status)
         _ = json.NewEncoder(writer).Encode(response.Body)
     }}
@@ -162,6 +221,29 @@ def ts_path_expression(path: str) -> str:
     for parameter in ("org_id", "project_id"):
         expression = expression.replace("{" + parameter + "}", "${encodeURIComponent(params." + parameter + ")}")
     return "`" + expression + "`"
+
+
+def ts_schema_type(schema: dict[str, Any]) -> str:
+    if "enum" in schema:
+        return " | ".join(json.dumps(value) for value in schema["enum"])
+    if schema.get("type") == "string":
+        return "string"
+    if schema.get("type") in {"integer", "number"}:
+        return "number"
+    if schema.get("type") == "boolean":
+        return "boolean"
+    if schema.get("type") == "array":
+        return f"Array<{ts_schema_type(schema.get('items', {}))}>"
+    return "unknown"
+
+
+def generate_ts_object_type(name: str, schema: dict[str, Any]) -> str:
+    required = set(schema.get("required", []))
+    fields = "\n".join(
+        f"  {property_name}{'' if property_name in required else '?'}: {ts_schema_type(property_schema)};"
+        for property_name, property_schema in schema.get("properties", {}).items()
+    )
+    return f"export type {name} = {{\n{fields}\n}};"
 
 
 def generate_typescript(openapi: dict[str, Any]) -> str:
@@ -183,17 +265,35 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         idempotency = "\n      'Idempotency-Key': options.idempotencyKey," if "IdempotencyKey" in op["parameter_refs"] else ""
         expected_version = "\n      'If-Match': options.expectedVersion," if "ExpectedVersion" in op["parameter_refs"] else ""
         body_line = "\n    body: JSON.stringify(body)," if has_body else ""
-        methods.append(f'''  async {op["id"]}(params: {parameter_type}{body_argument}, {options_signature}): Promise<unknown> {{
-    return this.request({ts_path_expression(op["path"])}, {{
+        request_call = f'''this.request({ts_path_expression(op["path"])}, {{
       method: "{op["method"]}",
       headers: {{{idempotency}{expected_version}
         ...this.securityHeaders(options.security),
         ...options.headers,
       }},{body_line}
-    }});
+    }})'''
+        if op["id"] == "login":
+            return_type = "Session"
+            result = f"return (await {request_call}).body as Session;"
+        elif "ETag" in op["response_headers"]:
+            return_type = "VersionedResponse<unknown>"
+            result = f'''const response = await {request_call};
+    const version = response.headers.get("ETag");
+    if (version === null || !versionETagPattern.test(version)) {{
+      throw new WorkplaneContractError("recordDecision response omitted a valid ETag");
+    }}
+    return {{ body: response.body, version: version as VersionETag }};'''
+        else:
+            return_type = "unknown"
+            result = f"return (await {request_call}).body;"
+        methods.append(f'''  async {op["id"]}(params: {parameter_type}{body_argument}, {options_signature}): Promise<{return_type}> {{
+    {result}
   }}''')
+    session_type = generate_ts_object_type("Session", openapi["components"]["schemas"]["Session"])
     return f'''// Code generated by scripts/generate.py from contracts/openapi.yaml; DO NOT EDIT.
 // Contract SHA-256: {digest("contracts/openapi.yaml")}
+
+{session_type}
 
 export type HumanSessionSecurity = {{
   kind: "human-session";
@@ -226,6 +326,17 @@ export type MutationOptions = Omit<RequestOptions, "security"> & {{
 export type VersionedMutationOptions = MutationOptions & {{
   expectedVersion: VersionETag;
 }};
+export type VersionedResponse<T> = {{
+  body: T;
+  version: VersionETag;
+}};
+
+type TransportResponse = {{
+  body: unknown;
+  headers: Headers;
+}};
+
+const versionETagPattern = /^"[1-9][0-9]*"$/;
 
 export const operationIds = {json.dumps([op["id"] for op in ops], indent=2)} as const;
 export type OperationId = (typeof operationIds)[number];
@@ -238,7 +349,7 @@ export class WorkplaneClient {{
 
 {chr(10).join(methods)}
 
-  private async request(path: string, init: RequestInit): Promise<unknown> {{
+  private async request(path: string, init: RequestInit): Promise<TransportResponse> {{
     const response = await this.fetcher(`${{this.baseUrl}}${{path}}`, {{
       ...init,
       credentials: "same-origin",
@@ -246,7 +357,7 @@ export class WorkplaneClient {{
     }});
     const payload: unknown = await response.json();
     if (!response.ok) throw new WorkplaneProblem(response.status, payload);
-    return payload;
+    return {{ body: payload, headers: response.headers }};
   }}
 
   private securityHeaders(security?: RequestSecurity): Record<string, string> {{
@@ -265,6 +376,8 @@ export class WorkplaneProblem extends Error {{
     super(`Workplane request failed (${{status}})`);
   }}
 }}
+
+export class WorkplaneContractError extends Error {{}}
 '''
 
 
