@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -69,6 +70,7 @@ type ReplayReport struct {
 	Projects          int    `json:"projects"`
 	Decisions         int    `json:"decisions"`
 	Activity          int    `json:"activity"`
+	Planning          int    `json:"planning"`
 	LiveChecksum      string `json:"live_checksum"`
 	RebuiltChecksum   string `json:"rebuilt_checksum"`
 	ActiveHeadUpdated bool   `json:"active_head_updated"`
@@ -346,9 +348,21 @@ type eventRow struct {
 }
 
 type projectionSnapshot struct {
-	Projects  []Project         `json:"projects"`
-	Decisions []Decision        `json:"decisions"`
-	Activity  []eventProjection `json:"activity"`
+	Projects      []Project         `json:"projects"`
+	Decisions     []Decision        `json:"decisions"`
+	Deliverables  []Deliverable     `json:"deliverables"`
+	Forecasts     []Forecast        `json:"forecasts"`
+	ForecastHeads []ForecastHead    `json:"forecast_heads"`
+	Targets       []Target          `json:"targets"`
+	TargetHeads   []TargetHead      `json:"target_heads"`
+	Deadlines     []Deadline        `json:"deadlines"`
+	DeadlineHeads []DeadlineHead    `json:"deadline_heads"`
+	Activity      []eventProjection `json:"activity"`
+}
+
+func (snapshot projectionSnapshot) planningCount() int {
+	return len(snapshot.Deliverables) + len(snapshot.Forecasts) + len(snapshot.ForecastHeads) +
+		len(snapshot.Targets) + len(snapshot.TargetHeads) + len(snapshot.Deadlines) + len(snapshot.DeadlineHeads)
 }
 
 type databaseQueryer interface {
@@ -430,20 +444,24 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 			return ReplayReport{}, fmt.Errorf("write replay activity: %w", err)
 		}
 	}
+	if err := writeReplayPlanning(ctx, tx, runID, rebuilt); err != nil {
+		_ = tx.Rollback()
+		return ReplayReport{}, err
+	}
 	finished := time.Now().UTC()
 	if _, err := tx.ExecContext(ctx, `UPDATE projection_replay_runs SET status='succeeded',finished_at=$2,last_sequence=$3,
-		projects_count=$4,decisions_count=$5,activity_count=$6,live_checksum=$7,rebuilt_checksum=$8 WHERE id=$1`,
-		runID, finished, lastSequence, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), liveChecksum, rebuiltChecksum); err != nil {
+		projects_count=$4,decisions_count=$5,activity_count=$6,planning_count=$7,live_checksum=$8,rebuilt_checksum=$9 WHERE id=$1`,
+		runID, finished, lastSequence, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), liveChecksum, rebuiltChecksum); err != nil {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO projection_heads
-		(name,run_id,last_sequence,checksum,projects_count,decisions_count,activity_count,updated_at)
-		VALUES ('m1-canonical',$1,$2,$3,$4,$5,$6,$7)
+		(name,run_id,last_sequence,checksum,projects_count,decisions_count,activity_count,planning_count,updated_at)
+		VALUES ('m1-canonical',$1,$2,$3,$4,$5,$6,$7,$8)
 		ON CONFLICT (name) DO UPDATE SET run_id=EXCLUDED.run_id,last_sequence=EXCLUDED.last_sequence,
 		checksum=EXCLUDED.checksum,projects_count=EXCLUDED.projects_count,decisions_count=EXCLUDED.decisions_count,
-		activity_count=EXCLUDED.activity_count,updated_at=EXCLUDED.updated_at`,
-		runID, lastSequence, rebuiltChecksum, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), finished); err != nil {
+		activity_count=EXCLUDED.activity_count,planning_count=EXCLUDED.planning_count,updated_at=EXCLUDED.updated_at`,
+		runID, lastSequence, rebuiltChecksum, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), finished); err != nil {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
@@ -451,8 +469,57 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 		return ReplayReport{}, fmt.Errorf("commit replay generation: %w", err)
 	}
 	return ReplayReport{RunID: runID, LastSequence: lastSequence, Projects: len(rebuilt.Projects),
-		Decisions: len(rebuilt.Decisions), Activity: len(rebuilt.Activity), LiveChecksum: liveChecksum,
+		Decisions: len(rebuilt.Decisions), Activity: len(rebuilt.Activity), Planning: rebuilt.planningCount(), LiveChecksum: liveChecksum,
 		RebuiltChecksum: rebuiltChecksum, ActiveHeadUpdated: true}, nil
+}
+
+func writeReplayPlanning(ctx context.Context, tx *sql.Tx, runID string, snapshot projectionSnapshot) error {
+	organizations := make(map[string]string, len(snapshot.Projects))
+	for _, project := range snapshot.Projects {
+		organizations[project.ID] = project.OrganizationID
+	}
+	type row struct {
+		kind, id, projectID string
+		value               any
+	}
+	rows := make([]row, 0, snapshot.planningCount())
+	for _, item := range snapshot.Deliverables {
+		rows = append(rows, row{"deliverable", item.ID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.Forecasts {
+		rows = append(rows, row{"forecast", item.ID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.ForecastHeads {
+		id := "project"
+		if item.DeliverableID != nil {
+			id = *item.DeliverableID
+		}
+		rows = append(rows, row{"forecast-head", id, item.ProjectID, item})
+	}
+	for _, item := range snapshot.Targets {
+		rows = append(rows, row{"target", item.ID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.TargetHeads {
+		rows = append(rows, row{"target-head", item.ProjectID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.Deadlines {
+		rows = append(rows, row{"deadline", item.ID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.DeadlineHeads {
+		rows = append(rows, row{"deadline-head", item.ProjectID, item.ProjectID, item})
+	}
+	for _, item := range rows {
+		organizationID := organizations[item.projectID]
+		if organizationID == "" {
+			return fmt.Errorf("planning projection %s:%s references unknown project %s", item.kind, item.id, item.projectID)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO replay_planning_projections
+			(run_id,kind,projection_id,organization_id,project_id,projection) VALUES ($1,$2,$3,$4,$5,$6)`,
+			runID, item.kind, item.id, organizationID, item.projectID, canonicalJSON(item.value)); err != nil {
+			return fmt.Errorf("write replay planning %s:%s: %w", item.kind, item.id, err)
+		}
+	}
+	return nil
 }
 
 func (store *DurableStore) recordReplayFailure(ctx context.Context, failure *ReplayFailure) error {
@@ -482,6 +549,15 @@ func (store *DurableStore) persistReplayFailure(ctx context.Context, failure *Re
 func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *ReplayFailure) {
 	projects := make(map[string]Project)
 	decisions := make([]Decision, 0)
+	deliverables := make(map[string]Deliverable)
+	forecasts := make(map[string]Forecast)
+	forecastHeads := make(map[string]ForecastHead)
+	pendingForecasts := make(map[string]ForecastSupersession)
+	pendingForecastCommands := make(map[string]string)
+	targets := make(map[string]Target)
+	targetHeads := make(map[string]TargetHead)
+	deadlines := make(map[string]Deadline)
+	deadlineHeads := make(map[string]DeadlineHead)
 	activity := make([]eventProjection, 0, len(events))
 	versions := make(map[string]int64)
 	for _, event := range events {
@@ -527,10 +603,159 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			project.Version = item.AggregateVersion
 			projects[project.ID] = project
 			decisions = append(decisions, decision)
+		case "project.activated", "project.held", "project.resumed":
+			var transition ProjectTransition
+			if err := decodeStrictJSON(event.Payload, &transition); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior, exists := projects[item.AggregateID]
+			validTransition := exists && transition.Project.Mode == prior.Mode
+			switch item.EventType {
+			case "project.activated":
+				validTransition = validTransition && prior.State == "proposed" && transition.Project.State == "active" &&
+					forecastHeads[forecastScopeKey(prior.ID, nil)].ForecastID != ""
+			case "project.held":
+				validTransition = validTransition && prior.State == "active" && transition.Project.State == "held"
+			case "project.resumed":
+				validTransition = validTransition && prior.State == "held" && transition.Project.State == "active"
+			}
+			if !validTransition || transition.Project.ID != item.AggregateID ||
+				transition.Project.OrganizationID != item.OrganizationID || transition.Project.Version != item.AggregateVersion || strings.TrimSpace(transition.Reason) == "" {
+				return failure("invalid_event_payload", "project transition identity, version, or reason is invalid")
+			}
+			projects[item.AggregateID] = transition.Project
+		case "project.promoted":
+			var promotion PromotionEvent
+			if err := decodeStrictJSON(event.Payload, &promotion); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior, exists := projects[item.AggregateID]
+			required := false
+			for _, deliverable := range deliverables {
+				required = required || (deliverable.ProjectID == item.AggregateID && deliverable.Required && deliverable.State != "waived" && deliverable.State != "cancelled")
+			}
+			if !exists || prior.Mode != "exploration" || prior.State != "active" ||
+				forecastHeads[forecastScopeKey(prior.ID, nil)].ForecastID == "" || !required || promotion.Project.ID != item.AggregateID ||
+				promotion.Project.OrganizationID != item.OrganizationID || promotion.Project.Mode != "exploitation" ||
+				promotion.Project.State != "active" || promotion.Project.Version != item.AggregateVersion ||
+				strings.TrimSpace(promotion.ResidualUncertainty) == "" || strings.TrimSpace(promotion.PriorityRationale) == "" {
+				return failure("invalid_event_payload", "promotion contract is incomplete")
+			}
+			projects[item.AggregateID] = promotion.Project
+		case "deliverable.created", "deliverable.revised":
+			var deliverable Deliverable
+			if err := decodeStrictJSON(event.Payload, &deliverable); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[deliverable.ProjectID]
+			if !exists || deliverable.ProjectID != item.AggregateID || deliverable.OrganizationID != item.OrganizationID {
+				return failure("invalid_event_payload", "deliverable references an unknown project")
+			}
+			prior, priorExists := deliverables[deliverable.ID]
+			invalidRevision := item.EventType == "deliverable.revised" && (!priorExists || deliverable.Version != prior.Version+1 ||
+				deliverable.ProjectID != prior.ProjectID || deliverable.OrganizationID != prior.OrganizationID ||
+				deliverable.CreatedBy != prior.CreatedBy || deliverable.CreatedAt != prior.CreatedAt)
+			if deliverable.CreatedBy != item.ActorID || deliverable.Version < 1 ||
+				(item.EventType == "deliverable.created" && (priorExists || deliverable.Version != 1)) || invalidRevision {
+				return failure("invalid_event_payload", "deliverable create/revision identity is inconsistent")
+			}
+			deliverables[deliverable.ID] = deliverable
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "forecast.superseded":
+			var supersession ForecastSupersession
+			if err := decodeStrictJSON(event.Payload, &supersession); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[supersession.ProjectID]
+			prior := forecasts[supersession.SupersededID]
+			if !exists || supersession.ProjectID != item.AggregateID || prior.ID == "" || supersession.SupersedingID == "" ||
+				prior.ProjectID != supersession.ProjectID || !equalOptionalString(prior.DeliverableID, supersession.DeliverableID) ||
+				forecastHeads[forecastScopeKey(supersession.ProjectID, supersession.DeliverableID)].ForecastID != supersession.SupersededID ||
+				pendingForecasts[supersession.SupersedingID].SupersedingID != "" {
+				return failure("invalid_event_payload", "forecast supersession references an unknown scope")
+			}
+			pendingForecasts[supersession.SupersedingID] = supersession
+			pendingForecastCommands[supersession.SupersedingID] = item.CommandID
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "forecast.created":
+			var forecast Forecast
+			if err := decodeStrictJSON(event.Payload, &forecast); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[forecast.ProjectID]
+			if !exists || forecast.ProjectID != item.AggregateID || forecast.OrganizationID != item.OrganizationID {
+				return failure("invalid_event_payload", "forecast references an unknown project")
+			}
+			if forecast.DeliverableID != nil {
+				if deliverables[*forecast.DeliverableID].ProjectID != forecast.ProjectID {
+					return failure("invalid_event_payload", "deliverable forecast scope is invalid")
+				}
+			}
+			if forecast.CreatedBy != item.ActorID {
+				return failure("invalid_event_payload", "forecast attribution does not match its envelope")
+			}
+			key := forecastScopeKey(forecast.ProjectID, forecast.DeliverableID)
+			pending, hasPending := pendingForecasts[forecast.ID]
+			if forecast.SupersedesID == nil {
+				if hasPending || forecastHeads[key].ForecastID != "" {
+					return failure("invalid_event_payload", "initial forecast conflicts with existing scope history")
+				}
+			} else if !hasPending || pending.SupersededID != *forecast.SupersedesID ||
+				!equalOptionalString(pending.DeliverableID, forecast.DeliverableID) || pendingForecastCommands[forecast.ID] != item.CommandID {
+				return failure("invalid_event_payload", "forecast creation does not complete its supersession event")
+			}
+			if _, duplicate := forecasts[forecast.ID]; duplicate {
+				return failure("duplicate_projection_identity", "forecast already exists")
+			}
+			forecasts[forecast.ID] = forecast
+			forecastHeads[key] = ForecastHead{ProjectID: forecast.ProjectID, DeliverableID: forecast.DeliverableID, ForecastID: forecast.ID}
+			delete(pendingForecasts, forecast.ID)
+			delete(pendingForecastCommands, forecast.ID)
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "target.changed":
+			var target Target
+			if err := decodeStrictJSON(event.Payload, &target); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[target.ProjectID]
+			prior := targetHeads[target.ProjectID]
+			validHistory := (prior.TargetID == "" && target.SupersedesID == nil) ||
+				(prior.TargetID != "" && target.SupersedesID != nil && *target.SupersedesID == prior.TargetID)
+			if !exists || !validHistory || target.CreatedBy != item.ActorID || targets[target.ID].ID != "" ||
+				target.ProjectID != item.AggregateID || target.OrganizationID != item.OrganizationID {
+				return failure("invalid_event_payload", "target references an unknown project")
+			}
+			targets[target.ID] = target
+			targetHeads[target.ProjectID] = TargetHead{ProjectID: target.ProjectID, TargetID: target.ID}
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "deadline.changed":
+			var deadline Deadline
+			if err := decodeStrictJSON(event.Payload, &deadline); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[deadline.ProjectID]
+			prior := deadlineHeads[deadline.ProjectID]
+			validHistory := (prior.DeadlineID == "" && deadline.SupersedesID == nil) ||
+				(prior.DeadlineID != "" && deadline.SupersedesID != nil && *deadline.SupersedesID == prior.DeadlineID)
+			if !exists || !validHistory || deadline.CreatedBy != item.ActorID || deadlines[deadline.ID].ID != "" ||
+				deadline.ProjectID != item.AggregateID || deadline.OrganizationID != item.OrganizationID {
+				return failure("invalid_event_payload", "deadline references an unknown project")
+			}
+			deadlines[deadline.ID] = deadline
+			deadlineHeads[deadline.ProjectID] = DeadlineHead{ProjectID: deadline.ProjectID, DeadlineID: deadline.ID}
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
 		default:
 			return failure("unknown_event_schema", "event type is not registered in replay v1")
 		}
 		activity = append(activity, item)
+	}
+	if len(pendingForecasts) != 0 {
+		return projectionSnapshot{}, &ReplayFailure{RunID: runID, Code: "invalid_event_payload", Detail: "forecast supersession event lacks its forecast creation event"}
 	}
 	projectList := make([]Project, 0, len(projects))
 	for _, project := range projects {
@@ -548,7 +773,30 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 		}
 		return decisions[i].ID < decisions[j].ID
 	})
-	return projectionSnapshot{Projects: projectList, Decisions: decisions, Activity: activity}, nil
+	snapshot := projectionSnapshot{Projects: projectList, Decisions: decisions, Activity: activity}
+	for _, item := range deliverables {
+		snapshot.Deliverables = append(snapshot.Deliverables, item)
+	}
+	for _, item := range forecasts {
+		snapshot.Forecasts = append(snapshot.Forecasts, item)
+	}
+	for _, item := range forecastHeads {
+		snapshot.ForecastHeads = append(snapshot.ForecastHeads, item)
+	}
+	for _, item := range targets {
+		snapshot.Targets = append(snapshot.Targets, item)
+	}
+	for _, item := range targetHeads {
+		snapshot.TargetHeads = append(snapshot.TargetHeads, item)
+	}
+	for _, item := range deadlines {
+		snapshot.Deadlines = append(snapshot.Deadlines, item)
+	}
+	for _, item := range deadlineHeads {
+		snapshot.DeadlineHeads = append(snapshot.DeadlineHeads, item)
+	}
+	sortPlanningSnapshot(&snapshot)
+	return snapshot, nil
 }
 
 func loadEventRows(ctx context.Context, queryer databaseQueryer) ([]eventRow, error) {
@@ -638,11 +886,148 @@ func loadLiveSnapshot(ctx context.Context, queryer databaseQueryer, events []eve
 	if err := decisionRows.Err(); err != nil {
 		return projectionSnapshot{}, err
 	}
+	snapshot := projectionSnapshot{Projects: projects, Decisions: decisions}
+	if err := loadLivePlanning(ctx, queryer, &snapshot); err != nil {
+		return projectionSnapshot{}, err
+	}
 	activity := make([]eventProjection, len(events))
 	for index, event := range events {
 		activity[index] = event.Projection
 	}
-	return projectionSnapshot{Projects: projects, Decisions: decisions, Activity: activity}, nil
+	snapshot.Activity = activity
+	return snapshot, nil
+}
+
+func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *projectionSnapshot) error {
+	deliverableRows, err := queryer.QueryContext(ctx, selectDeliverable+` ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for deliverableRows.Next() {
+		item, err := scanDeliverable(deliverableRows)
+		if err != nil {
+			_ = deliverableRows.Close()
+			return err
+		}
+		snapshot.Deliverables = append(snapshot.Deliverables, item)
+	}
+	if err := deliverableRows.Close(); err != nil {
+		return err
+	}
+
+	forecastRows, err := queryer.QueryContext(ctx, selectForecast+` ORDER BY project_id,deliverable_id NULLS FIRST,id`)
+	if err != nil {
+		return err
+	}
+	for forecastRows.Next() {
+		item, err := scanForecast(forecastRows)
+		if err != nil {
+			_ = forecastRows.Close()
+			return err
+		}
+		snapshot.Forecasts = append(snapshot.Forecasts, item)
+	}
+	if err := forecastRows.Close(); err != nil {
+		return err
+	}
+
+	headRows, err := queryer.QueryContext(ctx, `SELECT project_id,deliverable_id,forecast_id FROM forecast_heads ORDER BY project_id,scope_key`)
+	if err != nil {
+		return err
+	}
+	for headRows.Next() {
+		var item ForecastHead
+		var deliverableID sql.NullString
+		if err := headRows.Scan(&item.ProjectID, &deliverableID, &item.ForecastID); err != nil {
+			_ = headRows.Close()
+			return err
+		}
+		if deliverableID.Valid {
+			item.DeliverableID = &deliverableID.String
+		}
+		snapshot.ForecastHeads = append(snapshot.ForecastHeads, item)
+	}
+	if err := headRows.Close(); err != nil {
+		return err
+	}
+
+	targetRows, err := queryer.QueryContext(ctx, `SELECT id,organization_id,project_id,target_at,reason,supersedes_id,created_by,created_at FROM project_targets ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for targetRows.Next() {
+		var item Target
+		var targetAt, created time.Time
+		var supersedes sql.NullString
+		if err := targetRows.Scan(&item.ID, &item.OrganizationID, &item.ProjectID, &targetAt, &item.Reason, &supersedes, &item.CreatedBy, &created); err != nil {
+			_ = targetRows.Close()
+			return err
+		}
+		if supersedes.Valid {
+			item.SupersedesID = &supersedes.String
+		}
+		item.TargetAt, item.CreatedAt = targetAt.UTC().Format(timeFormat), created.UTC().Format(timeFormat)
+		snapshot.Targets = append(snapshot.Targets, item)
+	}
+	if err := targetRows.Close(); err != nil {
+		return err
+	}
+
+	targetHeadRows, err := queryer.QueryContext(ctx, `SELECT project_id,target_id FROM project_target_heads ORDER BY project_id`)
+	if err != nil {
+		return err
+	}
+	for targetHeadRows.Next() {
+		var item TargetHead
+		if err := targetHeadRows.Scan(&item.ProjectID, &item.TargetID); err != nil {
+			_ = targetHeadRows.Close()
+			return err
+		}
+		snapshot.TargetHeads = append(snapshot.TargetHeads, item)
+	}
+	if err := targetHeadRows.Close(); err != nil {
+		return err
+	}
+
+	deadlineRows, err := queryer.QueryContext(ctx, `SELECT id,organization_id,project_id,deadline_at,source,description,supersedes_id,created_by,created_at FROM project_deadlines ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for deadlineRows.Next() {
+		var item Deadline
+		var deadlineAt, created time.Time
+		var supersedes sql.NullString
+		if err := deadlineRows.Scan(&item.ID, &item.OrganizationID, &item.ProjectID, &deadlineAt, &item.Source, &item.Description, &supersedes, &item.CreatedBy, &created); err != nil {
+			_ = deadlineRows.Close()
+			return err
+		}
+		if supersedes.Valid {
+			item.SupersedesID = &supersedes.String
+		}
+		item.DeadlineAt, item.CreatedAt = deadlineAt.UTC().Format(timeFormat), created.UTC().Format(timeFormat)
+		snapshot.Deadlines = append(snapshot.Deadlines, item)
+	}
+	if err := deadlineRows.Close(); err != nil {
+		return err
+	}
+
+	deadlineHeadRows, err := queryer.QueryContext(ctx, `SELECT project_id,deadline_id FROM project_deadline_heads ORDER BY project_id`)
+	if err != nil {
+		return err
+	}
+	for deadlineHeadRows.Next() {
+		var item DeadlineHead
+		if err := deadlineHeadRows.Scan(&item.ProjectID, &item.DeadlineID); err != nil {
+			_ = deadlineHeadRows.Close()
+			return err
+		}
+		snapshot.DeadlineHeads = append(snapshot.DeadlineHeads, item)
+	}
+	if err := deadlineHeadRows.Close(); err != nil {
+		return err
+	}
+	sortPlanningSnapshot(snapshot)
+	return nil
 }
 
 func snapshotChecksum(snapshot projectionSnapshot) string {
@@ -652,9 +1037,9 @@ func snapshotChecksum(snapshot projectionSnapshot) string {
 
 func (store *DurableStore) ActiveProjectionHead(ctx context.Context) (ReplayReport, error) {
 	var report ReplayReport
-	err := store.db.QueryRowContext(ctx, `SELECT run_id,last_sequence,projects_count,decisions_count,activity_count,checksum
+	err := store.db.QueryRowContext(ctx, `SELECT run_id,last_sequence,projects_count,decisions_count,activity_count,planning_count,checksum
 		FROM projection_heads WHERE name='m1-canonical'`).Scan(&report.RunID, &report.LastSequence,
-		&report.Projects, &report.Decisions, &report.Activity, &report.RebuiltChecksum)
+		&report.Projects, &report.Decisions, &report.Activity, &report.Planning, &report.RebuiltChecksum)
 	if err != nil {
 		return ReplayReport{}, err
 	}
@@ -758,6 +1143,71 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 		return nil, fmt.Errorf("scan decision/event coupling: %w", err)
 	}
 	_ = orphanDecisionRows.Close()
+	planningOrphans, err := queryer.QueryContext(ctx, `
+		SELECT kind,id,project_id FROM (
+			SELECT 'deliverable' kind,deliverable.id::text id,deliverable.project_id
+			FROM deliverables deliverable LEFT JOIN domain_events event
+			  ON event.event_type IN ('deliverable.created','deliverable.revised') AND event.payload->>'id'=deliverable.id::text
+			WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'forecast',forecast.id::text,forecast.project_id
+			FROM forecasts forecast LEFT JOIN domain_events event
+			  ON event.event_type='forecast.created' AND event.payload->>'id'=forecast.id::text
+			WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'target',target.id::text,target.project_id
+			FROM project_targets target LEFT JOIN domain_events event
+			  ON event.event_type='target.changed' AND event.payload->>'id'=target.id::text
+			WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'deadline',deadline.id::text,deadline.project_id
+			FROM project_deadlines deadline LEFT JOIN domain_events event
+			  ON event.event_type='deadline.changed' AND event.payload->>'id'=deadline.id::text
+			WHERE event.event_id IS NULL
+		) orphan ORDER BY kind,id`)
+	if err != nil {
+		return nil, err
+	}
+	for planningOrphans.Next() {
+		var kind, id, projectID string
+		if err := planningOrphans.Scan(&kind, &id, &projectID); err != nil {
+			_ = planningOrphans.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "planning_projection_without_event", Aggregate: "project:" + projectID,
+			Detail: fmt.Sprintf("%s projection %s lacks its immutable event", kind, id)})
+	}
+	if err := planningOrphans.Close(); err != nil {
+		return nil, err
+	}
+
+	headMismatches, err := queryer.QueryContext(ctx, `
+		SELECT kind,project_id,id FROM (
+			SELECT 'forecast' kind,head.project_id,head.forecast_id::text id FROM forecast_heads head
+			JOIN forecasts forecast ON forecast.id=head.forecast_id
+			WHERE forecast.project_id<>head.project_id OR forecast.deliverable_id IS DISTINCT FROM head.deliverable_id
+			UNION ALL
+			SELECT 'target',head.project_id,head.target_id::text FROM project_target_heads head
+			JOIN project_targets target ON target.id=head.target_id WHERE target.project_id<>head.project_id
+			UNION ALL
+			SELECT 'deadline',head.project_id,head.deadline_id::text FROM project_deadline_heads head
+			JOIN project_deadlines deadline ON deadline.id=head.deadline_id WHERE deadline.project_id<>head.project_id
+		) mismatch ORDER BY kind,project_id`)
+	if err != nil {
+		return nil, err
+	}
+	for headMismatches.Next() {
+		var kind, projectID, id string
+		if err := headMismatches.Scan(&kind, &projectID, &id); err != nil {
+			_ = headMismatches.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "planning_head_mismatch", Aggregate: "project:" + projectID,
+			Detail: fmt.Sprintf("%s current head %s belongs to another scope", kind, id)})
+	}
+	if err := headMismatches.Close(); err != nil {
+		return nil, err
+	}
 	outboxRows, err := queryer.QueryContext(ctx, `SELECT record.event_sequence,record.event_id,
 		record.payload_sha256<>digest(convert_to(record.payload::text,'UTF8'),'sha256'),
 		record.payload IS DISTINCT FROM domain_event_outbox_envelope(event),
@@ -798,7 +1248,10 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 	}
 	_ = outboxRows.Close()
 	unknownRows, err := queryer.QueryContext(ctx, `SELECT sequence,event_id,event_type,schema_version FROM domain_events
-		WHERE schema_version<>1 OR event_type NOT IN ('project.created','decision.recorded') ORDER BY sequence`)
+		WHERE schema_version<>1 OR event_type NOT IN (
+			'project.created','decision.recorded','project.activated','project.held','project.resumed','project.promoted',
+			'deliverable.created','deliverable.revised','forecast.created','forecast.superseded','target.changed','deadline.changed'
+		) ORDER BY sequence`)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,8 @@
+id: M2C-FORECAST-001
+requirement: M2C-FORECAST-001
+layer: system
+title: Project and deliverable forecasts retain immutable scoped P50 P90 supersession history
+given: {runtime: production_http, database: real_postgresql, target_deadline_types: distinct}
+when: {command: scripts/test_planning.sh, operations: [reforecastProject, reforecastDeliverable, setProjectTarget, setProjectDeadline]}
+then: {result: pass, p50_lte_p90: true, current_per_scope: 1, history_mutation: denied, stale_effect: attention_only}
+evidence: [target/agent-evidence/m2c/m2c-forecasts.json]

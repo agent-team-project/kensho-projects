@@ -17,7 +17,18 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUEST_SCHEMA_NAMES = ("LoginRequest", "CreateExplorationProject", "RecordDecision")
+REQUEST_SCHEMA_NAMES = (
+    "LoginRequest",
+    "CreateExplorationProject",
+    "RecordDecision",
+    "LifecycleReasonRequest",
+    "DeliverableInput",
+    "PromoteProjectRequest",
+    "ForecastInput",
+    "TargetInput",
+    "DeadlineInput",
+)
+GO_SCHEMA_NAMES = (*REQUEST_SCHEMA_NAMES, "PromotionDecision", "Session")
 
 
 def load_yaml(relative: str) -> dict[str, Any]:
@@ -70,6 +81,8 @@ def go_property_name(property_name: str) -> str:
 
 
 def go_schema_type(schema: dict[str, Any]) -> str:
+    if "$ref" in schema:
+        return schema["$ref"].rsplit("/", 1)[-1]
     if schema.get("type") == "string":
         return "string"
     if schema.get("type") == "integer":
@@ -137,7 +150,7 @@ def generate_go(openapi: dict[str, Any]) -> str:
     )
     generated_structs = "\n\n".join(
         generate_go_struct(name, openapi["components"]["schemas"][name])
-        for name in (*REQUEST_SCHEMA_NAMES, "Session")
+        for name in GO_SCHEMA_NAMES
     )
     boundary_constants = generate_go_boundary_constants(openapi)
     constants = "\n".join(f'\tOperation{go_name(op["id"])} OperationID = "{op["id"]}"' for op in ops)
@@ -281,7 +294,7 @@ func writeAdapterProblem(writer http.ResponseWriter, status int, code string) {{
 
 def ts_path_expression(path: str) -> str:
     expression = path
-    for parameter in ("org_id", "project_id"):
+    for parameter in re_path_parameters(path):
         expression = expression.replace("{" + parameter + "}", "${encodeURIComponent(params." + parameter + ")}")
     return "`" + expression + "`"
 
@@ -343,6 +356,16 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         "login": "LoginRequest",
         "createProject": "CreateExplorationProject",
         "recordDecision": "RecordDecision",
+        "activateProject": "LifecycleReasonRequest",
+        "holdProject": "LifecycleReasonRequest",
+        "resumeProject": "LifecycleReasonRequest",
+        "promoteProject": "PromoteProjectRequest",
+        "createDeliverable": "DeliverableInput",
+        "reviseDeliverable": "DeliverableInput",
+        "reforecastProject": "ForecastInput",
+        "reforecastDeliverable": "ForecastInput",
+        "setProjectTarget": "TargetInput",
+        "setProjectDeadline": "DeadlineInput",
     }
     response_types = {
         "login": "Session",
@@ -350,6 +373,20 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         "getProject": "Project",
         "recordDecision": "Decision",
         "listProjectActivity": "Array<Activity>",
+        "activateProject": "Project",
+        "holdProject": "Project",
+        "resumeProject": "Project",
+        "promoteProject": "PromotionResult",
+        "listDeliverables": "Array<Deliverable>",
+        "createDeliverable": "Deliverable",
+        "getDeliverable": "Deliverable",
+        "reviseDeliverable": "Deliverable",
+        "listProjectForecasts": "Array<Forecast>",
+        "reforecastProject": "Forecast",
+        "listDeliverableForecasts": "Array<Forecast>",
+        "reforecastDeliverable": "Forecast",
+        "setProjectTarget": "Target",
+        "setProjectDeadline": "Deadline",
     }
     methods: list[str] = []
     for op in ops:
@@ -391,7 +428,7 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
             result = f'''const response = await {request_call};
     const version = response.headers.get("ETag");
     if (version === null || !versionETagPattern.test(version)) {{
-      throw new WorkplaneContractError("recordDecision response omitted a valid ETag");
+      throw new WorkplaneContractError("{op['id']} response omitted a valid ETag");
     }}
     return {{ body: response.body as {response_types[op['id']]}, version: version as VersionETag }};'''
         else:
@@ -400,13 +437,18 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         methods.append(f'''  async {op["id"]}(params: {parameter_type}{body_argument}, {options_signature}): Promise<{return_type}> {{
     {validation_prefix}{result}
   }}''')
-    schema_names = ["LoginRequest", "Session", "CreateExplorationProject", "Project", "RecordDecision", "Decision", "Activity", "Problem"]
+    schema_names = [
+        *REQUEST_SCHEMA_NAMES,
+        "PromotionDecision", "Session", "Project", "Decision", "Deliverable",
+        "Forecast", "Target", "Deadline", "PromotionResult", "Activity", "Problem",
+    ]
     generated_types = "\n\n".join(generate_ts_object_type(name, openapi["components"]["schemas"][name]) for name in schema_names)
     owned_request_headers = json.dumps(contract_owned_request_headers(openapi), indent=2)
     request_contract_schemas = json.dumps(
         {name: openapi["components"]["schemas"][name] for name in REQUEST_SCHEMA_NAMES},
         indent=2,
     )
+    component_schemas = json.dumps(openapi["components"]["schemas"], indent=2)
     request_contract_parameters = json.dumps(
         {
             name: resolve_local_schema(openapi, parameter["schema"])
@@ -462,9 +504,12 @@ type TransportResponse = {{
 }};
 
 type RuntimeSchema = {{
+  $ref?: string;
+  const?: unknown;
+  format?: string;
   type?: string | ReadonlyArray<string>;
   required?: ReadonlyArray<string>;
-  additionalProperties?: boolean;
+  additionalProperties?: boolean | RuntimeSchema;
   properties?: Readonly<Record<string, RuntimeSchema>>;
   items?: RuntimeSchema;
   enum?: ReadonlyArray<unknown>;
@@ -473,12 +518,16 @@ type RuntimeSchema = {{
   maxLength?: number;
   minItems?: number;
   maxItems?: number;
+  minimum?: number;
+  maximum?: number;
+  uniqueItems?: boolean;
 }};
 
 const versionETagPattern = /^"[1-9][0-9]*"$/;
 const contractOwnedRequestHeaders = new Set({owned_request_headers});
 export const requestBodyMaxBytes = {openapi["x-request-body-max-bytes"]};
 export const requestContractSchemas = {request_contract_schemas} as const;
+const componentSchemas = {component_schemas} as const;
 const requestContractParameters = {request_contract_parameters} as const;
 type RequestContractSchemaName = keyof typeof requestContractSchemas;
 type RequestContractParameterName = keyof typeof requestContractParameters;
@@ -522,6 +571,13 @@ export class WorkplaneClient {{
   }}
 
   private validateSchema(schema: RuntimeSchema, value: unknown, path: string): void {{
+    if (schema.$ref !== undefined) {{
+      const name = schema.$ref.replace("#/components/schemas/", "") as keyof typeof componentSchemas;
+      const resolved = componentSchemas[name];
+      if (resolved === undefined) throw new WorkplaneContractError(`${{path}} references an unknown schema`);
+      this.validateSchema(resolved, value, path);
+      return;
+    }}
     if (schema.type === "object") {{
       if (value === null || typeof value !== "object" || Array.isArray(value)) {{
         throw new WorkplaneContractError(`${{path}} must be an object`);
@@ -552,6 +608,9 @@ export class WorkplaneClient {{
       if (schema.maxItems !== undefined && value.length > schema.maxItems) {{
         throw new WorkplaneContractError(`${{path}} must contain at most ${{schema.maxItems}} items`);
       }}
+      if (schema.uniqueItems === true && new Set(value.map((item) => JSON.stringify(item))).size !== value.length) {{
+        throw new WorkplaneContractError(`${{path}} must contain unique items`);
+      }}
       if (schema.items !== undefined) {{
         value.forEach((item, index) => this.validateSchema(schema.items!, item, `${{path}}[${{index}}]`));
       }}
@@ -572,6 +631,22 @@ export class WorkplaneClient {{
       if (schema.pattern !== undefined && !new RegExp(schema.pattern, "u").test(value)) {{
         throw new WorkplaneContractError(`${{path}} does not match the public contract`);
       }}
+      return;
+    }}
+    if (schema.type === "integer") {{
+      if (typeof value !== "number" || !Number.isSafeInteger(value)) {{
+        throw new WorkplaneContractError(`${{path}} must be an integer`);
+      }}
+      if (schema.minimum !== undefined && value < schema.minimum) {{
+        throw new WorkplaneContractError(`${{path}} must be at least ${{schema.minimum}}`);
+      }}
+      if (schema.maximum !== undefined && value > schema.maximum) {{
+        throw new WorkplaneContractError(`${{path}} must be at most ${{schema.maximum}}`);
+      }}
+      return;
+    }}
+    if (schema.type === "boolean" && typeof value !== "boolean") {{
+      throw new WorkplaneContractError(`${{path}} must be a boolean`);
     }}
   }}
 

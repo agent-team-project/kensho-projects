@@ -1,0 +1,8 @@
+id: M2C-PARITY-001
+requirement: M2C-PARITY-001
+layer: system
+title: Human and agent planning commands produce equivalent fields and event groups
+given: {runtime: production_http, actors: [human, agent], authority: equivalent}
+when: {command: scripts/test_planning.sh, deny_dimensions: [cross_org, private, restricted_token, disabled, revoked, self_widening]}
+then: {result: pass, normalized_domain_equal: true, normalized_events_equal: true, deny_residue: 0}
+evidence: [target/agent-evidence/m2c/m2c-human-agent-parity.json, target/agent-evidence/m2c/m2c-authority-denies.json]

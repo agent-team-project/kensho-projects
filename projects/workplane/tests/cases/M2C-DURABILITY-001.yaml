@@ -1,0 +1,8 @@
+id: M2C-DURABILITY-001
+requirement: M2C-DURABILITY-001
+layer: system
+title: Planning state event outbox replay realtime and integrity projections commit as one group
+given: {runtime: outbound_isolated_compose, database: real_postgresql, replay_projection: empty}
+when: {command: scripts/test_planning.sh, faults: every_m2c_write_boundary, concurrency: conflicting_writers}
+then: {result: pass, missing_outbox: 0, replay_checksum: equal, realtime_delivery: complete, doctor_findings: 0}
+evidence: [target/agent-evidence/m2c/m2c-durability.json]

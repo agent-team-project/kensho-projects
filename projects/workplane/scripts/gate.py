@@ -41,6 +41,7 @@ GATES: dict[str, list[tuple[str, str]]] = {
         ("m1-upgrade-outbox-backfill", "scripts/test_m1_upgrade.sh"),
         ("m1-m2-durable-browser-offline", "scripts/test_m1.sh"),
         ("m2b-realtime-authority-resume-faults", "scripts/test_realtime.sh"),
+        ("m2c-planning-contracts", "scripts/test_planning.sh"),
     ],
     "publication": [
         ("repository-publication", f"{PYTHON} ../../scripts/check_publication.py"),
@@ -64,6 +65,10 @@ EXTRA_ARTIFACT_GLOBS = {
         "target/agent-evidence/m2b/*.json",
         "target/agent-evidence/m2b/*.txt",
         "target/agent-evidence/m2b/migration.log",
+    ],
+    "m2c-planning-contracts": [
+        "target/agent-evidence/m2c/*.json",
+        "target/agent-evidence/m2c/migration.log",
     ],
 }
 

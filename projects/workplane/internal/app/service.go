@@ -150,7 +150,11 @@ func (service *Service) bootstrap(ctx context.Context, seed BootstrapConfig) err
 	prefix := tokenPrefix(seed.AgentToken)
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO agent_tokens (id,agent_id,organization_id,token_prefix,token_hash,scopes,project_ids,expires_at,created_by,created_at)
-		VALUES ($1,$2,$3,$4,$5,ARRAY['project.create','project.read','decision.record','realtime.subscribe','event.subscribe'],NULL,$6,$7,$8)
+		VALUES ($1,$2,$3,$4,$5,ARRAY[
+			'project.create','project.read','project.activate','project.hold','project.resume','project.promote',
+			'project.reforecast','project.target.write','project.deadline.write','decision.record',
+			'deliverable.read','deliverable.edit','deliverable.reforecast','realtime.subscribe','event.subscribe'
+		],NULL,$6,$7,$8)
 		ON CONFLICT (id) DO UPDATE SET token_prefix=EXCLUDED.token_prefix,token_hash=EXCLUDED.token_hash,
 			scopes=EXCLUDED.scopes,expires_at=EXCLUDED.expires_at,revoked_at=NULL`,
 		tokenID, seed.AgentID, seed.OrganizationID, prefix, keyedHash(service.config.TokenHashKey, seed.AgentToken),
@@ -360,7 +364,33 @@ func agentProjectRestrictionAllows(projectIDs map[string]bool, projectID string)
 
 func organizationRoleAllows(role, action string) bool {
 	return role == "owner" || role == "admin" || role == "member" ||
-		(role == "observer" && (action == "project.read" || action == "realtime.subscribe" || action == "event.subscribe"))
+		(role == "observer" && (action == "project.read" || action == "deliverable.read" ||
+			action == "realtime.subscribe" || action == "event.subscribe"))
+}
+
+func (service *Service) authorizeProject(ctx context.Context, actor Actor, projectID, organizationID, action, rid string) (generated.Response, bool) {
+	if denied, ok := service.authorizeOrganization(actor, organizationID, action, rid); !ok {
+		return denied, false
+	}
+	var visibility, createdBy string
+	var participant bool
+	principalID := ""
+	if actor.PrincipalID != nil {
+		principalID = *actor.PrincipalID
+	}
+	err := service.db.QueryRowContext(ctx, `SELECT visibility::text,created_by,
+		EXISTS (SELECT 1 FROM project_memberships membership WHERE membership.project_id=projects.id
+			AND (membership.principal_id=$3 OR membership.principal_id=NULLIF($4,'')::uuid))
+		FROM projects WHERE id=$1 AND organization_id=$2`, projectID, organizationID, actor.ID, principalID).
+		Scan(&visibility, &createdBy, &participant)
+	if err != nil {
+		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
+	}
+	if visibility == "organization" || createdBy == actor.ID || (principalID != "" && createdBy == principalID) || participant ||
+		(privilegedProjectRole(actor.Role) && (actor.Kind != "agent" || privilegedProjectRole(actor.DelegatedRole))) {
+		return generated.Response{}, true
+	}
+	return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
 }
 
 func (service *Service) requireHumanMutation(request generated.Request, actor Actor, rid string) (generated.Response, bool) {

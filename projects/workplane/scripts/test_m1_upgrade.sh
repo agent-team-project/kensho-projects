@@ -179,3 +179,21 @@ if [ "$commit_horizon" != "5|lock_domain_event_commit_horizon()|true" ]; then
 fi
 
 printf '%s\n' "M2B checkpoint-horizon upgrade passed: shape=$commit_horizon"
+
+docker compose --project-name "$project" exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U workplane -d workplane < migrations/000006_m2_planning_contracts.up.sql
+
+planning_upgrade="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT max(version) || '|' || (SELECT count(*) FROM projects) || '|' ||
+    (SELECT count(*) FROM decisions) || '|' || (SELECT count(*) FROM domain_events) || '|' ||
+    (SELECT count(*) FROM outbox_records) || '|' || (SELECT count(*) FROM deliverables) || '|' ||
+    (SELECT count(*) FROM forecasts) || '|' ||
+    COALESCE((SELECT planning_count FROM projection_heads WHERE name='m1-canonical')::text,'no-head')
+   FROM schema_migrations;")"
+if [ "$planning_upgrade" != "6|1|1|2|2|0|0|no-head" ]; then
+  echo "M2B-to-M2C upgrade changed accepted rows or failed to add planning shape: $planning_upgrade" >&2
+  exit 1
+fi
+
+printf '%s\n' "M2B-to-M2C PostgreSQL upgrade passed without rewriting accepted ledger rows: shape=$planning_upgrade"

@@ -1,9 +1,9 @@
 openapi: 3.1.0
 x-request-body-max-bytes: 65536
 info:
-  title: Workplane Walking Slice and Realtime API
-  version: 0.4.0-m2b
-  description: Executable M1 human/agent commands plus the M2B resumable realtime transport.
+  title: Workplane Planning Contract API
+  version: 0.5.0-m2c
+  description: Executable M1/M2 durable realtime behavior plus the M2C planning-contract spine.
 servers:
   - url: http://localhost:8080
 paths:
@@ -84,6 +84,251 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Project'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/activate:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      operationId: activateProject
+      security: &mutationSecurity
+        - HumanSession: []
+          CsrfToken: []
+        - AgentBearer: []
+      x-permission-actions: [project.activate]
+      parameters: &versionedMutationParameters
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/ExpectedVersion'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LifecycleReasonRequest'}
+      responses:
+        '200': &versionedProjectResponse
+          description: Committed project projection
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/hold:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      operationId: holdProject
+      security: *mutationSecurity
+      x-permission-actions: [project.hold, decision.record]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LifecycleReasonRequest'}
+      responses:
+        '200': *versionedProjectResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/resume:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      operationId: resumeProject
+      security: *mutationSecurity
+      x-permission-actions: [project.resume, decision.record]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LifecycleReasonRequest'}
+      responses:
+        '200': *versionedProjectResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/promote:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      operationId: promoteProject
+      security: *mutationSecurity
+      x-permission-actions: [project.promote, decision.record]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PromoteProjectRequest'}
+      responses:
+        '200':
+          description: Atomic promotion result
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PromotionResult'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/deliverables:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    get:
+      operationId: listDeliverables
+      security: &readSecurity
+        - HumanSession: []
+        - AgentBearer: []
+      x-permission-actions: [deliverable.read]
+      responses:
+        '200':
+          description: Stable deliverable projections
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Deliverable'}}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.edit]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeliverableInput'}
+      responses:
+        '201': &versionedDeliverableResponse
+          description: Committed deliverable projection
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Deliverable'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    get:
+      operationId: getDeliverable
+      security: *readSecurity
+      x-permission-actions: [deliverable.read]
+      responses:
+        '200':
+          description: Deliverable projection
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Deliverable'}
+        default: {$ref: '#/components/responses/Problem'}
+    patch:
+      operationId: reviseDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.edit]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeliverableInput'}
+      responses:
+        '200': *versionedDeliverableResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/forecasts:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    get:
+      operationId: listProjectForecasts
+      security: *readSecurity
+      x-permission-actions: [project.read]
+      responses:
+        '200': &forecastHistoryResponse
+          description: Immutable forecast history with current and stale projection flags
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Forecast'}}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: reforecastProject
+      security: *mutationSecurity
+      x-permission-actions: [project.reforecast]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ForecastInput'}
+      responses:
+        '201': &versionedForecastResponse
+          description: Immutable current forecast
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Forecast'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{deliverable_id}/forecasts:
+    parameters: [{$ref: '#/components/parameters/DeliverableForecastId'}]
+    get:
+      operationId: listDeliverableForecasts
+      security: *readSecurity
+      x-permission-actions: [deliverable.read]
+      responses:
+        '200': *forecastHistoryResponse
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: reforecastDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.reforecast]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ForecastInput'}
+      responses:
+        '201': *versionedForecastResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/target:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      operationId: setProjectTarget
+      security: *mutationSecurity
+      x-permission-actions: [project.target.write]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TargetInput'}
+      responses:
+        '201': &versionedTargetResponse
+          description: Immutable current intent target
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Target'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/deadline:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    post:
+      operationId: setProjectDeadline
+      security: *mutationSecurity
+      x-permission-actions: [project.deadline.write]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeadlineInput'}
+      responses:
+        '201':
+          description: Immutable current typed deadline
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Deadline'}
         default: {$ref: '#/components/responses/Problem'}
   /api/v1/projects/{project_id}/decisions:
     parameters:
@@ -191,6 +436,10 @@ components:
       description: Server-generated identifier for the request and committed command.
       required: true
       schema: {type: string, minLength: 1, maxLength: 128}
+    VersionETag:
+      description: Quoted aggregate version returned by the committed mutation.
+      required: true
+      schema: {$ref: '#/components/schemas/VersionETag'}
   securitySchemes:
     HumanSession:
       type: apiKey
@@ -219,6 +468,16 @@ components:
       schema: {type: string, format: uuid}
     ProjectId:
       name: project_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    DeliverableId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    DeliverableForecastId:
+      name: deliverable_id
       in: path
       required: true
       schema: {type: string, format: uuid}
@@ -335,6 +594,89 @@ components:
           type: array
           maxItems: 32
           items: {type: string, maxLength: 2000}
+    LifecycleReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+    DeliverableInput:
+      type: object
+      additionalProperties: false
+      required: [title, description, required, weight, state, acceptance_criteria]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        description: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        required: {type: boolean}
+        weight: {type: integer, minimum: 1, maximum: 1000}
+        state: {type: string, enum: [draft, ready]}
+        acceptance_criteria:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
+    PromotionDecision:
+      type: object
+      additionalProperties: false
+      required: [question, choice, alternatives, rationale, evidence, consequences]
+      properties:
+        question: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        choice: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        alternatives: {type: array, maxItems: 32, items: {type: string, maxLength: 1000}}
+        rationale: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        evidence: {type: array, maxItems: 64, items: {type: string, maxLength: 2000}}
+        consequences: {type: array, maxItems: 32, items: {type: string, maxLength: 2000}}
+    PromoteProjectRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, residual_uncertainty, priority_rationale, deliverables]
+      properties:
+        decision: {$ref: '#/components/schemas/PromotionDecision'}
+        residual_uncertainty: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        priority_rationale: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        deliverables:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items: {$ref: '#/components/schemas/DeliverableInput'}
+    ForecastInput:
+      type: object
+      additionalProperties: false
+      required: [p50_at, p90_at, review_after, basis, assumptions, reason_codes, impact]
+      properties:
+        p50_at: {type: string, format: date-time}
+        p90_at: {type: string, format: date-time}
+        review_after: {type: string, format: date-time}
+        basis: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        assumptions:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
+        reason_codes:
+          type: array
+          minItems: 1
+          maxItems: 9
+          uniqueItems: true
+          items:
+            type: string
+            enum: [scope-change, new-evidence, dependency-change, capacity-change, quality-finding, incident, estimate-correction, hold-change, other]
+        impact: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+    TargetInput:
+      type: object
+      additionalProperties: false
+      required: [target_at, reason]
+      properties:
+        target_at: {type: string, format: date-time}
+        reason: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+    DeadlineInput:
+      type: object
+      additionalProperties: false
+      required: [deadline_at, source, description]
+      properties:
+        deadline_at: {type: string, format: date-time}
+        source: {type: string, enum: [contract, launch-window, demonstration, regulation, other]}
+        description: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
     Decision:
       type: object
       additionalProperties: false
@@ -348,7 +690,7 @@ components:
           type: [string, 'null']
           format: uuid
         recorded_at: {type: string, format: date-time}
-        kind: {type: string, enum: [continue]}
+        kind: {type: string, enum: [continue, promote]}
         question: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
         choice: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
         alternatives:
@@ -364,6 +706,88 @@ components:
           type: array
           maxItems: 32
           items: {type: string, maxLength: 2000}
+    Deliverable:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, title, description, required, weight, state, acceptance_criteria, version, created_by, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        title: {type: string}
+        description: {type: string}
+        required: {type: boolean}
+        weight: {type: integer}
+        state: {type: string, enum: [draft, ready, submitted, bounced, accepted, waived, cancelled]}
+        acceptance_criteria: {type: array, items: {type: string}}
+        version: {type: integer, minimum: 1}
+        created_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Forecast:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, scope, p50_at, p90_at, review_after, basis, assumptions, reason_codes, impact, created_by, created_at, current, stale, attention_only]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        deliverable_id: {type: [string, 'null'], format: uuid}
+        scope: {type: string, enum: [project, deliverable]}
+        p50_at: {type: string, format: date-time}
+        p90_at: {type: string, format: date-time}
+        review_after: {type: string, format: date-time}
+        basis: {type: string}
+        assumptions: {type: array, items: {type: string}}
+        reason_codes: {type: array, items: {type: string}}
+        impact: {type: string}
+        supersedes_id: {type: [string, 'null'], format: uuid}
+        created_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        current: {type: boolean}
+        stale: {type: boolean}
+        attention_only: {type: boolean, const: true}
+    Target:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, target_at, reason, created_by, created_at, current, missed, attention_only]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        target_at: {type: string, format: date-time}
+        reason: {type: string}
+        supersedes_id: {type: [string, 'null'], format: uuid}
+        created_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        current: {type: boolean}
+        missed: {type: boolean}
+        attention_only: {type: boolean, const: true}
+    Deadline:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, deadline_at, source, description, created_by, created_at, current, passed, attention_only]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        deadline_at: {type: string, format: date-time}
+        source: {type: string, enum: [contract, launch-window, demonstration, regulation, other]}
+        description: {type: string}
+        supersedes_id: {type: [string, 'null'], format: uuid}
+        created_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        current: {type: boolean}
+        passed: {type: boolean}
+        attention_only: {type: boolean, const: true}
+    PromotionResult:
+      type: object
+      additionalProperties: false
+      required: [project, decision, deliverables]
+      properties:
+        project: {$ref: '#/components/schemas/Project'}
+        decision: {$ref: '#/components/schemas/Decision'}
+        deliverables: {type: array, items: {$ref: '#/components/schemas/Deliverable'}}
     VersionETag:
       type: string
       pattern: '^"[1-9][0-9]*"$'

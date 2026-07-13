@@ -203,7 +203,7 @@ func (service *Service) GetProject(ctx context.Context, request generated.Reques
 	if err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeOrganization(actor, project.OrganizationID, "project.read", rid); !ok {
+	if denied, ok := service.authorizeProject(ctx, actor, project.ID, project.OrganizationID, "project.read", rid); !ok {
 		return denied, nil
 	}
 	return generated.Response{Status: http.StatusOK, Headers: generated.ResponseHeaders{XRequestID: rid}, Body: project}, nil
@@ -273,7 +273,7 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	if err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeOrganization(actor, project.OrganizationID, "decision.record", rid); !ok {
+	if denied, ok := service.authorizeProject(ctx, actor, project.ID, project.OrganizationID, "decision.record", rid); !ok {
 		return denied, nil
 	}
 	if project.Mode != "exploration" || (project.State != "proposed" && project.State != "active") {
@@ -336,6 +336,9 @@ func (service *Service) ListProjectActivity(ctx context.Context, request generat
 	var exists bool
 	if err := service.db.QueryRowContext(ctx, `SELECT true FROM projects WHERE id=$1 AND organization_id=$2`, projectID, actor.OrganizationID).Scan(&exists); err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
+	}
+	if denied, ok := service.authorizeProject(ctx, actor, projectID, actor.OrganizationID, "project.read", rid); !ok {
+		return denied, nil
 	}
 	rows, err := service.db.QueryContext(ctx, `SELECT event_id,event_type,actor_id,actor_kind,principal_id,
 		aggregate_version,command_id,request_id,occurred_at FROM domain_events

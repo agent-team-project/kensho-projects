@@ -65,6 +65,11 @@ claim_families:
     behavior: checkpointed_canonical_delivery_signed_resume_live_authority_and_bounded_backpressure
     suites: [realtime, permission, recovery, security, evidence_manifest]
     begins_at: durable-core
+  - id: TRACE-PLANNING-CONTRACTS
+    authority: [DOMAIN:3.3, DOMAIN:3.5, DOMAIN:3.8, DOMAIN:4, ISSUE:12]
+    behavior: nonterminal_lifecycle_deliverable_criteria_and_immutable_scoped_forecast_history
+    suites: [domain, property, permission, api_parity, persistence_replay_idempotency, realtime, recovery, evidence_manifest]
+    begins_at: durable-core
   - id: TRACE-OPERATIONS
     authority: [SPEC:5.8, ARCHITECTURE:deployment]
     behavior: offline_self_host_backup_restore_and_observable_recovery

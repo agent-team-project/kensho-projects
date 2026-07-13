@@ -78,6 +78,34 @@ requirements:
     source: VERIFICATION:19;ISSUE:10
     title: Exact-head evidence captures realtime authority resume restart revoke and backpressure outcomes
     begins_at: durable-core
+  - id: M2C-LIFECYCLE-001
+    source: DOMAIN:4;ISSUE:12
+    title: Every non-terminal project mode and state transition is explicit versioned and atomic
+    begins_at: durable-core
+  - id: M2C-DELIVERABLE-001
+    source: DOMAIN:3.5;ISSUE:12
+    title: Stable deliverables enforce required weight state criteria and accepted-edit invariants
+    begins_at: durable-core
+  - id: M2C-FORECAST-001
+    source: DOMAIN:3.8;ISSUE:12
+    title: Project and deliverable P50 P90 histories are immutable scoped current and attention-only
+    begins_at: durable-core
+  - id: M2C-PARITY-001
+    source: API:7-10;SECURITY:4-6;ISSUE:12
+    title: Humans and equivalently scoped agents share every M2C operation and deny boundary
+    begins_at: durable-core
+  - id: M2C-DURABILITY-001
+    source: DOMAIN:7-9;ISSUE:12
+    title: Every planning command atomically updates relational state event outbox replay and realtime
+    begins_at: durable-core
+  - id: M2C-UPGRADE-001
+    source: VERIFICATION:6;ISSUE:12
+    title: Exact M2B schemas upgrade to M2C without rewriting accepted rows and unknown schemas fail closed
+    begins_at: durable-core
+  - id: M2C-EVIDENCE-001
+    source: VERIFICATION:19;ISSUE:12
+    title: Exact-head evidence captures planning invariants parity concurrency faults replay and upgrade
+    begins_at: durable-core
   - id: PR-CORE-01
     source: PRODUCT:4.5
     title: Actor-neutral public project creation records attributable events
