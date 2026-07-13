@@ -228,10 +228,11 @@ func (store *DurableStore) RunOutboxOnce(ctx context.Context, consumer, worker s
 		return result, ErrInjectedCrash
 	}
 	// The checkpoint row lock serializes workers for this consumer, while the
-	// unique delivery effect and monotonic trigger protect identity/order. Using
-	// SSI here would make the earlier-event predicate abort an unrelated
-	// serializable domain command whenever a new outbox row commits while two
-	// production consumers are active.
+	// unique delivery effect and monotonic trigger protect identity/order. The
+	// commit-horizon lock waits for every transaction that could still commit a
+	// lower identity value. The following read-committed predicate can therefore
+	// distinguish a committed missing delivery from a permanently aborted
+	// sequence gap without making domain commands participate in SSI.
 	checkpoint, err := store.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return result, err
@@ -241,6 +242,9 @@ func (store *DurableStore) RunOutboxOnce(ctx context.Context, consumer, worker s
 	if err := checkpoint.QueryRowContext(ctx, `SELECT last_sequence FROM consumer_checkpoints
 		WHERE consumer_name=$1 FOR UPDATE`, consumer).Scan(&previous); err != nil {
 		return result, fmt.Errorf("lock checkpoint: %w", err)
+	}
+	if _, err := checkpoint.ExecContext(ctx, `SELECT lock_domain_event_commit_horizon()`); err != nil {
+		return result, fmt.Errorf("establish domain event commit horizon: %w", err)
 	}
 	var missingEarlier bool
 	if err := checkpoint.QueryRowContext(ctx, `SELECT EXISTS (
@@ -253,6 +257,20 @@ func (store *DurableStore) RunOutboxOnce(ctx context.Context, consumer, worker s
 		return result, fmt.Errorf("check earlier deliveries: %w", err)
 	}
 	if missingEarlier {
+		released, err := checkpoint.ExecContext(ctx, `UPDATE outbox_delivery_state
+			SET lease_owner=NULL,lease_until=NULL,updated_at=$4
+			WHERE consumer_name=$1 AND event_id=$2 AND lease_owner=$3 AND delivered_at IS NULL`,
+			consumer, result.EventID, worker, at)
+		if err != nil {
+			return result, fmt.Errorf("release out-of-order outbox lease: %w", err)
+		}
+		rows, err := released.RowsAffected()
+		if err != nil || rows != 1 {
+			return result, fmt.Errorf("outbox lease lost before out-of-order release")
+		}
+		if err := checkpoint.Commit(); err != nil {
+			return result, fmt.Errorf("commit out-of-order lease release: %w", err)
+		}
 		return result, ErrOutOfOrder
 	}
 	result.Checkpoint = previous

@@ -9,7 +9,10 @@ automation, or release/scale claims.
 The production outbox process runs the existing `projection-v1` consumer and a
 dedicated `realtime-v1` consumer. WebSocket and SSE read only immutable outbox
 records whose realtime logical effect exists at or behind that consumer's
-monotonic checkpoint. The transported JSON value is the complete M2A canonical
+monotonic checkpoint. Before advancing, the consumer establishes a PostgreSQL
+commit horizon over domain-event writers, so an allocated lower sequence cannot
+become visible after a higher checkpoint; rolled-back allocation gaps remain
+safe to cross. The transported JSON value is the complete M2A canonical
 outbox envelope; neither transport creates a second event shape or source of
 truth. Event id remains the logical deduplication identity.
 
@@ -37,8 +40,10 @@ the wire.
 WebSocket permits at most eight unacknowledged event cursors and closes with an
 explicit `rate_limited` / `slow_consumer` outcome. SSE uses an eight-message
 producer buffer plus bounded write deadlines and emits the same explicit
-outcome before ending when the consumer cannot keep up. Filters only reduce
-delivery and are part of the cursor binding.
+outcome before ending when the consumer cannot keep up. A WebSocket failure
+cursor repeats the last event successfully written, so exclusive resume cannot
+skip the first unread event. Filters only reduce delivery and are part of the
+cursor binding.
 
 ## Reproduction
 
@@ -46,5 +51,5 @@ delivery and are part of the cursor binding.
 dependency resolution, starts real PostgreSQL plus the production API/outbox
 services, commits events through public commands, restarts both processes, and
 then runs exact-envelope, resume, snapshot-required, authority-canary, revoke,
-commit-before-publish, and slow-consumer cases. Artifacts are written beneath
+commit-before-publish, inverted-commit-order, and slow-consumer-resume cases. Artifacts are written beneath
 `target/agent-evidence/m2b/` and are copied and hashed by `make evidence-smoke`.

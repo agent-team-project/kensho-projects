@@ -164,3 +164,18 @@ if [ "$realtime_coverage" != "4|2|2|0|1|1" ]; then
 fi
 
 printf '%s\n' "M2A-to-M2B PostgreSQL upgrade passed: coverage=$realtime_coverage"
+
+docker compose --project-name "$project" exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U workplane -d workplane < migrations/000005_m2_realtime_checkpoint_horizon.up.sql
+
+commit_horizon="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT max(version) || '|' || to_regprocedure('lock_domain_event_commit_horizon()')::text || '|' ||
+    has_function_privilege('workplane_app','lock_domain_event_commit_horizon()','EXECUTE')
+   FROM schema_migrations;")"
+if [ "$commit_horizon" != "5|lock_domain_event_commit_horizon()|true" ]; then
+  echo "M2B checkpoint-horizon upgrade failed: $commit_horizon" >&2
+  exit 1
+fi
+
+printf '%s\n' "M2B checkpoint-horizon upgrade passed: shape=$commit_horizon"

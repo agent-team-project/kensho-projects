@@ -262,6 +262,10 @@ func (run *harness) full() error {
 		return err
 	}
 	results["commit_before_publish"] = true
+	if err := run.invertedCommitOrder(); err != nil {
+		return err
+	}
+	results["inverted_commit_order"] = true
 	if err := run.websocketBackpressure(); err != nil {
 		return err
 	}
@@ -604,6 +608,120 @@ func (run *harness) commitBeforePublish() error {
 	return run.writeJSON("m2b-commit-before-publish.json", map[string]any{"rolled_back_disclosed": false, "committed_project_id": created.ID, "committed_event_id": eventIDOf(delivered.Event)})
 }
 
+func (run *harness) invertedCommitOrder() error {
+	if err := run.waitRealtimeCaughtUp(10 * time.Second); err != nil {
+		return err
+	}
+	var baseline int64
+	if err := run.db.QueryRow(`SELECT last_sequence FROM consumer_checkpoints WHERE consumer_name=$1`, consumerName).Scan(&baseline); err != nil {
+		return err
+	}
+	ws, _, err := run.openWebSocket("", "")
+	if err != nil {
+		return err
+	}
+	defer ws.close()
+	stream, err := run.openSSE("", "", nil)
+	if err != nil {
+		return err
+	}
+	defer stream.close()
+	if event, err := stream.next(3 * time.Second); err != nil || event.Kind != "ready" {
+		return fmt.Errorf("inverted-order SSE ready: %+v %v", event, err)
+	}
+
+	lowerTx, err := run.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer lowerTx.Rollback() //nolint:errcheck
+	lowerProject, lowerEvent, lowerSequence, err := run.insertInvertedProjectEvent(lowerTx, "lower")
+	if err != nil {
+		return err
+	}
+	higherTx, err := run.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer higherTx.Rollback() //nolint:errcheck
+	higherProject, higherEvent, higherSequence, err := run.insertInvertedProjectEvent(higherTx, "higher")
+	if err != nil {
+		return err
+	}
+	if lowerSequence >= higherSequence {
+		return fmt.Errorf("inverted-order allocation was not increasing: lower=%d higher=%d", lowerSequence, higherSequence)
+	}
+	if err := higherTx.Commit(); err != nil {
+		return err
+	}
+	if err := run.waitConsumerDelivery(higherEvent, 5*time.Second); err != nil {
+		return fmt.Errorf("higher event was not published while lower transaction remained open: %w", err)
+	}
+	premature, err := run.checkpointReached(higherSequence, 500*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	if err := lowerTx.Commit(); err != nil {
+		return err
+	}
+	if premature {
+		return fmt.Errorf("realtime checkpoint crossed open lower event: baseline=%d lower=%d higher=%d", baseline, lowerSequence, higherSequence)
+	}
+
+	lowerEnvelope, err := run.outboxEnvelope(lowerEvent)
+	if err != nil {
+		return err
+	}
+	higherEnvelope, err := run.outboxEnvelope(higherEvent)
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(higherEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	wsEvents, err := collectWebSocketEvents(ws, 2, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	for _, frame := range wsEvents {
+		if err := ws.ack(frame.Cursor); err != nil {
+			return err
+		}
+	}
+	sseEvents, err := collectSSEEvents(stream, 2, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	expected := []json.RawMessage{lowerEnvelope, higherEnvelope}
+	for index := range expected {
+		if !equalJSON(wsEvents[index].Event, expected[index]) || !equalJSON(sseEvents[index].Data, expected[index]) ||
+			!equalJSON(wsEvents[index].Event, sseEvents[index].Data) {
+			return fmt.Errorf("inverted-order envelope %d differs across ledger/ws/sse", index)
+		}
+	}
+	if err := assertNoWebSocketEvent(ws, 250*time.Millisecond); err != nil {
+		return err
+	}
+	if err := assertNoSSEEvent(stream, 250*time.Millisecond); err != nil {
+		return err
+	}
+	var deliveryCount int
+	if err := run.db.QueryRow(`SELECT count(*) FROM consumer_deliveries
+		WHERE consumer_name=$1 AND event_id IN ($2,$3)`, consumerName, lowerEvent, higherEvent).Scan(&deliveryCount); err != nil {
+		return err
+	}
+	if deliveryCount != 2 {
+		return fmt.Errorf("inverted-order logical delivery count=%d, want 2", deliveryCount)
+	}
+	return run.writeJSON("m2b-inverted-commit-order.json", map[string]any{
+		"allocation_order": []int64{lowerSequence, higherSequence}, "commit_order": []string{higherEvent, lowerEvent},
+		"projects": []string{lowerProject, higherProject}, "checkpoint_before_lower_commit": baseline,
+		"premature_checkpoint": false, "websocket_sequences": []int64{sequenceOf(wsEvents[0].Event), sequenceOf(wsEvents[1].Event)},
+		"sse_sequences":          []int64{sequenceOf(sseEvents[0].Data), sequenceOf(sseEvents[1].Data)},
+		"logical_delivery_count": deliveryCount, "canonical_envelope_equal": true, "duplicate_events": 0,
+	})
+}
+
 func (run *harness) websocketBackpressure() error {
 	if err := run.waitRealtimeCaughtUp(10 * time.Second); err != nil {
 		return err
@@ -613,27 +731,59 @@ func (run *harness) websocketBackpressure() error {
 		return err
 	}
 	defer ws.close()
+	projects := make([]project, 0, 10)
 	for index := 0; index < 10; index++ {
-		if _, err := run.createProject(fmt.Sprintf("WS backpressure %02d", index), fmt.Sprintf("ws-backpressure-%08d", index), nil); err != nil {
+		created, err := run.createProject(fmt.Sprintf("WS backpressure %02d", index), fmt.Sprintf("ws-backpressure-%08d", index), nil)
+		if err != nil {
 			return err
 		}
+		projects = append(projects, created)
 	}
-	events := 0
+	events := make([]wireFrame, 0, 8)
+	var failure wireFrame
 	for {
 		frame, err := ws.next(10 * time.Second)
 		if err != nil {
 			return err
 		}
 		if frame.Type == "event" {
-			events++
+			events = append(events, frame)
 		}
 		if frame.Type == "rate_limited" {
-			if frame.Code != "slow_consumer" || events != 8 {
-				return fmt.Errorf("unexpected websocket backpressure frame=%+v events=%d", frame, events)
+			if frame.Code != "slow_consumer" || len(events) != 8 || frame.Cursor == "" || frame.Cursor != events[len(events)-1].Cursor {
+				return fmt.Errorf("unexpected websocket backpressure frame=%+v events=%d", frame, len(events))
 			}
-			return run.writeJSON("m2b-websocket-backpressure.json", map[string]any{"unacked_events": events, "outcome": frame.Type, "code": frame.Code, "silent_drop": false})
+			failure = frame
+			break
 		}
 	}
+	ws.close()
+	resumed, _, err := run.openWebSocket(failure.Cursor, "")
+	if err != nil {
+		return fmt.Errorf("resume from websocket slow-consumer outcome: %w", err)
+	}
+	defer resumed.close()
+	recovered, err := collectWebSocketEvents(resumed, 2, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	for _, frame := range recovered {
+		if err := resumed.ack(frame.Cursor); err != nil {
+			return err
+		}
+	}
+	if aggregateIDOf(recovered[0].Event) != projects[8].ID || aggregateIDOf(recovered[1].Event) != projects[9].ID ||
+		sequenceOf(recovered[0].Event) >= sequenceOf(recovered[1].Event) {
+		return fmt.Errorf("websocket slow-consumer resume gap/reorder: first=%s second=%s", recovered[0].Event, recovered[1].Event)
+	}
+	if err := assertNoWebSocketEvent(resumed, 250*time.Millisecond); err != nil {
+		return err
+	}
+	return run.writeJSON("m2b-websocket-backpressure.json", map[string]any{
+		"unacked_events": len(events), "outcome": failure.Type, "code": failure.Code, "silent_drop": false,
+		"failure_cursor_matches_last_delivered": true, "recovered_project_ids": []string{aggregateIDOf(recovered[0].Event), aggregateIDOf(recovered[1].Event)},
+		"recovered_sequences": []int64{sequenceOf(recovered[0].Event), sequenceOf(recovered[1].Event)}, "resume_gap": false, "duplicate_events": 0,
+	})
 }
 
 func (run *harness) sseBackpressure() error {
@@ -926,6 +1076,69 @@ func (client *sseClient) close() {
 	}
 }
 
+func collectWebSocketEvents(client *wsClient, count int, timeout time.Duration) ([]wireFrame, error) {
+	deadline := time.Now().Add(timeout)
+	events := make([]wireFrame, 0, count)
+	for len(events) < count {
+		frame, err := client.next(time.Until(deadline))
+		if err != nil {
+			return nil, fmt.Errorf("collect websocket events: %w", err)
+		}
+		if frame.Type == "event" {
+			events = append(events, frame)
+		}
+	}
+	return events, nil
+}
+
+func collectSSEEvents(client *sseClient, count int, timeout time.Duration) ([]sseEvent, error) {
+	deadline := time.Now().Add(timeout)
+	events := make([]sseEvent, 0, count)
+	for len(events) < count {
+		event, err := client.next(time.Until(deadline))
+		if err != nil {
+			return nil, fmt.Errorf("collect SSE events: %w", err)
+		}
+		if event.Kind == "domain-event" {
+			events = append(events, event)
+		}
+	}
+	return events, nil
+}
+
+func assertNoWebSocketEvent(client *wsClient, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		frame, err := client.next(time.Until(deadline))
+		if err != nil {
+			var networkError net.Error
+			if errors.As(err, &networkError) && networkError.Timeout() {
+				return nil
+			}
+			return fmt.Errorf("check websocket duplicate: %w", err)
+		}
+		if frame.Type == "event" {
+			return fmt.Errorf("websocket emitted an additional domain event: %s", frame.Event)
+		}
+	}
+}
+
+func assertNoSSEEvent(client *sseClient, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		event, err := client.next(time.Until(deadline))
+		if err != nil {
+			if strings.Contains(err.Error(), "SSE event timeout") {
+				return nil
+			}
+			return fmt.Errorf("check SSE duplicate: %w", err)
+		}
+		if event.Kind == "domain-event" {
+			return fmt.Errorf("SSE emitted an additional domain event: %s", event.Data)
+		}
+	}
+}
+
 func (run *harness) projectEnvelopes(projectID string) ([]json.RawMessage, error) {
 	rows, err := run.db.Query(`SELECT record.payload FROM outbox_records record
 		WHERE record.payload->>'aggregate_id'=$1 ORDER BY record.event_sequence`, projectID)
@@ -958,6 +1171,39 @@ func (run *harness) waitRealtimeCaughtUp(timeout time.Duration) error {
 	return errors.New("realtime consumer did not catch up")
 }
 
+func (run *harness) waitConsumerDelivery(eventID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		var delivered bool
+		err := run.db.QueryRow(`SELECT EXISTS (
+			SELECT 1 FROM consumer_deliveries WHERE consumer_name=$1 AND event_id=$2
+		)`, consumerName, eventID).Scan(&delivered)
+		if err != nil {
+			return err
+		}
+		if delivered {
+			return nil
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return fmt.Errorf("consumer %s did not publish event %s", consumerName, eventID)
+}
+
+func (run *harness) checkpointReached(want int64, timeout time.Duration) (bool, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		var got int64
+		if err := run.db.QueryRow(`SELECT last_sequence FROM consumer_checkpoints WHERE consumer_name=$1`, consumerName).Scan(&got); err != nil {
+			return false, err
+		}
+		if got >= want {
+			return true, nil
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return false, nil
+}
+
 func (run *harness) waitCheckpoint(raw json.RawMessage, timeout time.Duration) error {
 	want := sequenceOf(raw)
 	deadline := time.Now().Add(timeout)
@@ -969,6 +1215,37 @@ func (run *harness) waitCheckpoint(raw json.RawMessage, timeout time.Duration) e
 		time.Sleep(25 * time.Millisecond)
 	}
 	return fmt.Errorf("realtime checkpoint did not reach %d", want)
+}
+
+func (run *harness) insertInvertedProjectEvent(tx *sql.Tx, marker string) (string, string, int64, error) {
+	projectID, eventID, commandID := uuid(), uuid(), uuid()
+	title := "M2B inverted commit " + marker
+	payload := map[string]any{
+		"id": projectID, "organization_id": organizationID, "title": title, "outcome": "Prove a commit-visible realtime prefix",
+		"mode": "exploration", "state": "proposed", "version": 1, "hypothesis": "A lower open event blocks checkpoint advancement",
+		"falsifier": "The higher event becomes resumable first", "decision_criteria": []string{"Both transports receive lower then higher"},
+		"experiment_bound": "Two inverted domain-event transactions",
+	}
+	if _, err := tx.Exec(`INSERT INTO projects
+		(id,organization_id,title,outcome,mode,state,version,hypothesis,falsifier,decision_criteria,experiment_bound,created_by,created_at,updated_at)
+		VALUES ($1,$2,$3,'Prove a commit-visible realtime prefix','exploration','proposed',1,
+		'A lower open event blocks checkpoint advancement','The higher event becomes resumable first',
+		'["Both transports receive lower then higher"]','Two inverted domain-event transactions',$4,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+		projectID, organizationID, title, humanID); err != nil {
+		return "", "", 0, err
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", "", 0, err
+	}
+	var sequence int64
+	if err := tx.QueryRow(`INSERT INTO domain_events
+		(event_id,organization_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,actor_kind,actor_id,principal_id,command_id,request_id,occurred_at,payload)
+		VALUES ($1,$2,'project',$3,1,'project.created',1,'human',$4,NULL,$5,$6,CURRENT_TIMESTAMP,$7)
+		RETURNING sequence`, eventID, organizationID, projectID, humanID, commandID, "m2b-inverted-"+marker+"-commit", encoded).Scan(&sequence); err != nil {
+		return "", "", 0, err
+	}
+	return projectID, eventID, sequence, nil
 }
 
 func (run *harness) seedCanary(orgID, creatorID, projectID, visibility, title string) (json.RawMessage, error) {
@@ -1067,6 +1344,12 @@ func eventIDOf(raw json.RawMessage) string {
 	var value envelope
 	_ = json.Unmarshal(raw, &value)
 	return value.EventID
+}
+
+func aggregateIDOf(raw json.RawMessage) string {
+	var value envelope
+	_ = json.Unmarshal(raw, &value)
+	return value.AggregateID
 }
 
 func uuid() string {

@@ -49,6 +49,7 @@ for artifact in \
   m2b-authority-canaries.json \
   m2b-live-revocation.json \
   m2b-commit-before-publish.json \
+  m2b-inverted-commit-order.json \
   m2b-websocket-backpressure.json \
   m2b-sse-backpressure.json \
   m2b-load-bearing-outcomes.json; do

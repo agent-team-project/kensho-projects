@@ -405,6 +405,7 @@ func (service *Service) runWebSocket(ctx context.Context, connection net.Conn, r
 	if err := writeWebSocketJSON(connection, writeTimeout, realtimeFrame{Type: "ready", Cursor: readyCursor}); err != nil {
 		return
 	}
+	lastDeliveredCursor := readyCursor
 	acknowledgements := make(chan realtimeCursor, maxUnacked*2)
 	readErrors := make(chan error, 1)
 	go service.readWebSocket(reader, binding, acknowledgements, readErrors)
@@ -448,21 +449,22 @@ func (service *Service) runWebSocket(ctx context.Context, connection net.Conn, r
 			return
 		}
 		for _, record := range records {
-			current = record.Envelope.Sequence
 			if record.Envelope.OrganizationID != actor.OrganizationID || !filter.allows(record.Envelope.EventType) ||
 				!service.actorCanReadEnvelope(ctx, actor, record.Envelope) {
+				current = record.Envelope.Sequence
 				continue
 			}
 			if len(pending) >= maxUnacked {
-				cursor, _ := service.encodeRealtimeCursor(binding, current, "")
-				_ = writeWebSocketJSON(connection, writeTimeout, realtimeFrame{Type: "rate_limited", Cursor: cursor, Code: "slow_consumer", Detail: "Too many events remain unacknowledged."})
+				_ = writeWebSocketJSON(connection, writeTimeout, realtimeFrame{Type: "rate_limited", Cursor: lastDeliveredCursor, Code: "slow_consumer", Detail: "Too many events remain unacknowledged."})
 				_ = writeWebSocketClose(connection, writeTimeout, 1013, "slow consumer")
 				return
 			}
-			cursor, _ := service.encodeRealtimeCursor(binding, current, record.Envelope.EventID)
+			cursor, _ := service.encodeRealtimeCursor(binding, record.Envelope.Sequence, record.Envelope.EventID)
 			if err := writeWebSocketJSON(connection, writeTimeout, realtimeFrame{Type: "event", Cursor: cursor, Event: record.Encoded}); err != nil {
 				return
 			}
+			current = record.Envelope.Sequence
+			lastDeliveredCursor = cursor
 			pending = append(pending, current)
 		}
 		if examined > current {
