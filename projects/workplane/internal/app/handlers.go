@@ -203,7 +203,7 @@ func (service *Service) GetProject(ctx context.Context, request generated.Reques
 	if err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeOrganization(actor, project.OrganizationID, "project.read", rid); !ok {
+	if denied, ok := service.authorizeProject(ctx, actor, project.ID, project.OrganizationID, "project.read", rid); !ok {
 		return denied, nil
 	}
 	return generated.Response{Status: http.StatusOK, Headers: generated.ResponseHeaders{XRequestID: rid}, Body: project}, nil
@@ -253,7 +253,7 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	}
 	input.Question, input.Choice, input.Rationale = strings.TrimSpace(input.Question), strings.TrimSpace(input.Choice), strings.TrimSpace(input.Rationale)
 	canonical := canonicalJSON(input)
-	hash := requestHash(canonical, []byte(request.ExpectedVersion))
+	hash := requestHash([]byte(projectID), canonical, []byte(request.ExpectedVersion))
 
 	tx, err := service.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
@@ -262,6 +262,9 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, actor.OrganizationID+actor.ID+"recordDecision"+request.IdempotencyKey); err != nil {
 		return serviceUnavailable(rid), nil
+	}
+	if denied, ok := service.authorizeProjectWith(ctx, tx, actor, projectID, actor.OrganizationID, "decision.record", rid); !ok {
+		return denied, nil
 	}
 	if replay, found, conflict := replayIdempotency(ctx, tx, actor.OrganizationID, actor.ID, "recordDecision", request.IdempotencyKey, hash); found {
 		if conflict {
@@ -272,9 +275,6 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	project, err := scanProject(tx.QueryRowContext(ctx, selectProject+" WHERE id=$1 AND organization_id=$2 FOR UPDATE", projectID, actor.OrganizationID))
 	if err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
-	}
-	if denied, ok := service.authorizeOrganization(actor, project.OrganizationID, "decision.record", rid); !ok {
-		return denied, nil
 	}
 	if project.Mode != "exploration" || (project.State != "proposed" && project.State != "active") {
 		return problem(http.StatusConflict, "invariant_violation", "Decision not allowed", "A continue decision requires a mutable exploration project.", rid), nil
@@ -336,6 +336,9 @@ func (service *Service) ListProjectActivity(ctx context.Context, request generat
 	var exists bool
 	if err := service.db.QueryRowContext(ctx, `SELECT true FROM projects WHERE id=$1 AND organization_id=$2`, projectID, actor.OrganizationID).Scan(&exists); err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
+	}
+	if denied, ok := service.authorizeProject(ctx, actor, projectID, actor.OrganizationID, "project.read", rid); !ok {
+		return denied, nil
 	}
 	rows, err := service.db.QueryContext(ctx, `SELECT event_id,event_type,actor_id,actor_kind,principal_id,
 		aggregate_version,command_id,request_id,occurred_at FROM domain_events

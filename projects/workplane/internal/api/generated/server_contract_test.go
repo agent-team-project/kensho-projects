@@ -39,6 +39,49 @@ func (handler *adapterTestHandler) RecordDecision(context.Context, Request) (Res
 	return handler.recordDecisionResponse, nil
 }
 
+func (*adapterTestHandler) ActivateProject(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) HoldProject(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) ResumeProject(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) PromoteProject(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) CreateDeliverable(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusCreated, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) GetDeliverable(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) ReviseDeliverable(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) ListDeliverables(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: []any{}}, nil
+}
+func (*adapterTestHandler) ReforecastProject(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusCreated, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) ReforecastDeliverable(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusCreated, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) ListProjectForecasts(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: []any{}}, nil
+}
+func (*adapterTestHandler) ListDeliverableForecasts(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusOK, Body: []any{}}, nil
+}
+func (*adapterTestHandler) SetProjectTarget(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusCreated, Body: map[string]string{}}, nil
+}
+func (*adapterTestHandler) SetProjectDeadline(context.Context, Request) (Response, error) {
+	return Response{Status: http.StatusCreated, Body: map[string]string{}}, nil
+}
+
 func TestHumanSessionBootstrap(t *testing.T) {
 	t.Parallel()
 

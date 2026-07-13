@@ -43,6 +43,7 @@ test-integration:
 	scripts/test_m1_upgrade.sh
 	scripts/test_m1.sh
 	scripts/test_realtime.sh
+	scripts/test_planning.sh
 
 test-browser:
 	scripts/test_m1.sh

@@ -1,0 +1,8 @@
+id: M2C-EVIDENCE-001
+requirement: M2C-EVIDENCE-001
+layer: system
+title: Exact-head smoke evidence digests every M2C outcome and command log
+given: {source: clean_exact_commit, runtime: outbound_isolated_compose}
+when: {command: make evidence-smoke}
+then: {result: pass, artifact_digests: valid, source_commit: exact_head, planning_artifacts: non_empty}
+evidence: [evidence/runs]

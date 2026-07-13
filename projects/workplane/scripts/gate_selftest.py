@@ -31,6 +31,7 @@ REQUIRED_SMOKE_GATES = {
     "m1-upgrade-outbox-backfill",
     "m1-m2-durable-browser-offline",
     "m2b-realtime-authority-resume-faults",
+    "m2c-planning-contracts",
     "repository-publication",
 }
 

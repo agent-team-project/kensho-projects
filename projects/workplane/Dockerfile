@@ -7,6 +7,7 @@ COPY internal ./internal
 RUN --network=none CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/workplane ./cmd/api
 RUN --network=none CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/workplane-smoke ./cmd/smoke
 RUN --network=none CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/workplane-realtime-smoke ./cmd/realtime-smoke
+RUN --network=none CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/workplane-planning-smoke ./cmd/planning-smoke
 
 FROM scratch AS runtime
 COPY --from=build /out/workplane /workplane
@@ -19,5 +20,6 @@ ENTRYPOINT ["/workplane"]
 FROM scratch AS smoke
 COPY --from=build /out/workplane-smoke /workplane-smoke
 COPY --from=build /out/workplane-realtime-smoke /workplane-realtime-smoke
+COPY --from=build /out/workplane-planning-smoke /workplane-planning-smoke
 USER 65532:65532
 ENTRYPOINT ["/workplane-smoke"]

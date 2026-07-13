@@ -1,0 +1,8 @@
+id: M2C-DELIVERABLE-001
+requirement: M2C-DELIVERABLE-001
+layer: system
+title: Deliverable create and revise preserve stable identity and reject every invariant violation
+given: {runtime: production_http, database: real_postgresql, accepted_edit_fixture: true}
+when: {command: scripts/test_planning.sh, operations: [createDeliverable, reviseDeliverable]}
+then: {result: pass, stable_identity: true, invalid_residue: 0, accepted_edit: denied}
+evidence: [target/agent-evidence/m2c/m2c-deliverables.json]

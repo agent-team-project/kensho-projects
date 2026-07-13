@@ -1,0 +1,8 @@
+id: M2C-LIFECYCLE-001
+requirement: M2C-LIFECYCLE-001
+layer: system
+title: Non-terminal project lifecycle transitions enforce mode state reason forecast and version atomically
+given: {runtime: production_http, database: real_postgresql, states: [proposed, active, held], modes: [exploration, exploitation]}
+when: {command: scripts/test_planning.sh, operations: [activateProject, holdProject, resumeProject, promoteProject]}
+then: {result: pass, invalid_residue: 0, terminal_operations: absent, contiguous_versions: true}
+evidence: [target/agent-evidence/m2c/m2c-lifecycle.json]

@@ -42,3 +42,44 @@ func TestReplayStopsAtUnknownSchemaWithoutBuildingProjection(t *testing.T) {
 		t.Fatalf("unexpected replay failure: %+v", failure)
 	}
 }
+
+func TestCrossActorDeliverableRevisionPreservesCreatorAndReplays(t *testing.T) {
+	t.Parallel()
+	const (
+		organizationID = "00000000-0000-4000-8000-000000000010"
+		projectID      = "00000000-0000-4000-8000-000000000020"
+		deliverableID  = "00000000-0000-4000-8000-000000000030"
+		creatorID      = "00000000-0000-4000-8000-000000000040"
+		reviserID      = "00000000-0000-4000-8000-000000000050"
+		createdAt      = "2026-07-13T10:00:00Z"
+	)
+	created := Deliverable{ID: deliverableID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: "Original", Description: "Observable output", Required: true, Weight: 1000, State: "ready",
+		AcceptanceCriteria: []string{"Exact replay passes"}, Version: 1, CreatedBy: creatorID,
+		CreatedAt: createdAt, UpdatedAt: createdAt}
+	revised := created
+	revised.Title, revised.Version, revised.UpdatedAt = "Revised", 2, "2026-07-13T11:00:00Z"
+	events := []eventRow{
+		{Projection: eventProjection{Sequence: 1, EventID: "00000000-0000-4000-8000-000000000101", EventType: "project.created",
+			SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project", AggregateID: projectID,
+			AggregateVersion: 1, ActorKind: "human", ActorID: creatorID},
+			Payload: canonicalJSON(Project{ID: projectID, OrganizationID: organizationID, Mode: "exploitation", State: "active", Version: 1})},
+		{Projection: eventProjection{Sequence: 2, EventID: "00000000-0000-4000-8000-000000000102", EventType: "deliverable.created",
+			SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project", AggregateID: projectID,
+			AggregateVersion: 2, ActorKind: "human", ActorID: creatorID}, Payload: canonicalJSON(created)},
+		{Projection: eventProjection{Sequence: 3, EventID: "00000000-0000-4000-8000-000000000103", EventType: "deliverable.revised",
+			SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project", AggregateID: projectID,
+			AggregateVersion: 3, ActorKind: "agent", ActorID: reviserID}, Payload: canonicalJSON(revised)},
+	}
+
+	snapshot, failure := rebuildSnapshot("cross-actor-revision", events)
+	if failure != nil {
+		t.Fatalf("cross-actor deliverable revision must replay: %v", failure)
+	}
+	if len(snapshot.Deliverables) != 1 || snapshot.Deliverables[0].CreatedBy != creatorID {
+		t.Fatalf("creator attribution changed during replay: %+v", snapshot.Deliverables)
+	}
+	if len(snapshot.Activity) != 3 || snapshot.Activity[2].ActorID != reviserID {
+		t.Fatalf("revision event attribution was not preserved: %+v", snapshot.Activity)
+	}
+}

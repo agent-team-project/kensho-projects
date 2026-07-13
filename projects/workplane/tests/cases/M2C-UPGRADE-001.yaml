@@ -1,0 +1,8 @@
+id: M2C-UPGRADE-001
+requirement: M2C-UPGRADE-001
+layer: integration
+title: Exact M2B schema upgrades without rewriting accepted ledger rows and rejects unknown event schema
+given: {schema_version: 5, accepted_m1_m2_rows: populated}
+when: {command: scripts/test_m1_upgrade.sh, migration: 000006_m2_planning_contracts.up.sql}
+then: {result: pass, prior_rows_unchanged: true, planning_tables: present, unknown_schema: fail_closed}
+evidence: [target/agent-evidence/m2c/migration.log]

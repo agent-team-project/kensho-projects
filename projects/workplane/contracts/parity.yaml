@@ -43,7 +43,31 @@ seed_capabilities:
     agent_example: examples/agent/reforecast
     permission_action: project.reforecast
     parity_case_id: PARITY-FORECAST-001
-    status: specified
+    status: implemented
+  - capability_id: lifecycle-project
+    requirement_id: M2C-LIFECYCLE-001
+    public_operation_id: activateProject|holdProject|resumeProject|promoteProject
+    ui_surface: headless-m2c-contract-no-track-c-ui
+    agent_example: web/src/planning.ts#runAgentPlanningSlice
+    permission_action: project.activate
+    parity_case_id: M2C-PARITY-001
+    status: implemented
+  - capability_id: edit-deliverable
+    requirement_id: M2C-DELIVERABLE-001
+    public_operation_id: createDeliverable|reviseDeliverable
+    ui_surface: headless-m2c-contract-no-track-c-ui
+    agent_example: web/src/planning.ts#runAgentPlanningSlice
+    permission_action: deliverable.edit
+    parity_case_id: M2C-PARITY-001
+    status: implemented
+  - capability_id: reforecast-deliverable
+    requirement_id: M2C-FORECAST-001
+    public_operation_id: reforecastDeliverable
+    ui_surface: headless-m2c-contract-no-track-c-ui
+    agent_example: web/src/planning.ts#runAgentPlanningSlice
+    permission_action: deliverable.reforecast
+    parity_case_id: M2C-PARITY-001
+    status: implemented
   - capability_id: apply-brief-section
     requirement_id: PR-BRIEF-01
     public_operation_id: applyBriefSection
