@@ -1770,11 +1770,12 @@ func (run *runner) parityFlow(ctx context.Context, client *http.Client, actor st
 			return project{}, promotion{}, nil, err
 		}
 	}
-	committed := run.call(client, http.MethodPost, "/api/v1/projects/"+item.ID+"/forecasts", forecastInput(24, 48, 1), merge(auth, map[string]string{"Idempotency-Key": prefix + "-forecast-commit", "If-Match": `"1"`}))
+	committedInput := forecastInput(24, 48, 1)
+	committed := run.call(client, http.MethodPost, "/api/v1/projects/"+item.ID+"/forecasts", committedInput, merge(auth, map[string]string{"Idempotency-Key": prefix + "-forecast-commit", "If-Match": `"1"`}))
 	if err := expect(committed, http.StatusCreated, ""); err != nil {
 		return project{}, promotion{}, nil, err
 	}
-	retry := run.call(client, http.MethodPost, "/api/v1/projects/"+item.ID+"/forecasts", forecastInput(24, 48, 1), merge(auth, map[string]string{"Idempotency-Key": prefix + "-forecast-commit", "If-Match": `"1"`}))
+	retry := run.call(client, http.MethodPost, "/api/v1/projects/"+item.ID+"/forecasts", committedInput, merge(auth, map[string]string{"Idempotency-Key": prefix + "-forecast-commit", "If-Match": `"1"`}))
 	if !bytes.Equal(committed.Body, retry.Body) || committed.Headers["X-Request-ID"] != retry.Headers["X-Request-ID"] {
 		return project{}, promotion{}, nil, errors.New("forecast retry was not exact")
 	}
