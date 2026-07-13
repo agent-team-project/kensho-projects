@@ -208,6 +208,8 @@ def validate() -> dict[str, int]:
             check(set(declared_actions) <= set(actions), f"OpenAPI: {key} references unknown permission action")
             if key == "POST /api/v1/session/login":
                 check(operation.get("security") == [], "OpenAPI: login must be the only explicitly unauthenticated operation")
+            elif operation.get("x-agent-only") is True:
+                check(operation.get("security") == [{"AgentBearer": []}], f"OpenAPI: agent-only read {key} must require bearer authentication")
             elif method in {"post", "put", "patch", "delete"}:
                 check(operation.get("security") == mutation_security, f"OpenAPI: protected mutation {key} must require cookie+CSRF or agent bearer")
             else:

@@ -2,7 +2,7 @@
 package app
 
 // BuildStage is exposed by the health surface and evidence harness.
-const BuildStage = "m2-durable-spine"
+const BuildStage = "m2-realtime-spine"
 
 // Capabilities preserves the M1 surface and adds only the admitted Track B spine.
 var Capabilities = []string{
@@ -14,4 +14,9 @@ var Capabilities = []string{
 	"transactional-outbox",
 	"deterministic-replay",
 	"integrity-doctor",
+	"organization-websocket",
+	"agent-sse",
+	"signed-resume-cursors",
+	"live-authority-recheck",
+	"bounded-backpressure",
 }

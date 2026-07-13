@@ -827,7 +827,7 @@
         "DENY-REVOKED",
         "DENY-UNAUTHENTICATED"
       ],
-      "operation": "GET /api/v1/events?cursor=<opaque>&types=review.requested,work_item.assigned"
+      "operation": "GET /api/v1/events"
     },
     {
       "actions": [
@@ -1259,7 +1259,7 @@
         "DENY-REVOKED",
         "DENY-UNAUTHENTICATED"
       ],
-      "operation": "GET /api/v1/realtime?cursor=<opaque>"
+      "operation": "GET /api/v1/realtime"
     },
     {
       "actions": [
@@ -2286,7 +2286,7 @@
   "schema_version": 1,
   "sources": {
     "expected_denies": "853adc4afc73e28142cd65199f33995d2aceab4ad5a8ad178fa655a5e5043989",
-    "operation_permissions": "510b0a5a5d558a98bde7cef9a50352cfc6a1ccfb491f9c463e6bd786c0aa5bc5",
+    "operation_permissions": "0d02b38f3048e629d7502206fe567bdd9fd89bc161b316c32242aaeae8bb555d",
     "permissions": "eac6199b62bc009cc609249cee53e0f4fe1679965e8a96f21e9166d8f48c8214"
   }
 }

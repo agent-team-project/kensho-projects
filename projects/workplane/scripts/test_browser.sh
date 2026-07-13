@@ -4,8 +4,11 @@ set -eu
 cd "$(dirname "$0")/.."
 browser_ip="${WORKPLANE_BROWSER_IP:-172.30.17.50}"
 browser_base="${WORKPLANE_BROWSER_BASE:-http://127.0.0.1:18080}"
+runtime_image="${WORKPLANE_RUNTIME_IMAGE:-$(docker compose config --images | awk '/^workplane-runtime:/ {print; exit}')}"
 container="workplane-browser-api-${$}"
 proxy_pid=""
+
+test -n "$runtime_image"
 
 cleanup() {
   if [ -n "$proxy_pid" ]; then kill "$proxy_pid" >/dev/null 2>&1 || true; fi
@@ -27,7 +30,7 @@ docker run -d --name "$container" --network workplane_default --ip "$browser_ip"
   -e WORKPLANE_BOOTSTRAP_HUMAN_PASSWORD=walking-slice-password \
   -e WORKPLANE_BOOTSTRAP_AGENT_ID=00000000-0000-4000-8000-000000000002 \
   -e WORKPLANE_BOOTSTRAP_AGENT_TOKEN=wpa_local_walking_slice_agent_token_00000000000000000001 \
-  workplane-runtime:m2-durable-spine >/dev/null
+	  "$runtime_image" >/dev/null
 
 WORKPLANE_PROXY_TARGET="http://${browser_ip}:8080" WORKPLANE_PROXY_ADDR="${browser_base#http://}" \
   python3 scripts/http_proxy.py >target/agent-evidence/browser-proxy.log 2>&1 &

@@ -36,6 +36,8 @@ def operations(openapi: dict[str, Any]) -> list[dict[str, Any]]:
             if method not in path_item:
                 continue
             operation = path_item[method]
+            if operation.get("x-codegen") == "manual-stream":
+                continue
             parameter_refs = {
                 parameter.get("$ref", "").rsplit("/", 1)[-1]
                 for parameter in operation.get("parameters", [])

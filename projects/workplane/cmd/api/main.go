@@ -58,6 +58,7 @@ func main() {
 		writer.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(writer).Encode(map[string]string{"status": "ready"})
 	})
+	service.RegisterRealtime(mux)
 	generated.RegisterHandlers(mux, service)
 	registerWeb(mux, os.Getenv("WORKPLANE_WEB_ROOT"))
 
@@ -104,10 +105,22 @@ func runOutbox() {
 	if worker == "" {
 		worker = "workplane-outbox"
 	}
-	log.Printf("Workplane %s outbox consumer started as %s", app.BuildStage, worker)
-	if err := store.RunOutboxLoop(ctx, "projection-v1", worker, 30*time.Second, 100*time.Millisecond); err != nil {
+	consumers := []string{"projection-v1", "realtime-v1"}
+	consumerCtx, cancelConsumers := context.WithCancel(ctx)
+	defer cancelConsumers()
+	errors := make(chan error, len(consumers))
+	for _, consumer := range consumers {
+		consumer := consumer
+		go func() {
+			log.Printf("Workplane %s outbox consumer %s started as %s", app.BuildStage, consumer, worker)
+			errors <- store.RunOutboxLoop(consumerCtx, consumer, worker+":"+consumer, 30*time.Second, 25*time.Millisecond)
+		}()
+	}
+	if err := <-errors; err != nil {
+		cancelConsumers()
 		log.Fatal(err)
 	}
+	cancelConsumers()
 }
 
 func registerWeb(mux *http.ServeMux, root string) {

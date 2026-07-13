@@ -147,3 +147,35 @@ if [ "$event_state" != "project.created:1:0,decision.recorded:2:0" ]; then
 fi
 
 printf '%s\n' "M1-to-M2 PostgreSQL upgrade passed: coverage=$coverage events=$event_state"
+
+docker compose --project-name "$project" exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U workplane -d workplane < migrations/000004_m2_realtime_spine.up.sql
+
+realtime_coverage="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT max(version) || '|' || (SELECT count(*) FROM outbox_records) || '|' ||
+    (SELECT count(*) FROM outbox_delivery_state WHERE consumer_name='realtime-v1') || '|' ||
+    (SELECT last_sequence FROM consumer_checkpoints WHERE consumer_name='realtime-v1') || '|' ||
+    (SELECT count(*) FROM project_memberships) || '|' || (SELECT count(*) FROM realtime_retention)
+   FROM schema_migrations;")"
+if [ "$realtime_coverage" != "4|2|2|0|1|1" ]; then
+  echo "M2B upgrade did not backfill realtime consumer/authority state: $realtime_coverage" >&2
+  exit 1
+fi
+
+printf '%s\n' "M2A-to-M2B PostgreSQL upgrade passed: coverage=$realtime_coverage"
+
+docker compose --project-name "$project" exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U workplane -d workplane < migrations/000005_m2_realtime_checkpoint_horizon.up.sql
+
+commit_horizon="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT max(version) || '|' || to_regprocedure('lock_domain_event_commit_horizon()')::text || '|' ||
+    has_function_privilege('workplane_app','lock_domain_event_commit_horizon()','EXECUTE')
+   FROM schema_migrations;")"
+if [ "$commit_horizon" != "5|lock_domain_event_commit_horizon()|true" ]; then
+  echo "M2B checkpoint-horizon upgrade failed: $commit_horizon" >&2
+  exit 1
+fi
+
+printf '%s\n' "M2B checkpoint-horizon upgrade passed: shape=$commit_horizon"

@@ -43,7 +43,7 @@ services:
         done
 
   api:
-    image: workplane-runtime:m2-durable-spine
+    image: workplane-runtime:m2-realtime-spine
     build:
       context: .
       dockerfile: Dockerfile
@@ -80,7 +80,7 @@ services:
       retries: 30
 
   outbox:
-    image: workplane-runtime:m2-durable-spine
+    image: workplane-runtime:m2-realtime-spine
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -33,9 +33,21 @@ test "$shape" = "reference|Reference Organization"
 
 durable_shape="$(docker compose --project-name "$project" exec -T postgres \
   psql -At -U workplane -d workplane -c \
-  "SELECT max(version) || '|' || (SELECT count(*) FROM outbox_consumers) || '|' || (SELECT count(*) FROM projection_heads) FROM schema_migrations;")"
-if [ "$durable_shape" != "3|1|0" ]; then
+  "SELECT max(version) || '|' || (SELECT count(*) FROM outbox_consumers) || '|' ||
+    (SELECT count(*) FROM projection_heads) || '|' ||
+    COALESCE(to_regclass('public.realtime_retention')::text,'absent') || '|' ||
+    COALESCE(to_regclass('public.project_memberships')::text,'absent') FROM schema_migrations;")"
+if [ "$durable_shape" != "5|2|0|realtime_retention|project_memberships" ]; then
   echo "unexpected durable schema shape: $durable_shape" >&2
+  exit 1
+fi
+
+commit_horizon="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT to_regprocedure('lock_domain_event_commit_horizon()')::text || '|' ||
+    has_function_privilege('workplane_app','lock_domain_event_commit_horizon()','EXECUTE');")"
+if [ "$commit_horizon" != "lock_domain_event_commit_horizon()|true" ]; then
+  echo "unexpected checkpoint commit-horizon authority: $commit_horizon" >&2
   exit 1
 fi
 

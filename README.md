@@ -15,7 +15,7 @@ history are deliberately excluded.
 | --- | --- | --- | --- |
 | [Chess Engine](projects/chess-engine/) | Working local product with documented strength gaps | Correctness-driven systems delivery: legal move generation, perft, UCI, search, and a native board | [Evaluation report](projects/chess-engine/docs/release/kensho-evaluation-report.md) |
 | [Excel Lite](projects/excel-lite/) | Local demo ready; public launch not ready | Broad parallel implementation behind a stable formula engine and native spreadsheet shell | [Kensho retrospective](projects/excel-lite/docs/release/kensho-evaluation-report.md) and [PDF](projects/excel-lite/docs/release/kensho-excel-lite-retrospective.pdf) |
-| [Workplane](projects/workplane/) | M1 walking slice plus M2A durable spine implemented | Agent-native project and portfolio coordination with evidence, permissions, events, and empirical dogfooding | [Specification and verification gates](projects/workplane/README.md) |
+| [Workplane](projects/workplane/) | M1 walking slice plus M2A durable and M2B realtime spines implemented | Agent-native project and portfolio coordination with evidence, permissions, events, and empirical dogfooding | [Specification and verification gates](projects/workplane/README.md) |
 
 ## Quick verification
 
@@ -81,8 +81,8 @@ publishing private runtime transcripts.
 - The reports distinguish measured behavior from missing or aspirational gates.
 - Excel Lite is not represented as a publicly distributable v1 release.
 - The chess engine is not represented as having a measured Elo rating.
-- Workplane implements its serialized M1 walking slice and the first Track B
-  transactional-outbox/replay unit; broader M2 realtime/domain and release claims
+- Workplane implements its serialized M1 walking slice and the M2A/M2B Track B
+  transactional-outbox/replay/realtime units; broader M2 domain and release claims
   remain unimplemented.
 
 ## License

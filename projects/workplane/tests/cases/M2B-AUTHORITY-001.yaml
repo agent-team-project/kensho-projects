@@ -1,0 +1,8 @@
+id: M2B-AUTHORITY-001
+requirement: M2B-AUTHORITY-001
+layer: system
+title: Live authority rechecks suppress every organization visibility and restriction canary
+given: {actor: scoped_agent, canaries: [cross_org, private_project, unlisted_project]}
+when: {command: scripts/test_realtime.sh, live_changes: [membership_remove, token_revoke]}
+then: {result: pass, disclosed_canaries: 0, revoke_under_seconds: 5, explicit_close: true}
+evidence: [target/agent-evidence/m2b/m2b-authority-canaries.json, target/agent-evidence/m2b/m2b-live-revocation.json]

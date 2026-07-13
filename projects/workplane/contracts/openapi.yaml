@@ -1,9 +1,9 @@
 openapi: 3.1.0
 x-request-body-max-bytes: 65536
 info:
-  title: Workplane Walking Slice API
-  version: 0.2.0-m1
-  description: Executable M1 human and agent walking-slice surface.
+  title: Workplane Walking Slice and Realtime API
+  version: 0.4.0-m2b
+  description: Executable M1 human/agent commands plus the M2B resumable realtime transport.
 servers:
   - url: http://localhost:8080
 paths:
@@ -136,6 +136,55 @@ paths:
                 type: array
                 items: {$ref: '#/components/schemas/Activity'}
         default: {$ref: '#/components/responses/Problem'}
+  /api/v1/realtime:
+    get:
+      operationId: subscribeRealtime
+      x-codegen: manual-stream
+      x-permission-actions: [realtime.subscribe]
+      description: >-
+        Upgrades to the workplane.v1 WebSocket subprotocol and emits only
+        checkpointed canonical outbox envelopes authorized for the live actor.
+      security:
+        - HumanSession: []
+        - AgentBearer: []
+      parameters:
+        - {$ref: '#/components/parameters/RealtimeCursor'}
+        - {$ref: '#/components/parameters/EventTypes'}
+        - name: Sec-WebSocket-Protocol
+          in: header
+          required: true
+          schema: {type: string, const: workplane.v1}
+      responses:
+        '101':
+          description: WebSocket upgraded; frames are ready, event, heartbeat, permission_changed, rate_limited, snapshot_required, or error.
+        '409': {$ref: '#/components/responses/SnapshotRequired'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/events:
+    get:
+      operationId: subscribeAgentEvents
+      x-codegen: manual-stream
+      x-agent-only: true
+      x-permission-actions: [event.subscribe]
+      description: >-
+        Streams the same checkpointed canonical event envelopes as the
+        organization WebSocket, restricted by the current agent delegation.
+      security:
+        - AgentBearer: []
+      parameters:
+        - {$ref: '#/components/parameters/RealtimeCursor'}
+        - {$ref: '#/components/parameters/EventTypes'}
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: {type: string, minLength: 1, maxLength: 2048}
+      responses:
+        '200':
+          description: Server-sent canonical domain event envelopes with signed cursor ids.
+          content:
+            text/event-stream:
+              schema: {type: string}
+        '409': {$ref: '#/components/responses/SnapshotRequired'}
+        default: {$ref: '#/components/responses/Problem'}
 components:
   headers:
     RequestId:
@@ -184,12 +233,31 @@ components:
       required: true
       description: Quoted current aggregate version; stale or missing values deny before mutation.
       schema: {$ref: '#/components/schemas/VersionETag'}
+    RealtimeCursor:
+      name: cursor
+      in: query
+      required: false
+      schema: {type: string, minLength: 1, maxLength: 2048}
+      description: Opaque signed last-consumed position bound to actor, organization, transport, and filters.
+    EventTypes:
+      name: types
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 2048
+        pattern: '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*(,[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)*$'
   responses:
     Problem:
       description: Typed problem response
       content:
         application/problem+json:
           schema: {$ref: '#/components/schemas/Problem'}
+    SnapshotRequired:
+      description: The requested cursor cannot be resumed; fetch an authorized snapshot before reconnecting.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/SnapshotProblem'}
   schemas:
     LoginRequest:
       type: object
@@ -327,3 +395,18 @@ components:
         code: {type: string}
         request_id: {type: string}
         detail: {type: string}
+    SnapshotProblem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, request_id, detail, links]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string}
+        status: {const: 409}
+        code: {const: snapshot_required}
+        request_id: {type: string}
+        detail: {type: string}
+        links:
+          type: object
+          additionalProperties: {type: string}
+          required: [projects, activity]

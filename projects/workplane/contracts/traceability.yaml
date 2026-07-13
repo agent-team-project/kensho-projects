@@ -60,6 +60,11 @@ claim_families:
     behavior: tenant_isolation_attribution_revocation_and_separation_of_duty
     suites: [permission, security, realtime, search, brief]
     begins_at: contract-freeze
+  - id: TRACE-REALTIME
+    authority: [SPEC:9.2, API:16-17, SECURITY:4.2, VERIFICATION:9]
+    behavior: checkpointed_canonical_delivery_signed_resume_live_authority_and_bounded_backpressure
+    suites: [realtime, permission, recovery, security, evidence_manifest]
+    begins_at: durable-core
   - id: TRACE-OPERATIONS
     authority: [SPEC:5.8, ARCHITECTURE:deployment]
     behavior: offline_self_host_backup_restore_and_observable_recovery

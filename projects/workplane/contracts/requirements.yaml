@@ -58,6 +58,26 @@ requirements:
     source: VERIFICATION:19;ISSUE:8
     title: Exact-head evidence records durable rows crash timelines replay checksums and negative findings
     begins_at: durable-core
+  - id: M2B-REALTIME-001
+    source: API:16-17;ISSUE:10
+    title: Organization WebSocket and agent SSE publish one checkpointed canonical event envelope
+    begins_at: durable-core
+  - id: M2B-RESUME-001
+    source: VERIFICATION:9;ISSUE:10
+    title: Signed resume cursors survive reconnect and process restart and fail explicitly when stale or unknown
+    begins_at: durable-core
+  - id: M2B-AUTHORITY-001
+    source: SECURITY:4.2,6,10;ISSUE:10
+    title: Live subscriptions re-evaluate actor delegation membership role visibility restriction expiry and revocation
+    begins_at: durable-core
+  - id: M2B-BACKPRESSURE-001
+    source: SECURITY:10;VERIFICATION:9;ISSUE:10
+    title: Bounded WebSocket and SSE slow consumers receive explicit failure without silent event loss
+    begins_at: durable-core
+  - id: M2B-EVIDENCE-001
+    source: VERIFICATION:19;ISSUE:10
+    title: Exact-head evidence captures realtime authority resume restart revoke and backpressure outcomes
+    begins_at: durable-core
   - id: PR-CORE-01
     source: PRODUCT:4.5
     title: Actor-neutral public project creation records attributable events
