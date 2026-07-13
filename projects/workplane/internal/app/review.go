@@ -218,7 +218,7 @@ func normalizeEvidenceInput(input generated.EvidenceInput) (generated.EvidenceIn
 	input.Title, input.Claim, input.Source = strings.TrimSpace(input.Title), strings.TrimSpace(input.Claim), strings.TrimSpace(input.Source)
 	validKinds := map[string]bool{"report": true, "test-run": true, "link": true, "image": true, "observation": true, "measurement": true}
 	if !validKinds[input.Kind] || !validText(input.Title, 1, 200) || !validText(input.Claim, 1, 2000) ||
-		!validText(input.Source, 1, 2000) || len(input.Metadata) > 32 || len(input.Supports) < 1 || len(input.Supports) > 32 {
+		!validText(input.Source, 1, 2000) || input.Metadata == nil || len(input.Metadata) > 32 || len(input.Supports) < 1 || len(input.Supports) > 32 {
 		return generated.EvidenceInput{}, false
 	}
 	var ok bool
@@ -644,6 +644,21 @@ func loadCurrentEvidence(ctx context.Context, tx *sql.Tx, projectID string, ids 
 	return items, nil
 }
 
+func loadRetainedEvidence(ctx context.Context, tx *sql.Tx, projectID string, ids []string) ([]Evidence, error) {
+	items := make([]Evidence, 0, len(ids))
+	for _, id := range ids {
+		item, err := scanEvidence(tx.QueryRowContext(ctx, selectEvidence+` WHERE id=$1 AND project_id=$2`, id, projectID))
+		if err != nil {
+			return nil, err
+		}
+		if err := loadEvidenceSupports(ctx, tx, &item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
 func evidenceSupports(item Evidence, targetType, targetID string) bool {
 	for _, support := range item.Supports {
 		if support.TargetType == targetType && support.TargetID == targetID {
@@ -747,7 +762,7 @@ func normalizeVerdictInput(input generated.VerdictInput) (generated.VerdictInput
 		return generated.VerdictInput{}, false
 	}
 	var ok bool
-	if input.EvidenceIDs, ok = normalizeUUIDList(input.EvidenceIDs, 1, 64); !ok || len(input.Findings) > 32 {
+	if input.EvidenceIDs, ok = normalizeUUIDList(input.EvidenceIDs, 1, 64); !ok || input.Findings == nil || len(input.Findings) > 32 {
 		return generated.VerdictInput{}, false
 	}
 	if (input.Result == "pass" && len(input.Findings) != 0) || (input.Result == "fail" && len(input.Findings) == 0) {
@@ -763,12 +778,20 @@ func normalizeVerdictInput(input generated.VerdictInput) (generated.VerdictInput
 	return input, true
 }
 
-func independentReviewer(actor Actor, deliverable Deliverable, submission Submission, evidence []Evidence) bool {
+func independentReviewer(actor Actor, deliverable Deliverable, submission Submission, submittedEvidence, verdictEvidence []Evidence) bool {
 	effective := actorEffectiveIDs(actor)
-	if effective[deliverable.CreatedBy] || overlapsEffectiveIdentity(effective, submission.SubmittedBy, submission.PrincipalID) {
+	if effective[deliverable.CreatedBy] {
 		return false
 	}
-	for _, item := range evidence {
+	if overlapsEffectiveIdentity(effective, submission.SubmittedBy, submission.PrincipalID) {
+		return false
+	}
+	for _, item := range submittedEvidence {
+		if overlapsEffectiveIdentity(effective, item.ProducedBy, item.PrincipalID) {
+			return false
+		}
+	}
+	for _, item := range verdictEvidence {
 		if overlapsEffectiveIdentity(effective, item.ProducedBy, item.PrincipalID) {
 			return false
 		}
@@ -813,7 +836,11 @@ func (service *Service) RecordVerdict(ctx context.Context, request generated.Req
 			if err != nil {
 				return mutationOutcome{}, rejected(problem(http.StatusConflict, "invariant_violation", "Submission missing", "A gate verdict requires the immutable current submission.", rid)), nil
 			}
-			if gate.IndependenceRequired && !independentReviewer(actor, deliverable, submission, evidence) {
+			submittedEvidence, err := loadRetainedEvidence(ctx, tx, project.ID, submission.EvidenceIDs)
+			if err != nil {
+				return mutationOutcome{}, nil, err
+			}
+			if gate.IndependenceRequired && !independentReviewer(actor, deliverable, submission, submittedEvidence, evidence) {
 				return mutationOutcome{}, rejected(problem(http.StatusForbidden, "forbidden", "Independent review required", "The effective principal produced the submitted deliverable or evidence.", rid)), nil
 			}
 			var prior sql.NullString

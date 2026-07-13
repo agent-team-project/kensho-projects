@@ -1,0 +1,8 @@
+id: M2D-AUTH-001
+requirement: M2D-PARITY-001
+layer: system
+title: Accepted agent API use records last-used while invalid revoked expired and unauthorized attempts write nothing
+given: {runtime: production_http, database: real_postgresql, token_last_used: null}
+when: {command: scripts/test_planning.sh, attempts: [invalid_hash, revoked, expired, unauthorized_scope, accepted_project_read]}
+then: {result: pass, denied_last_used: null, accepted_last_used: non_null}
+evidence: [target/agent-evidence/m2c/m2d-agent-token-usage.json]

@@ -26,6 +26,8 @@ attributed action linked to current evidence.
 ## Review lifecycle and authority
 
 The public cycle is `ready -> submitted -> bounced -> submitted -> accepted`.
+An optional deliverable may separately move from `draft` or `ready` to the
+immutable `cancelled` state; required deliverables cannot use that command.
 Submit and resubmit create immutable submission records and move a constrained
 submission head. Bounce requires one current actionable finding. Resubmit
 requires every finding closed plus linked resolution evidence. Approval
@@ -33,8 +35,9 @@ requires every hard gate passed and no open finding.
 
 Separation of duty compares effective identities, including an agent's
 delegated human principal. An independent reviewer cannot be the deliverable
-creator, current submitter, or producer of verdict evidence. Denials occur
-before any durable write, including idempotency and token-usage residue.
+creator, current submitter, producer of any evidence retained by the current
+submission, or producer of verdict evidence. Denials occur before any durable
+write, including idempotency and token-usage residue.
 
 Hard gates are never waivable. A soft gate or deliverable waiver is a
 policy-designated human judgment represented by the same universal decision
@@ -50,7 +53,8 @@ generated adapters, idempotency check, `If-Match` version contract, serializable
 PostgreSQL transaction, event ledger, outbox, replay projection, integrity
 doctor, and realtime consumers. The M2D event families are evidence, gate,
 verdict, finding, submission, bounce/resubmit/acceptance, decision, and waiver.
-Replay rebuilds all review projections into the same atomic shadow generation
+Replay rebuilds all review projections, including optional-deliverable
+cancellation, into the same atomic shadow generation
 as prior milestones and fails closed on unknown schema versions or event types.
 
 Run `make smoke` for the complete accepted gate. The real-PostgreSQL M2D cases

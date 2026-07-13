@@ -38,6 +38,18 @@ const (
 	reviewerSession    = "m2d-reviewer-session-token-000000000000000000000001"
 	reviewerCSRF       = "m2d-reviewer-csrf-token-0000000000000000000000001"
 	reviewerAgentToken = "wpa_m2d_reviewer_agent_token_000000000000000000000001"
+	evidenceProducerID = "00000000-0000-4000-8000-000000000035"
+	evidenceSessionID  = "00000000-0000-4000-8000-000000000036"
+	evidenceSession    = "m2d-evidence-producer-session-token-000000000000000001"
+	evidenceCSRF       = "m2d-evidence-producer-csrf-token-0000000000000000001"
+	submitterHumanID   = "00000000-0000-4000-8000-000000000037"
+	submitterSessionID = "00000000-0000-4000-8000-000000000038"
+	submitterSession   = "m2d-submitter-session-token-00000000000000000000001"
+	submitterCSRF      = "m2d-submitter-csrf-token-000000000000000000000001"
+	verdictProducerID  = "00000000-0000-4000-8000-000000000039"
+	verdictSessionID   = "00000000-0000-4000-8000-000000000040"
+	verdictSession     = "m2d-verdict-producer-session-token-00000000000000001"
+	verdictCSRF        = "m2d-verdict-producer-csrf-token-000000000000000001"
 	publicOrigin       = "http://localhost:8080"
 )
 
@@ -191,10 +203,11 @@ type sseClient struct {
 }
 
 type runner struct {
-	base, artifacts, csrf                      string
-	human, agent, reviewerHuman, reviewerAgent *http.Client
-	db                                         *sql.DB
-	checks                                     []string
+	base, artifacts, csrf                             string
+	human, agent, reviewerHuman, reviewerAgent        *http.Client
+	evidenceProducer, submitterHuman, verdictProducer *http.Client
+	db                                                *sql.DB
+	checks                                            []string
 }
 
 func main() {
@@ -230,7 +243,7 @@ func (run *runner) execute(ctx context.Context) error {
 	_, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET scopes=ARRAY[
 		'project.create','project.read','project.activate','project.hold','project.resume','project.promote',
 		'project.reforecast','project.target.write','project.deadline.write','decision.record',
-		'deliverable.read','deliverable.edit','deliverable.reforecast','deliverable.submit','review.request',
+		'deliverable.read','deliverable.edit','deliverable.cancel','deliverable.reforecast','deliverable.submit','review.request',
 		'evidence.read','evidence.create','evidence.supersede','finding.resolve','deliverable.waive','gate.soft_waive',
 		'realtime.subscribe','event.subscribe'
 	],project_ids=ARRAY[]::uuid[],revoked_at=NULL WHERE token_prefix=$1`, agentToken[:16])
@@ -581,6 +594,15 @@ func (run *runner) reviewFlow(ctx context.Context) error {
 	if err := run.bootstrapReviewers(ctx); err != nil {
 		return err
 	}
+	if err := run.agentTokenUsageFlow(ctx); err != nil {
+		return err
+	}
+	if err := run.cancellationReviewFlow(ctx); err != nil {
+		return err
+	}
+	if err := run.separationReviewFlow(ctx); err != nil {
+		return err
+	}
 	accepted, err := run.acceptanceReviewFlow(ctx)
 	if err != nil {
 		return err
@@ -623,6 +645,20 @@ func (run *runner) bootstrapReviewers(ctx context.Context) error {
 			VALUES ('00000000-0000-4000-8000-000000000034',$1,$2,$3,$4,
 			ARRAY['project.read','deliverable.read','evidence.read','review.verdict','finding.withdraw','realtime.subscribe','event.subscribe'],
 			ARRAY[]::uuid[],$5,$6,$7)`, []any{reviewerAgentID, organizationID, reviewerAgentToken[:16], m2dKeyedHash(reviewerAgentToken), now.Add(time.Hour), reviewerHumanID, now}},
+		{`INSERT INTO principals (id,kind,display_name,status,human_principal_id,created_at)
+			VALUES ($1,'human','M2D submitted-evidence producer','active',NULL,$2),
+			($3,'human','M2D submitter','active',NULL,$2),
+			($4,'human','M2D verdict-evidence producer','active',NULL,$2)`, []any{evidenceProducerID, now, submitterHumanID, verdictProducerID}},
+		{`INSERT INTO organization_memberships (organization_id,principal_id,role,created_at)
+			VALUES ($1,$2,'member',$5),($1,$3,'member',$5),($1,$4,'member',$5)`,
+			[]any{organizationID, evidenceProducerID, submitterHumanID, verdictProducerID, now}},
+		{`INSERT INTO human_sessions (id,principal_id,token_hash,csrf_hash,expires_at,created_at)
+			VALUES ($1,$2,$3,$4,$9,$10),($5,$6,$7,$8,$9,$10),($11,$12,$13,$14,$9,$10)`, []any{
+			evidenceSessionID, evidenceProducerID, m2dKeyedHash(evidenceSession), m2dKeyedHash(evidenceCSRF),
+			submitterSessionID, submitterHumanID, m2dKeyedHash(submitterSession), m2dKeyedHash(submitterCSRF),
+			now.Add(time.Hour), now,
+			verdictSessionID, verdictProducerID, m2dKeyedHash(verdictSession), m2dKeyedHash(verdictCSRF),
+		}},
 	}
 	for _, statement := range statements {
 		if _, err := tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
@@ -632,24 +668,421 @@ func (run *runner) bootstrapReviewers(ctx context.Context) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	jar, err := cookiejar.New(nil)
-	if err != nil {
+	if run.reviewerHuman, err = sessionClient(run.base, reviewerSession); err != nil {
 		return err
 	}
-	baseURL, err := url.Parse(run.base)
-	if err != nil {
+	if run.evidenceProducer, err = sessionClient(run.base, evidenceSession); err != nil {
 		return err
 	}
-	jar.SetCookies(baseURL, []*http.Cookie{{Name: "workplane_session", Value: reviewerSession, Path: "/"}})
-	run.reviewerHuman = &http.Client{Jar: jar, Timeout: 10 * time.Second}
+	if run.submitterHuman, err = sessionClient(run.base, submitterSession); err != nil {
+		return err
+	}
+	if run.verdictProducer, err = sessionClient(run.base, verdictSession); err != nil {
+		return err
+	}
 	run.reviewerAgent = &http.Client{Timeout: 10 * time.Second}
 	return nil
+}
+
+func sessionClient(base, token string) (*http.Client, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+	baseURL, err := url.Parse(base)
+	if err != nil {
+		return nil, err
+	}
+	jar.SetCookies(baseURL, []*http.Cookie{{Name: "workplane_session", Value: token, Path: "/"}})
+	return &http.Client{Jar: jar, Timeout: 10 * time.Second}, nil
 }
 
 func (run *runner) grantReviewers(ctx context.Context, projectID string) error {
 	_, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
 		VALUES ($1,$2,'reviewer',CURRENT_TIMESTAMP),($1,$3,'reviewer',CURRENT_TIMESTAMP)`, projectID, reviewerHumanID, reviewerAgentID)
 	return err
+}
+
+func (run *runner) agentTokenUsageFlow(ctx context.Context) error {
+	projectItem, promoted, _, err := run.parityFlow(ctx, run.human, "human", run.humanHeaders(), "m2d-token-usage")
+	if err != nil {
+		return err
+	}
+	lastUsedIsNull := func() (bool, error) {
+		var value bool
+		err := run.db.QueryRowContext(ctx, `SELECT last_used_at IS NULL FROM agent_tokens WHERE token_prefix=$1`, reviewerAgentToken[:16]).Scan(&value)
+		return value, err
+	}
+	resetLastUsed := func() error {
+		_, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET last_used_at=NULL WHERE token_prefix=$1`, reviewerAgentToken[:16])
+		return err
+	}
+	if err := resetLastUsed(); err != nil {
+		return err
+	}
+	invalid := run.call(run.reviewerAgent, http.MethodGet, "/api/v1/projects/"+projectItem.ID, nil,
+		map[string]string{"Authorization": "Bearer " + reviewerAgentToken + "-invalid"})
+	if err := expect(invalid, http.StatusUnauthorized, "unauthenticated"); err != nil {
+		return err
+	}
+	if empty, err := lastUsedIsNull(); err != nil || !empty {
+		return fmt.Errorf("invalid token updated last-used: empty=%v err=%v", empty, err)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET revoked_at=CURRENT_TIMESTAMP,last_used_at=NULL WHERE token_prefix=$1`, reviewerAgentToken[:16]); err != nil {
+		return err
+	}
+	revoked := run.call(run.reviewerAgent, http.MethodGet, "/api/v1/projects/"+projectItem.ID, nil, run.reviewerAgentHeaders())
+	if err := expect(revoked, http.StatusUnauthorized, "unauthenticated"); err != nil {
+		return err
+	}
+	if empty, err := lastUsedIsNull(); err != nil || !empty {
+		return fmt.Errorf("revoked token updated last-used: empty=%v err=%v", empty, err)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET revoked_at=NULL,expires_at=CURRENT_TIMESTAMP-INTERVAL '1 minute',last_used_at=NULL WHERE token_prefix=$1`, reviewerAgentToken[:16]); err != nil {
+		return err
+	}
+	expired := run.call(run.reviewerAgent, http.MethodGet, "/api/v1/projects/"+projectItem.ID, nil, run.reviewerAgentHeaders())
+	if err := expect(expired, http.StatusUnauthorized, "unauthenticated"); err != nil {
+		return err
+	}
+	if empty, err := lastUsedIsNull(); err != nil || !empty {
+		return fmt.Errorf("expired token updated last-used: empty=%v err=%v", empty, err)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET expires_at=CURRENT_TIMESTAMP+INTERVAL '1 hour',last_used_at=NULL WHERE token_prefix=$1`, reviewerAgentToken[:16]); err != nil {
+		return err
+	}
+	scopeDenied := run.call(run.reviewerAgent, http.MethodPost, "/api/v1/deliverables/"+promoted.Deliverables[0].ID+"/cancel",
+		map[string]any{"reason": "A scoped denial cannot record token usage"},
+		run.reviewHeaders(run.reviewerAgentHeaders(), "m2d-token-scope-deny", projectItem.Version))
+	if err := expect(scopeDenied, http.StatusForbidden, "forbidden"); err != nil {
+		return err
+	}
+	if empty, err := lastUsedIsNull(); err != nil || !empty {
+		return fmt.Errorf("scope-denied token updated last-used: empty=%v err=%v", empty, err)
+	}
+	if err := run.grantReviewers(ctx, projectItem.ID); err != nil {
+		return err
+	}
+	accepted := run.call(run.reviewerAgent, http.MethodGet, "/api/v1/projects/"+projectItem.ID, nil, run.reviewerAgentHeaders())
+	if err := expect(accepted, http.StatusOK, ""); err != nil {
+		return err
+	}
+	empty, err := lastUsedIsNull()
+	if err != nil || empty {
+		return fmt.Errorf("accepted token use did not update last-used: empty=%v err=%v", empty, err)
+	}
+	run.write("m2d-agent-token-usage.json", map[string]any{
+		"invalid_hash": "unauthenticated-no-write", "revoked": "unauthenticated-no-write", "expired": "unauthenticated-no-write",
+		"unauthorized_scope": "forbidden-no-write", "accepted_project_read": "last-used-recorded",
+	})
+	run.checks = append(run.checks, "accepted-only-agent-token-last-used-tracking")
+	return nil
+}
+
+func (run *runner) cancellationReviewFlow(ctx context.Context) error {
+	projectItem, promoted, _, err := run.parityFlow(ctx, run.human, "human", run.humanHeaders(), "m2d-cancel")
+	if err != nil {
+		return err
+	}
+	version := projectItem.Version
+	createOptional := func(title, state, key string) (deliverable, error) {
+		input := deliverableInput(title)
+		input["required"], input["state"] = false, state
+		response := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/deliverables", input,
+			run.reviewHeaders(run.humanHeaders(), key, version))
+		if err := expect(response, http.StatusCreated, ""); err != nil {
+			return deliverable{}, err
+		}
+		var item deliverable
+		if err := json.Unmarshal(response.Body, &item); err != nil {
+			return deliverable{}, err
+		}
+		version = etagVersion(response)
+		return item, nil
+	}
+	draft, err := createOptional("Optional draft cancellation", "draft", "m2d-cancel-draft-create")
+	if err != nil {
+		return err
+	}
+	ready, err := createOptional("Optional ready cancellation", "ready", "m2d-cancel-ready-create")
+	if err != nil {
+		return err
+	}
+	requiredBefore := run.counts(ctx)
+	requiredDenied := run.call(run.human, http.MethodPost, "/api/v1/deliverables/"+promoted.Deliverables[0].ID+"/cancel",
+		map[string]any{"reason": "Required deliverables stay in the project contract"},
+		run.reviewHeaders(run.humanHeaders(), "m2d-required-cancel-deny", version))
+	if err := expect(requiredDenied, http.StatusConflict, "invariant_violation"); err != nil {
+		return err
+	}
+	if after := run.counts(ctx); after != requiredBefore {
+		return fmt.Errorf("required deliverable cancellation left residue: before=%+v after=%+v", requiredBefore, after)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET last_used_at=NULL WHERE token_prefix=$1`, reviewerAgentToken[:16]); err != nil {
+		return err
+	}
+	unauthorizedBefore := run.counts(ctx)
+	unauthorized := run.call(run.reviewerAgent, http.MethodPost, "/api/v1/deliverables/"+ready.ID+"/cancel",
+		map[string]any{"reason": "Review tokens cannot cancel deliverables"},
+		run.reviewHeaders(run.reviewerAgentHeaders(), "m2d-cancel-scope-deny", version))
+	if err := expect(unauthorized, http.StatusForbidden, "forbidden"); err != nil {
+		return err
+	}
+	var unauthorizedLastUsed bool
+	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at IS NULL FROM agent_tokens WHERE token_prefix=$1`, reviewerAgentToken[:16]).Scan(&unauthorizedLastUsed); err != nil || !unauthorizedLastUsed {
+		return fmt.Errorf("unauthorized cancel recorded token usage: null=%v err=%v", unauthorizedLastUsed, err)
+	}
+	if after := run.counts(ctx); after != unauthorizedBefore {
+		return fmt.Errorf("unauthorized cancellation left residue: before=%+v after=%+v", unauthorizedBefore, after)
+	}
+	for index, boundary := range []string{"after-deliverable-cancel", "after-deliverable-cancel-event"} {
+		if err := run.faultNoResidue(ctx, run.human, http.MethodPost, "/api/v1/deliverables/"+draft.ID+"/cancel",
+			map[string]any{"reason": "The optional draft is outside the admitted outcome"},
+			run.reviewHeaders(run.humanHeaders(), fmt.Sprintf("m2d-cancel-fault-%02d", index), version), boundary); err != nil {
+			return err
+		}
+	}
+	draftExpected := version
+	draftResponse := run.call(run.human, http.MethodPost, "/api/v1/deliverables/"+draft.ID+"/cancel",
+		map[string]any{"reason": "The optional draft is outside the admitted outcome"},
+		run.reviewHeaders(run.humanHeaders(), "m2d-cancel-draft", draftExpected))
+	if err := expect(draftResponse, http.StatusOK, ""); err != nil {
+		return err
+	}
+	var cancelledDraft deliverable
+	if err := json.Unmarshal(draftResponse.Body, &cancelledDraft); err != nil || cancelledDraft.State != "cancelled" || cancelledDraft.Required {
+		return fmt.Errorf("draft cancellation projection invalid: item=%+v err=%v", cancelledDraft, err)
+	}
+	draftRetry := run.call(run.human, http.MethodPost, "/api/v1/deliverables/"+draft.ID+"/cancel",
+		map[string]any{"reason": "The optional draft is outside the admitted outcome"},
+		run.reviewHeaders(run.humanHeaders(), "m2d-cancel-draft", draftExpected))
+	if err := expect(draftRetry, http.StatusOK, ""); err != nil || !bytes.Equal(draftRetry.Body, draftResponse.Body) ||
+		draftRetry.Headers["X-Request-ID"] != draftResponse.Headers["X-Request-ID"] {
+		return fmt.Errorf("cancel idempotent retry diverged: err=%v first=%+v retry=%+v", err, draftResponse, draftRetry)
+	}
+	version = etagVersion(draftResponse)
+	staleBefore := run.counts(ctx)
+	stale := run.call(run.agent, http.MethodPost, "/api/v1/deliverables/"+ready.ID+"/cancel",
+		map[string]any{"reason": "The optional ready deliverable is no longer needed"},
+		run.reviewHeaders(run.agentHeaders(), "m2d-cancel-stale", version-1))
+	if err := expect(stale, http.StatusConflict, "version_conflict"); err != nil {
+		return err
+	}
+	if after := run.counts(ctx); after != staleBefore {
+		return fmt.Errorf("stale cancellation left residue: before=%+v after=%+v", staleBefore, after)
+	}
+	readyExpected := version
+	readyResponse := run.call(run.agent, http.MethodPost, "/api/v1/deliverables/"+ready.ID+"/cancel",
+		map[string]any{"reason": "The optional ready deliverable is no longer needed"},
+		run.reviewHeaders(run.agentHeaders(), "m2d-cancel-ready", readyExpected))
+	if err := expect(readyResponse, http.StatusOK, ""); err != nil {
+		return err
+	}
+	var cancelledReady deliverable
+	if err := json.Unmarshal(readyResponse.Body, &cancelledReady); err != nil || cancelledReady.State != "cancelled" || cancelledReady.Required {
+		return fmt.Errorf("ready cancellation projection invalid: item=%+v err=%v", cancelledReady, err)
+	}
+	readyRetry := run.call(run.agent, http.MethodPost, "/api/v1/deliverables/"+ready.ID+"/cancel",
+		map[string]any{"reason": "The optional ready deliverable is no longer needed"},
+		run.reviewHeaders(run.agentHeaders(), "m2d-cancel-ready", readyExpected))
+	if err := expect(readyRetry, http.StatusOK, ""); err != nil || !bytes.Equal(readyRetry.Body, readyResponse.Body) {
+		return fmt.Errorf("agent cancel idempotent retry diverged: err=%v first=%+v retry=%+v", err, readyResponse, readyRetry)
+	}
+	version = etagVersion(readyResponse)
+	terminalBefore := run.counts(ctx)
+	terminal := run.call(run.human, http.MethodPost, "/api/v1/deliverables/"+ready.ID+"/cancel",
+		map[string]any{"reason": "Terminal deliverables cannot transition again"},
+		run.reviewHeaders(run.humanHeaders(), "m2d-cancel-terminal-deny", version))
+	if err := expect(terminal, http.StatusConflict, "invariant_violation"); err != nil {
+		return err
+	}
+	if after := run.counts(ctx); after != terminalBefore {
+		return fmt.Errorf("terminal cancellation left residue: before=%+v after=%+v", terminalBefore, after)
+	}
+	var events, outbox int
+	if err := run.db.QueryRowContext(ctx, `SELECT count(*),(SELECT count(*) FROM outbox_records record
+		JOIN domain_events event ON event.event_id=record.event_id WHERE event.event_type='deliverable.cancelled')
+		FROM domain_events WHERE event_type='deliverable.cancelled'`).Scan(&events, &outbox); err != nil {
+		return err
+	}
+	if events < 2 || events != outbox {
+		return fmt.Errorf("deliverable cancellation event/outbox mismatch: events=%d outbox=%d", events, outbox)
+	}
+	if err := run.waitRealtime(ctx, 10*time.Second); err != nil {
+		return err
+	}
+	run.write("m2d-cancellation.json", map[string]any{
+		"states": []string{"draft->cancelled", "ready->cancelled"}, "actors": []string{"human", "agent"},
+		"required": "denied-no-residue", "unauthorized": "denied-no-residue", "stale": "denied-no-residue",
+		"terminal_retry": "denied-no-residue", "idempotent_retry": "exact", "fault_boundaries": "rollback",
+		"event_outbox_count": events, "project_version": version,
+	})
+	run.checks = append(run.checks, "optional-draft-ready-cancellation-atomicity-parity-and-replay")
+	return nil
+}
+
+func (run *runner) separationReviewFlow(ctx context.Context) error {
+	projectItem, promoted, _, err := run.parityFlow(ctx, run.human, "human", run.humanHeaders(), "m2d-separation")
+	if err != nil {
+		return err
+	}
+	if err := run.grantReviewers(ctx, projectItem.ID); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'contributor',CURRENT_TIMESTAMP),($1,$3,'contributor',CURRENT_TIMESTAMP),
+		($1,$4,'reviewer',CURRENT_TIMESTAMP)`, projectItem.ID, evidenceProducerID, submitterHumanID, verdictProducerID); err != nil {
+		return err
+	}
+	deliverableItem := promoted.Deliverables[0]
+	version := projectItem.Version
+	claim := "Distinct-identity separation evidence passes"
+	gateResponse := run.call(run.human, http.MethodPost, "/api/v1/deliverables/"+deliverableItem.ID+"/gates",
+		reviewGateInput("Distinct identity gate", true, claim), run.reviewHeaders(run.humanHeaders(), "m2d-separation-gate", version))
+	if err := expect(gateResponse, http.StatusCreated, ""); err != nil {
+		return err
+	}
+	var gateItem gate
+	if err := json.Unmarshal(gateResponse.Body, &gateItem); err != nil {
+		return err
+	}
+	version = etagVersion(gateResponse)
+	submittedEvidenceResponse := run.call(run.evidenceProducer, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/evidence",
+		reviewEvidenceInput("Submitted evidence from its own producer", claim, []map[string]string{
+			{"target_type": "deliverable", "target_id": deliverableItem.ID}, {"target_type": "gate", "target_id": gateItem.ID},
+		}), run.reviewHeaders(run.evidenceProducerHeaders(), "m2d-separation-submit-evidence", version))
+	if err := expect(submittedEvidenceResponse, http.StatusCreated, ""); err != nil {
+		return err
+	}
+	var submittedEvidence evidence
+	if err := json.Unmarshal(submittedEvidenceResponse.Body, &submittedEvidence); err != nil {
+		return err
+	}
+	version = etagVersion(submittedEvidenceResponse)
+	submitResponse := run.call(run.submitterHuman, http.MethodPost, "/api/v1/deliverables/"+deliverableItem.ID+"/submit",
+		reviewSubmissionInput(submittedEvidence.ID, "A distinct submitter retains the producer's evidence"),
+		run.reviewHeaders(run.submitterHeaders(), "m2d-separation-submit", version))
+	if err := expect(submitResponse, http.StatusOK, ""); err != nil {
+		return err
+	}
+	version = etagVersion(submitResponse)
+	verdictEvidenceResponse := run.call(run.verdictProducer, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/evidence",
+		reviewEvidenceInput("Verdict evidence from another producer", claim, []map[string]string{
+			{"target_type": "deliverable", "target_id": deliverableItem.ID}, {"target_type": "gate", "target_id": gateItem.ID},
+		}), run.reviewHeaders(run.verdictProducerHeaders(), "m2d-separation-verdict-evidence", version))
+	if err := expect(verdictEvidenceResponse, http.StatusCreated, ""); err != nil {
+		return err
+	}
+	var verdictEvidence evidence
+	if err := json.Unmarshal(verdictEvidenceResponse.Body, &verdictEvidence); err != nil {
+		return err
+	}
+	version = etagVersion(verdictEvidenceResponse)
+	denials := []struct {
+		name    string
+		client  *http.Client
+		headers map[string]string
+	}{
+		{"creator", run.human, run.humanHeaders()},
+		{"submitter", run.submitterHuman, run.submitterHeaders()},
+		{"submitted-evidence-producer", run.evidenceProducer, run.evidenceProducerHeaders()},
+		{"verdict-evidence-producer", run.verdictProducer, run.verdictProducerHeaders()},
+	}
+	for index, test := range denials {
+		before := run.counts(ctx)
+		response := run.call(test.client, http.MethodPost, "/api/v1/gates/"+gateItem.ID+"/verdicts",
+			reviewVerdictInput("pass", verdictEvidence.ID, false),
+			run.reviewHeaders(test.headers, fmt.Sprintf("m2d-separation-deny-%02d", index), version))
+		if err := expect(response, http.StatusForbidden, "forbidden"); err != nil {
+			return fmt.Errorf("%s independence guard: %w", test.name, err)
+		}
+		if after := run.counts(ctx); after != before {
+			return fmt.Errorf("%s independence denial left residue: before=%+v after=%+v", test.name, before, after)
+		}
+	}
+	passedResponse := run.call(run.reviewerHuman, http.MethodPost, "/api/v1/gates/"+gateItem.ID+"/verdicts",
+		reviewVerdictInput("pass", verdictEvidence.ID, false),
+		run.reviewHeaders(run.reviewerHumanHeaders(), "m2d-separation-independent-pass", version))
+	if err := expect(passedResponse, http.StatusCreated, ""); err != nil {
+		return err
+	}
+	var passed verdictResult
+	if err := json.Unmarshal(passedResponse.Body, &passed); err != nil {
+		return err
+	}
+	if passed.Verdict.ReviewerID != reviewerHumanID || passed.Gate.State != "passed" {
+		return fmt.Errorf("independent reviewer verdict invalid: %+v", passed)
+	}
+	var eventID string
+	if err := run.db.QueryRowContext(ctx, `SELECT event_id::text FROM domain_events
+		WHERE event_type='gate.verdict_recorded' AND payload->'verdict'->>'id'=$1`, passed.Verdict.ID).Scan(&eventID); err != nil {
+		return err
+	}
+	if err := run.assertReplayRejectsSubmittedEvidenceProducer(ctx, eventID, passed.Verdict.ID); err != nil {
+		return err
+	}
+	run.write("m2d-separation.json", map[string]any{
+		"distinct_identities": map[string]string{
+			"creator": humanID, "submitter": submitterHumanID, "submitted_evidence_producer": evidenceProducerID,
+			"verdict_evidence_producer": verdictProducerID, "reviewer": reviewerHumanID,
+		},
+		"live_guards": []string{"creator", "submitter", "submitted-evidence-producer", "verdict-evidence-producer"},
+		"denials":     "forbidden-no-residue", "independent_verdict": "passed", "replay_tamper": "submitted-evidence-producer-rejected",
+	})
+	run.checks = append(run.checks, "five-identity-live-and-replay-separation-mutation-sensitivity")
+	return nil
+}
+
+func (run *runner) assertReplayRejectsSubmittedEvidenceProducer(ctx context.Context, eventID, verdictID string) error {
+	setReviewer := func(reviewerID string) error {
+		tx, err := run.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE domain_events DISABLE TRIGGER domain_events_append_only`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE review_verdicts DISABLE TRIGGER review_verdicts_append_only`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE domain_events SET actor_kind='human',actor_id=$2::uuid,principal_id=NULL,
+			payload=jsonb_set(jsonb_set(jsonb_set(payload,'{verdict,reviewer_id}',to_jsonb(($2::uuid)::text)),
+			'{verdict,reviewer_kind}',to_jsonb('human'::text)),'{verdict,principal_id}','null'::jsonb) WHERE event_id=$1::uuid`, eventID, reviewerID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE review_verdicts SET reviewer_id=$2::uuid,reviewer_kind='human',principal_id=NULL WHERE id=$1::uuid`, verdictID, reviewerID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE review_verdicts ENABLE TRIGGER review_verdicts_append_only`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE domain_events ENABLE TRIGGER domain_events_append_only`); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	if err := setReviewer(evidenceProducerID); err != nil {
+		return err
+	}
+	store, err := app.NewDurableStore(envOr("WORKPLANE_DATABASE_URL", "postgres://workplane:workplane-local-only@postgres:5432/workplane?sslmode=disable"))
+	if err != nil {
+		_ = setReviewer(reviewerHumanID)
+		return err
+	}
+	_, replayErr := store.Replay(ctx)
+	restoreErr := setReviewer(reviewerHumanID)
+	if restoreErr != nil {
+		return restoreErr
+	}
+	if replayErr == nil || !strings.Contains(replayErr.Error(), "gate verdict transition or attribution is invalid") {
+		return fmt.Errorf("replay accepted submitted-evidence producer as reviewer: %v", replayErr)
+	}
+	restored, err := store.Replay(ctx)
+	if err != nil || restored.LiveChecksum != restored.RebuiltChecksum {
+		return fmt.Errorf("restored separation replay mismatch: report=%+v err=%v", restored, err)
+	}
+	return nil
 }
 
 func (run *runner) acceptanceReviewFlow(ctx context.Context) (string, error) {
@@ -725,6 +1158,24 @@ func (run *runner) acceptanceReviewFlow(ctx context.Context) (string, error) {
 	initialInput := reviewEvidenceInput("Initial exact-head evidence", claim, []map[string]string{
 		{"target_type": "deliverable", "target_id": deliverableItem.ID}, {"target_type": "gate", "target_id": gateItem.ID},
 	})
+	omittedMetadata := reviewEvidenceInput("Omitted metadata must fail", claim, []map[string]string{
+		{"target_type": "deliverable", "target_id": deliverableItem.ID}, {"target_type": "gate", "target_id": gateItem.ID},
+	})
+	delete(omittedMetadata, "metadata")
+	for index, transport := range []struct {
+		client  *http.Client
+		headers map[string]string
+	}{{run.human, run.humanHeaders()}, {run.agent, run.agentHeaders()}} {
+		before := run.counts(ctx)
+		response := run.call(transport.client, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/evidence", omittedMetadata,
+			run.reviewHeaders(transport.headers, fmt.Sprintf("m2d-metadata-omitted-%02d", index), version))
+		if err := expect(response, http.StatusBadRequest, "invalid_request"); err != nil {
+			return "", err
+		}
+		if after := run.counts(ctx); after != before {
+			return "", fmt.Errorf("omitted evidence metadata left residue for transport %d: before=%+v after=%+v", index, before, after)
+		}
+	}
 	for index, boundary := range []string{"after-evidence", "after-evidence-event"} {
 		if err := run.faultNoResidue(ctx, run.human, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/evidence", initialInput,
 			run.reviewHeaders(run.humanHeaders(), fmt.Sprintf("m2d-evidence-fault-%02d", index), version), boundary); err != nil {
@@ -798,6 +1249,22 @@ func (run *runner) acceptanceReviewFlow(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("invalid submission attribution/state: %+v", submitted)
 	}
 	version = submittedVersion
+	omittedFindings := reviewVerdictInput("pass", corrected.ID, false)
+	delete(omittedFindings, "findings")
+	for index, transport := range []struct {
+		client  *http.Client
+		headers map[string]string
+	}{{run.human, run.humanHeaders()}, {run.reviewerAgent, run.reviewerAgentHeaders()}} {
+		before := run.counts(ctx)
+		response := run.call(transport.client, http.MethodPost, "/api/v1/gates/"+gateItem.ID+"/verdicts", omittedFindings,
+			run.reviewHeaders(transport.headers, fmt.Sprintf("m2d-findings-omitted-%02d", index), version))
+		if err := expect(response, http.StatusBadRequest, "invalid_request"); err != nil {
+			return "", err
+		}
+		if after := run.counts(ctx); after != before {
+			return "", fmt.Errorf("omitted verdict findings left residue for transport %d: before=%+v after=%+v", index, before, after)
+		}
+	}
 
 	failInput := reviewVerdictInput("fail", corrected.ID, true)
 	selfBefore := run.counts(ctx)
@@ -1016,12 +1483,14 @@ func (run *runner) acceptanceReviewFlow(ctx context.Context) (string, error) {
 		"effective_principal_self_review": "forbidden-no-residue", "human_agent_resolution_race": "one-winner-one-version-conflict",
 		"human_agent_submission_race": "one-winner-one-version-conflict", "human_agent_approval_race": "one-winner-one-version-conflict",
 		"duplicate_reordered_verdicts": "denied-no-residue", "idempotent_retry": "exact", "fault_boundaries": "all-rollback",
+		"omitted_required_members": []string{"human-evidence-metadata", "agent-evidence-metadata", "human-verdict-findings", "agent-verdict-findings"},
 	})
 	run.checks = append(run.checks,
 		"immutable-attributable-evidence-and-linear-supersession",
 		"submit-bounce-resolve-resubmit-approve-review-cycle",
 		"immutable-verdict-history-with-later-pass",
 		"effective-principal-separation-and-postgresql-atomicity",
+		"raw-human-agent-required-member-parity",
 		"public-human-agent-evidence-review-parity")
 	return projectItem.ID, nil
 }
@@ -1157,7 +1626,8 @@ func (run *runner) waiverReviewFlow(ctx context.Context) (string, error) {
 
 func (run *runner) assertReviewLedger(ctx context.Context) error {
 	required := []string{"evidence.created", "evidence.superseded", "gate.created", "gate.verdict_recorded", "finding.created",
-		"finding.resolved", "deliverable.submitted", "deliverable.bounced", "deliverable.resubmitted", "deliverable.accepted", "gate.waived", "deliverable.waived"}
+		"finding.resolved", "deliverable.submitted", "deliverable.bounced", "deliverable.resubmitted", "deliverable.accepted",
+		"deliverable.cancelled", "gate.waived", "deliverable.waived"}
 	for _, eventType := range required {
 		var events, outbox int
 		if err := run.db.QueryRowContext(ctx, `SELECT count(*),(SELECT count(*) FROM outbox_records record
@@ -1245,6 +1715,18 @@ func (run *runner) reviewerHumanHeaders() map[string]string {
 
 func (run *runner) reviewerAgentHeaders() map[string]string {
 	return map[string]string{"Authorization": "Bearer " + reviewerAgentToken}
+}
+
+func (run *runner) evidenceProducerHeaders() map[string]string {
+	return map[string]string{"Origin": publicOrigin, "X-CSRF-Token": evidenceCSRF}
+}
+
+func (run *runner) submitterHeaders() map[string]string {
+	return map[string]string{"Origin": publicOrigin, "X-CSRF-Token": submitterCSRF}
+}
+
+func (run *runner) verdictProducerHeaders() map[string]string {
+	return map[string]string{"Origin": publicOrigin, "X-CSRF-Token": verdictCSRF}
 }
 
 func m2dKeyedHash(value string) []byte {

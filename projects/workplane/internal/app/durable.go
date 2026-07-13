@@ -612,7 +612,7 @@ func (store *DurableStore) persistReplayFailure(ctx context.Context, failure *Re
 	return nil
 }
 
-func replayEvidenceSelection(ids []string, projectID string, records map[string]Evidence) ([]Evidence, bool) {
+func replayEvidenceAttributions(ids []string, projectID string, records map[string]Evidence) ([]Evidence, bool) {
 	if len(ids) == 0 {
 		return nil, false
 	}
@@ -623,13 +623,23 @@ func replayEvidenceSelection(ids []string, projectID string, records map[string]
 		if record.ID == "" || record.ProjectID != projectID || seen[id] {
 			return nil, false
 		}
+		seen[id] = true
+		selected = append(selected, record)
+	}
+	return selected, true
+}
+
+func replayEvidenceSelection(ids []string, projectID string, records map[string]Evidence) ([]Evidence, bool) {
+	selected, valid := replayEvidenceAttributions(ids, projectID, records)
+	if !valid {
+		return nil, false
+	}
+	for _, item := range selected {
 		for _, candidate := range records {
-			if candidate.SupersedesID != nil && *candidate.SupersedesID == id {
+			if candidate.SupersedesID != nil && *candidate.SupersedesID == item.ID {
 				return nil, false
 			}
 		}
-		seen[id] = true
-		selected = append(selected, record)
 	}
 	return selected, true
 }
@@ -949,6 +959,7 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			deliverable := deliverables[result.Gate.DeliverableID]
 			submission := submissions[submissionHeads[result.Gate.DeliverableID].SubmissionID]
 			selectedEvidence, evidenceValid := replayEvidenceSelection(result.Verdict.EvidenceIDs, result.Gate.ProjectID, evidence)
+			submittedEvidence, submittedEvidenceValid := replayEvidenceAttributions(submission.EvidenceIDs, result.Gate.ProjectID, evidence)
 			validTransition := prior.ID != "" && result.Gate.Version == prior.Version+1 &&
 				((prior.State == "pending" && (result.Gate.State == "passed" || result.Gate.State == "failed")) ||
 					(prior.State == "failed" && result.Gate.State == "passed"))
@@ -960,9 +971,9 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 				result.Verdict.GateID != result.Gate.ID || result.Verdict.ProjectID != result.Gate.ProjectID ||
 				result.Verdict.ReviewerID != item.ActorID || result.Verdict.ReviewerKind != item.ActorKind ||
 				!equalOptionalString(result.Verdict.PrincipalID, item.PrincipalID) || verdicts[result.Verdict.ID].ID != "" ||
-				deliverable.State != "submitted" || submission.ID == "" || !evidenceValid || !evidenceMeetsGate(selectedEvidence, prior) ||
+				deliverable.State != "submitted" || submission.ID == "" || !evidenceValid || !submittedEvidenceValid || !evidenceMeetsGate(selectedEvidence, prior) ||
 				!validResult || !validHistory || (prior.IndependenceRequired && !independentReviewer(
-				Actor{ID: item.ActorID, Kind: item.ActorKind, PrincipalID: item.PrincipalID}, deliverable, submission, selectedEvidence)) {
+				Actor{ID: item.ActorID, Kind: item.ActorKind, PrincipalID: item.PrincipalID}, deliverable, submission, submittedEvidence, selectedEvidence)) {
 				return failure("invalid_event_payload", "gate verdict transition or attribution is invalid")
 			}
 			gates[result.Gate.ID] = result.Gate
@@ -1084,6 +1095,23 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			if !exists || prior.State != "submitted" || result.Deliverable.State != expectedState ||
 				result.Deliverable.Version != prior.Version+1 || !validDetail || strings.TrimSpace(result.Rationale) == "" {
 				return failure("invalid_event_payload", "deliverable review transition is invalid")
+			}
+			deliverables[result.Deliverable.ID] = result.Deliverable
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "deliverable.cancelled":
+			var result DeliverableCancellation
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := deliverables[result.Deliverable.ID]
+			project, exists := projects[result.Deliverable.ProjectID]
+			validPrior := prior.State == "draft" || prior.State == "ready"
+			if !exists || !validPrior || prior.Required || result.Deliverable.Required ||
+				result.Deliverable.ProjectID != item.AggregateID || result.Deliverable.OrganizationID != item.OrganizationID ||
+				result.Deliverable.State != "cancelled" || result.Deliverable.Version != prior.Version+1 ||
+				strings.TrimSpace(result.Reason) == "" {
+				return failure("invalid_event_payload", "optional deliverable cancellation is invalid")
 			}
 			deliverables[result.Deliverable.ID] = result.Deliverable
 			project.Version = item.AggregateVersion
@@ -1968,7 +1996,7 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 			'deliverable.created','deliverable.revised','forecast.created','forecast.superseded','target.changed','deadline.changed',
 			'evidence.created','evidence.superseded','gate.created','gate.verdict_recorded','gate.waived',
 			'finding.created','finding.resolved','finding.withdrawn','deliverable.submitted','deliverable.bounced',
-			'deliverable.resubmitted','deliverable.accepted','deliverable.waived'
+			'deliverable.resubmitted','deliverable.accepted','deliverable.cancelled','deliverable.waived'
 		) ORDER BY sequence`)
 	if err != nil {
 		return nil, err

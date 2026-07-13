@@ -130,6 +130,11 @@ type ProjectTransition struct {
 	Reason  string  `json:"reason"`
 }
 
+type DeliverableCancellation struct {
+	Deliverable Deliverable `json:"deliverable"`
+	Reason      string      `json:"reason"`
+}
+
 type PromotionEvent struct {
 	Project             Project `json:"project"`
 	ResidualUncertainty string  `json:"residual_uncertainty"`
@@ -565,6 +570,56 @@ func (service *Service) ReviseDeliverable(ctx context.Context, request generated
 				return mutationOutcome{}, nil, err
 			}
 			eventID, err := insertPlanningEvent(ctx, tx, service, request, actor, rid, project.ID, project.Version, "deliverable.revised", item, now, "after-deliverable-event")
+			if err != nil {
+				return mutationOutcome{}, nil, err
+			}
+			return mutationOutcome{Status: http.StatusOK, Body: item, Version: project.Version, EventIDs: []string{eventID}}, nil, nil
+		})
+	return result, nil
+}
+
+func (service *Service) CancelDeliverable(ctx context.Context, request generated.Request) (generated.Response, error) {
+	id := request.HTTPRequest.PathValue("id")
+	projectID, found := service.deliverableProjectID(ctx, id)
+	if !found {
+		projectID = "00000000-0000-4000-8000-000000000000"
+	}
+	actor, rid, expected, response, ok := service.prepareProjectMutation(ctx, request,
+		[]string{"deliverable.cancel", "decision.record"}, projectID)
+	if !ok {
+		return response, nil
+	}
+	input, err := decodeStrict[generated.LifecycleReasonRequest](request.Body)
+	input, valid := normalizeLifecycleReason(input)
+	if err != nil || !valid {
+		return problem(http.StatusBadRequest, "invalid_request", "Invalid cancellation reason", "A non-empty optional-deliverable cancellation reason is required.", rid), nil
+	}
+	result := service.executeProjectMutation(ctx, request, actor, rid, projectID, "cancelDeliverable", expected, canonicalJSON(input),
+		func(tx *sql.Tx, project Project, actor Actor, rid string, now time.Time) (mutationOutcome, *generated.Response, error) {
+			if !mutableProject(project) || project.Mode != "exploitation" {
+				return mutationOutcome{}, rejected(problem(http.StatusConflict, "invariant_violation", "Deliverable cancellation denied", "The owning project is not a mutable exploitation project.", rid)), nil
+			}
+			item, err := scanDeliverable(tx.QueryRowContext(ctx, selectDeliverable+` WHERE id=$1 AND project_id=$2 FOR UPDATE`, id, project.ID))
+			if err != nil {
+				return mutationOutcome{}, rejected(problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid)), nil
+			}
+			if item.Required || (item.State != "draft" && item.State != "ready") {
+				return mutationOutcome{}, rejected(problem(http.StatusConflict, "invariant_violation", "Deliverable cancellation denied", "Only an optional draft or ready deliverable can be cancelled independently of its project.", rid)), nil
+			}
+			item.State, item.Version, item.UpdatedAt = "cancelled", item.Version+1, now.Format(timeFormat)
+			if _, err := tx.ExecContext(ctx, `UPDATE deliverables SET state='cancelled',version=$1,updated_at=$2 WHERE id=$3`,
+				item.Version, now, item.ID); err != nil {
+				return mutationOutcome{}, nil, err
+			}
+			if service.config.FaultInjection && request.HTTPRequest.Header.Get("X-Workplane-Fault") == "after-deliverable-cancel" {
+				return mutationOutcome{}, nil, ErrInjectedCrash
+			}
+			project.Version++
+			if _, err := tx.ExecContext(ctx, `UPDATE projects SET version=$1,updated_at=$2 WHERE id=$3`, project.Version, now, project.ID); err != nil {
+				return mutationOutcome{}, nil, err
+			}
+			eventID, err := insertPlanningEvent(ctx, tx, service, request, actor, rid, project.ID, project.Version,
+				"deliverable.cancelled", DeliverableCancellation{Deliverable: item, Reason: input.Reason}, now, "after-deliverable-cancel-event")
 			if err != nil {
 				return mutationOutcome{}, nil, err
 			}

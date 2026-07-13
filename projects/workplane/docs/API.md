@@ -278,13 +278,16 @@ POST   /api/v1/findings/{finding_id}/withdraw
 ```
 
 An independent gate rejects any actor whose effective identity created the
-deliverable, made the current submission, or produced its verdict evidence.
+deliverable, made the current submission, produced any evidence retained by
+that submission, or produced its verdict evidence.
 Submit and resubmit require current evidence satisfying every stable gate
 contract; bounce requires an open actionable finding; approval requires every
 hard gate passed and every finding closed. `gates/{id}/waive` rejects hard gates
 in every state. Both waiver routes require a human actor and embed the universal
 waiver decision payload with rationale, linked evidence, consequences, and
-residual risk; neither accepts a free-form action qualifier.
+residual risk; neither accepts a free-form action qualifier. Cancellation is a
+separate versioned command for optional draft or ready deliverables only; it
+does not expose project cancellation or permit required deliverable removal.
 
 ## 11. Work and dependencies
 

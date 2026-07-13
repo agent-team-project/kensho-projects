@@ -84,6 +84,14 @@ seed_capabilities:
     permission_action: deliverable.submit
     parity_case_id: M2D-PARITY-001
     status: implemented
+  - capability_id: cancel-optional-deliverable
+    requirement_id: M2D-REVIEW-001
+    public_operation_id: cancelDeliverable
+    ui_surface: headless-m2d-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#cancelDeliverable
+    permission_action: deliverable.cancel
+    parity_case_id: M2D-PARITY-001
+    status: implemented
   - capability_id: create-and-supersede-evidence
     requirement_id: M2D-EVIDENCE-001
     public_operation_id: createEvidence|supersedeEvidence

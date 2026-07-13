@@ -372,6 +372,7 @@ func (service *Service) serveWebSocket(writer http.ResponseWriter, request *http
 	if err := buffered.Flush(); err != nil {
 		return
 	}
+	service.recordAcceptedAgentRequest(request.Context(), request)
 	service.runWebSocket(request.Context(), connection, buffered.Reader, request, actor, binding, filter, start)
 }
 
@@ -636,6 +637,7 @@ func (service *Service) serveSSE(writer http.ResponseWriter, request *http.Reque
 	writer.Header().Set("Connection", "keep-alive")
 	writer.Header().Set("X-Accel-Buffering", "no")
 	writer.Header().Set("X-Request-ID", rid)
+	service.recordAcceptedAgentRequest(request.Context(), request)
 	writer.WriteHeader(http.StatusOK)
 	readyCursor, _ := service.encodeRealtimeCursor(binding, start, "")
 	ready, _ := json.Marshal(realtimeFrame{Type: "ready", Cursor: readyCursor})

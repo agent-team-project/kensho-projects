@@ -468,6 +468,21 @@ paths:
       responses:
         '200': *versionedDeliverableResponse
         default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/cancel:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    post:
+      operationId: cancelDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.cancel, decision.record]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LifecycleReasonRequest'}
+      responses:
+        '200': *versionedDeliverableResponse
+        default: {$ref: '#/components/responses/Problem'}
   /api/v1/deliverables/{id}/waive:
     parameters: [{$ref: '#/components/parameters/DeliverableId'}]
     post:
