@@ -3,11 +3,13 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -25,14 +27,46 @@ func TestRealtimeCursorIsBoundAndExpires(t *testing.T) {
 	if err != nil || value.Sequence != 42 {
 		t.Fatalf("cursor round trip: value=%+v err=%v", value, err)
 	}
-	changed := binding
-	changed.ActorID = "00000000-0000-4000-8000-000000000099"
-	if _, err := service.decodeRealtimeCursor(token, changed); err == nil {
-		t.Fatal("cursor was reusable by another actor")
+	parts := strings.Split(token, ".")
+	signature, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
 	}
-	now = now.Add(time.Minute)
-	if _, err := service.decodeRealtimeCursor(token, binding); err == nil {
-		t.Fatal("expired cursor remained valid")
+	signature[0] ^= 0x01
+	tampered := parts[0] + "." + base64.RawURLEncoding.EncodeToString(signature)
+
+	wrongOrganization := binding
+	wrongOrganization.OrganizationID = "00000000-0000-4000-8000-000000000099"
+	wrongActor := binding
+	wrongActor.ActorID = "00000000-0000-4000-8000-000000000099"
+	wrongTransport := binding
+	wrongTransport.Transport = "websocket"
+	wrongFilter := binding
+	wrongFilter.FilterDigest = "different-filter"
+
+	tests := []struct {
+		name    string
+		token   string
+		binding cursorBinding
+		expired bool
+	}{
+		{name: "rejects_signature_tampering", token: tampered, binding: binding},
+		{name: "rejects_organization_binding_mismatch", token: token, binding: wrongOrganization},
+		{name: "rejects_actor_binding_mismatch", token: token, binding: wrongActor},
+		{name: "rejects_transport_binding_mismatch", token: token, binding: wrongTransport},
+		{name: "rejects_filter_digest_binding_mismatch", token: token, binding: wrongFilter},
+		{name: "rejects_expired_cursor", token: token, binding: binding, expired: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.expired {
+				now = now.Add(time.Minute)
+				defer func() { now = now.Add(-time.Minute) }()
+			}
+			if _, err := service.decodeRealtimeCursor(test.token, test.binding); err == nil {
+				t.Fatalf("production cursor decoder accepted %s", test.name)
+			}
+		})
 	}
 }
 

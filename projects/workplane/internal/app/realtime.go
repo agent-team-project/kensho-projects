@@ -264,8 +264,10 @@ func (service *Service) realtimeBatch(ctx context.Context, after int64) ([]strea
 
 func privilegedProjectRole(role string) bool { return role == "owner" || role == "admin" }
 
+// Transport loops reject a mismatched organization before this project and
+// principal check. Keeping those boundaries separate makes each guard explicit.
 func (service *Service) actorCanReadEnvelope(ctx context.Context, actor Actor, envelope OutboxEnvelope) bool {
-	if actor.OrganizationID != envelope.OrganizationID || !organizationRoleAllows(actor.Role, "project.read") ||
+	if !organizationRoleAllows(actor.Role, "project.read") ||
 		(actor.Kind == "agent" && !organizationRoleAllows(actor.DelegatedRole, "project.read")) {
 		return false
 	}

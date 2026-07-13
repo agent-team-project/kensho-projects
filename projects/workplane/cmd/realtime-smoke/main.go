@@ -335,6 +335,16 @@ func (run *harness) authorityCanaries() error {
 	if _, err := run.db.Exec(`UPDATE organization_memberships SET role='observer' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
 	}
+	humanWebSocket, _, err := run.openWebSocket("", "")
+	if err != nil {
+		return err
+	}
+	defer humanWebSocket.close()
+	agentWebSocket, _, err := run.openAgentWebSocket("", "")
+	if err != nil {
+		return err
+	}
+	defer agentWebSocket.close()
 	stream, err := run.openSSE("", "", nil)
 	if err != nil {
 		return err
@@ -362,28 +372,55 @@ func (run *harness) authorityCanaries() error {
 	if err := run.waitCheckpoint(allowedEvent, 10*time.Second); err != nil {
 		return err
 	}
-	var delivered sseEvent
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		event, err := stream.next(time.Until(deadline))
-		if err != nil {
+	humanEvents, err := collectWebSocketEvents(humanWebSocket, 2, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("session websocket authority: %w", err)
+	}
+	for _, frame := range humanEvents {
+		if err := humanWebSocket.ack(frame.Cursor); err != nil {
 			return err
 		}
-		if event.Kind == "domain-event" {
-			delivered = event
-			break
-		}
 	}
-	if !equalJSON(delivered.Data, allowedEvent) || bytes.Contains(delivered.Data, []byte("CANARY")) && !bytes.Contains(delivered.Data, []byte("ALLOWED_PROJECT_EVENT")) {
-		return fmt.Errorf("authority stream disclosed a canary or omitted allowed event: %s", delivered.Data)
+	if !equalJSON(humanEvents[0].Event, restricted) || !equalJSON(humanEvents[1].Event, allowedEvent) {
+		return fmt.Errorf("session websocket crossed organization/private authority: first=%s second=%s", humanEvents[0].Event, humanEvents[1].Event)
+	}
+	if err := assertNoWebSocketEvent(humanWebSocket, 250*time.Millisecond); err != nil {
+		return fmt.Errorf("session websocket authority: %w", err)
+	}
+	agentEvents, err := collectWebSocketEvents(agentWebSocket, 1, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("restricted bearer websocket authority: %w", err)
+	}
+	if err := agentWebSocket.ack(agentEvents[0].Cursor); err != nil {
+		return err
+	}
+	if !equalJSON(agentEvents[0].Event, allowedEvent) {
+		return fmt.Errorf("restricted bearer websocket disclosed a canary or omitted allowed event: %s", agentEvents[0].Event)
+	}
+	if err := assertNoWebSocketEvent(agentWebSocket, 250*time.Millisecond); err != nil {
+		return fmt.Errorf("restricted bearer websocket authority: %w", err)
+	}
+	sseEvents, err := collectSSEEvents(stream, 1, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("restricted bearer SSE authority: %w", err)
+	}
+	if !equalJSON(sseEvents[0].Data, allowedEvent) {
+		return fmt.Errorf("restricted bearer SSE disclosed a canary or omitted allowed event: %s", sseEvents[0].Data)
+	}
+	if err := assertNoSSEEvent(stream, 250*time.Millisecond); err != nil {
+		return fmt.Errorf("restricted bearer SSE authority: %w", err)
 	}
 	if err := run.restoreAgentAuthority(); err != nil {
 		return err
 	}
 	return run.writeJSON("m2b-authority-canaries.json", map[string]any{
-		"delivered_event_id": eventIDOf(delivered.Data), "cross_org_event_id": eventIDOf(cross),
+		"session_websocket_event_ids": []string{eventIDOf(humanEvents[0].Event), eventIDOf(humanEvents[1].Event)},
+		"bearer_websocket_event_id":   eventIDOf(agentEvents[0].Event), "sse_event_id": eventIDOf(sseEvents[0].Data),
+		"delivered_event_id": eventIDOf(allowedEvent), "cross_org_event_id": eventIDOf(cross),
 		"private_event_id": eventIDOf(private), "restricted_event_id": eventIDOf(restricted),
-		"cross_org_disclosed": false, "private_disclosed": false, "restricted_disclosed": false,
+		"session_cross_org_disclosed": false, "session_private_disclosed": false,
+		"bearer_cross_org_disclosed": false, "bearer_private_disclosed": false, "bearer_restricted_disclosed": false,
+		"sse_cross_org_disclosed": false, "sse_private_disclosed": false, "sse_restricted_disclosed": false,
 	})
 }
 
@@ -881,6 +918,14 @@ func (run *harness) request(client *http.Client, method, path string, input any,
 }
 
 func (run *harness) openWebSocket(cursor, types string) (*wsClient, wireFrame, error) {
+	return run.openWebSocketWithBearer(cursor, types, "")
+}
+
+func (run *harness) openAgentWebSocket(cursor, types string) (*wsClient, wireFrame, error) {
+	return run.openWebSocketWithBearer(cursor, types, agentToken)
+}
+
+func (run *harness) openWebSocketWithBearer(cursor, types, bearer string) (*wsClient, wireFrame, error) {
 	target, err := url.Parse(run.base)
 	if err != nil {
 		return nil, wireFrame{}, err
@@ -902,13 +947,17 @@ func (run *harness) openWebSocket(cursor, types string) (*wsClient, wireFrame, e
 	}
 	keyBytes := make([]byte, 16)
 	_, _ = rand.Read(keyBytes)
-	cookies := run.human.Jar.Cookies(target)
-	cookieValues := make([]string, 0, len(cookies))
-	for _, cookie := range cookies {
-		cookieValues = append(cookieValues, cookie.Name+"="+cookie.Value)
+	authorityHeader := "Authorization: Bearer " + bearer + "\r\n"
+	if bearer == "" {
+		cookies := run.human.Jar.Cookies(target)
+		cookieValues := make([]string, 0, len(cookies))
+		for _, cookie := range cookies {
+			cookieValues = append(cookieValues, cookie.Name+"="+cookie.Value)
+		}
+		authorityHeader = "Cookie: " + strings.Join(cookieValues, "; ") + "\r\n"
 	}
-	request := fmt.Sprintf("GET %s HTTP/1.1\r\nHost: %s\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Protocol: workplane.v1\r\nOrigin: %s\r\nCookie: %s\r\n\r\n",
-		path, target.Host, base64.StdEncoding.EncodeToString(keyBytes), publicOrigin, strings.Join(cookieValues, "; "))
+	request := fmt.Sprintf("GET %s HTTP/1.1\r\nHost: %s\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Protocol: workplane.v1\r\nOrigin: %s\r\n%s\r\n",
+		path, target.Host, base64.StdEncoding.EncodeToString(keyBytes), publicOrigin, authorityHeader)
 	if _, err := io.WriteString(connection, request); err != nil {
 		connection.Close()
 		return nil, wireFrame{}, err
