@@ -1,0 +1,8 @@
+id: M2D-SEPARATION-001
+requirement: M2D-SEPARATION-001
+layer: system
+title: Every effective-identity independence guard and agent policy judgment deny without residue while hard gates never waive
+given: {runtime: production_http, delegated_agent: true, independent_gate: true, human_required_policy: true, distinct_identities: 5}
+when: {command: scripts/test_planning.sh, deny_dimensions: [creator, submitter, submitted_evidence_producer, verdict_evidence_producer, delegated_principal, agent_waiver, hard_gate_waiver], replay_tamper: submitted_evidence_producer_as_reviewer}
+then: {result: pass, each_independence_guard: load_bearing, replay: rejects_tamper, hard_waiver: forbidden, agent_policy_write_residue: 0}
+evidence: [target/agent-evidence/m2c/m2d-separation.json, target/agent-evidence/m2c/m2d-authority-atomicity.json, target/agent-evidence/m2c/m2d-waivers.json]

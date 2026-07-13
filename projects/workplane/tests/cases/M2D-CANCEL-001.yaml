@@ -1,0 +1,8 @@
+id: M2D-CANCEL-001
+requirement: M2D-REVIEW-001
+layer: system
+title: Optional draft and ready deliverables cancel atomically while required and terminal targets deny
+given: {runtime: production_http, database: real_postgresql, deliverables: [optional_draft, optional_ready, required_ready]}
+when: {command: scripts/test_planning.sh, operation: cancelDeliverable, actors: [human, agent]}
+then: {result: pass, state: cancelled, required_cancel: invariant_violation, invalid_residue: 0, replay: exact}
+evidence: [target/agent-evidence/m2c/m2d-cancellation.json]

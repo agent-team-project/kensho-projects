@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 var (
@@ -71,6 +71,7 @@ type ReplayReport struct {
 	Decisions         int    `json:"decisions"`
 	Activity          int    `json:"activity"`
 	Planning          int    `json:"planning"`
+	Review            int    `json:"review"`
 	LiveChecksum      string `json:"live_checksum"`
 	RebuiltChecksum   string `json:"rebuilt_checksum"`
 	ActiveHeadUpdated bool   `json:"active_head_updated"`
@@ -348,21 +349,33 @@ type eventRow struct {
 }
 
 type projectionSnapshot struct {
-	Projects      []Project         `json:"projects"`
-	Decisions     []Decision        `json:"decisions"`
-	Deliverables  []Deliverable     `json:"deliverables"`
-	Forecasts     []Forecast        `json:"forecasts"`
-	ForecastHeads []ForecastHead    `json:"forecast_heads"`
-	Targets       []Target          `json:"targets"`
-	TargetHeads   []TargetHead      `json:"target_heads"`
-	Deadlines     []Deadline        `json:"deadlines"`
-	DeadlineHeads []DeadlineHead    `json:"deadline_heads"`
-	Activity      []eventProjection `json:"activity"`
+	Projects        []Project         `json:"projects"`
+	Decisions       []Decision        `json:"decisions"`
+	Deliverables    []Deliverable     `json:"deliverables"`
+	Forecasts       []Forecast        `json:"forecasts"`
+	ForecastHeads   []ForecastHead    `json:"forecast_heads"`
+	Targets         []Target          `json:"targets"`
+	TargetHeads     []TargetHead      `json:"target_heads"`
+	Deadlines       []Deadline        `json:"deadlines"`
+	DeadlineHeads   []DeadlineHead    `json:"deadline_heads"`
+	Evidence        []Evidence        `json:"evidence"`
+	Gates           []Gate            `json:"gates"`
+	Verdicts        []Verdict         `json:"verdicts"`
+	Findings        []Finding         `json:"findings"`
+	FindingActions  []FindingAction   `json:"finding_actions"`
+	Submissions     []Submission      `json:"submissions"`
+	SubmissionHeads []SubmissionHead  `json:"submission_heads"`
+	Activity        []eventProjection `json:"activity"`
 }
 
 func (snapshot projectionSnapshot) planningCount() int {
 	return len(snapshot.Deliverables) + len(snapshot.Forecasts) + len(snapshot.ForecastHeads) +
 		len(snapshot.Targets) + len(snapshot.TargetHeads) + len(snapshot.Deadlines) + len(snapshot.DeadlineHeads)
+}
+
+func (snapshot projectionSnapshot) reviewCount() int {
+	return len(snapshot.Evidence) + len(snapshot.Gates) + len(snapshot.Verdicts) + len(snapshot.Findings) +
+		len(snapshot.FindingActions) + len(snapshot.Submissions) + len(snapshot.SubmissionHeads)
 }
 
 type databaseQueryer interface {
@@ -448,20 +461,24 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
+	if err := writeReplayReview(ctx, tx, runID, rebuilt); err != nil {
+		_ = tx.Rollback()
+		return ReplayReport{}, err
+	}
 	finished := time.Now().UTC()
 	if _, err := tx.ExecContext(ctx, `UPDATE projection_replay_runs SET status='succeeded',finished_at=$2,last_sequence=$3,
-		projects_count=$4,decisions_count=$5,activity_count=$6,planning_count=$7,live_checksum=$8,rebuilt_checksum=$9 WHERE id=$1`,
-		runID, finished, lastSequence, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), liveChecksum, rebuiltChecksum); err != nil {
+		projects_count=$4,decisions_count=$5,activity_count=$6,planning_count=$7,review_count=$8,live_checksum=$9,rebuilt_checksum=$10 WHERE id=$1`,
+		runID, finished, lastSequence, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), rebuilt.reviewCount(), liveChecksum, rebuiltChecksum); err != nil {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO projection_heads
-		(name,run_id,last_sequence,checksum,projects_count,decisions_count,activity_count,planning_count,updated_at)
-		VALUES ('m1-canonical',$1,$2,$3,$4,$5,$6,$7,$8)
+		(name,run_id,last_sequence,checksum,projects_count,decisions_count,activity_count,planning_count,review_count,updated_at)
+		VALUES ('m1-canonical',$1,$2,$3,$4,$5,$6,$7,$8,$9)
 		ON CONFLICT (name) DO UPDATE SET run_id=EXCLUDED.run_id,last_sequence=EXCLUDED.last_sequence,
 		checksum=EXCLUDED.checksum,projects_count=EXCLUDED.projects_count,decisions_count=EXCLUDED.decisions_count,
-		activity_count=EXCLUDED.activity_count,planning_count=EXCLUDED.planning_count,updated_at=EXCLUDED.updated_at`,
-		runID, lastSequence, rebuiltChecksum, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), finished); err != nil {
+		activity_count=EXCLUDED.activity_count,planning_count=EXCLUDED.planning_count,review_count=EXCLUDED.review_count,updated_at=EXCLUDED.updated_at`,
+		runID, lastSequence, rebuiltChecksum, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), rebuilt.reviewCount(), finished); err != nil {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
@@ -469,7 +486,7 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 		return ReplayReport{}, fmt.Errorf("commit replay generation: %w", err)
 	}
 	return ReplayReport{RunID: runID, LastSequence: lastSequence, Projects: len(rebuilt.Projects),
-		Decisions: len(rebuilt.Decisions), Activity: len(rebuilt.Activity), Planning: rebuilt.planningCount(), LiveChecksum: liveChecksum,
+		Decisions: len(rebuilt.Decisions), Activity: len(rebuilt.Activity), Planning: rebuilt.planningCount(), Review: rebuilt.reviewCount(), LiveChecksum: liveChecksum,
 		RebuiltChecksum: rebuiltChecksum, ActiveHeadUpdated: true}, nil
 }
 
@@ -522,6 +539,55 @@ func writeReplayPlanning(ctx context.Context, tx *sql.Tx, runID string, snapshot
 	return nil
 }
 
+func writeReplayReview(ctx context.Context, tx *sql.Tx, runID string, snapshot projectionSnapshot) error {
+	type row struct {
+		kind, id, organizationID, projectID string
+		value                               any
+	}
+	rows := make([]row, 0, snapshot.reviewCount())
+	for _, item := range snapshot.Evidence {
+		rows = append(rows, row{"evidence", item.ID, item.OrganizationID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.Gates {
+		rows = append(rows, row{"gate", item.ID, item.OrganizationID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.Verdicts {
+		rows = append(rows, row{"verdict", item.ID, item.OrganizationID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.Findings {
+		rows = append(rows, row{"finding", item.ID, item.OrganizationID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.FindingActions {
+		rows = append(rows, row{"finding-action", item.ID, item.OrganizationID, item.ProjectID, item})
+	}
+	for _, item := range snapshot.Submissions {
+		rows = append(rows, row{"submission", item.ID, item.OrganizationID, item.ProjectID, item})
+	}
+	projects := make(map[string]Project, len(snapshot.Projects))
+	for _, project := range snapshot.Projects {
+		projects[project.ID] = project
+	}
+	for _, item := range snapshot.SubmissionHeads {
+		for _, submission := range snapshot.Submissions {
+			if submission.ID == item.SubmissionID {
+				rows = append(rows, row{"submission-head", item.DeliverableID, submission.OrganizationID, submission.ProjectID, item})
+				break
+			}
+		}
+	}
+	for _, item := range rows {
+		if projects[item.projectID].ID == "" {
+			return fmt.Errorf("review projection %s:%s references unknown project %s", item.kind, item.id, item.projectID)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO replay_review_projections
+			(run_id,kind,projection_id,organization_id,project_id,projection) VALUES ($1,$2,$3,$4,$5,$6)`,
+			runID, item.kind, item.id, item.organizationID, item.projectID, canonicalJSON(item.value)); err != nil {
+			return fmt.Errorf("write replay review %s:%s: %w", item.kind, item.id, err)
+		}
+	}
+	return nil
+}
+
 func (store *DurableStore) recordReplayFailure(ctx context.Context, failure *ReplayFailure) error {
 	if err := store.persistReplayFailure(ctx, failure); err != nil {
 		return errors.Join(failure, fmt.Errorf("persist replay failure: %w", err))
@@ -546,6 +612,84 @@ func (store *DurableStore) persistReplayFailure(ctx context.Context, failure *Re
 	return nil
 }
 
+func replayEvidenceAttributions(ids []string, projectID string, records map[string]Evidence) ([]Evidence, bool) {
+	if len(ids) == 0 {
+		return nil, false
+	}
+	selected := make([]Evidence, 0, len(ids))
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		record := records[id]
+		if record.ID == "" || record.ProjectID != projectID || seen[id] {
+			return nil, false
+		}
+		seen[id] = true
+		selected = append(selected, record)
+	}
+	return selected, true
+}
+
+func replayEvidenceSelection(ids []string, projectID string, records map[string]Evidence) ([]Evidence, bool) {
+	selected, valid := replayEvidenceAttributions(ids, projectID, records)
+	if !valid {
+		return nil, false
+	}
+	for _, item := range selected {
+		for _, candidate := range records {
+			if candidate.SupersedesID != nil && *candidate.SupersedesID == item.ID {
+				return nil, false
+			}
+		}
+	}
+	return selected, true
+}
+
+func replayDeliverableGates(deliverableID string, records map[string]Gate) []Gate {
+	result := make([]Gate, 0)
+	for _, gate := range records {
+		if gate.DeliverableID == deliverableID {
+			result = append(result, gate)
+		}
+	}
+	return result
+}
+
+func replayOpenFindings(deliverableID string, blockingOnly bool, records map[string]Finding) int {
+	count := 0
+	for _, finding := range records {
+		if finding.DeliverableID == deliverableID && finding.State == "open" && (!blockingOnly || finding.Blocking) {
+			count++
+		}
+	}
+	return count
+}
+
+func replayDecision(id string, decisions []Decision) (Decision, bool) {
+	for _, decision := range decisions {
+		if decision.ID == id {
+			return decision, true
+		}
+	}
+	return Decision{}, false
+}
+
+func replayEvidenceTargetExists(support EvidenceSupport, projectID string, deliverables map[string]Deliverable, gates map[string]Gate,
+	findings map[string]Finding, decisions []Decision) bool {
+	switch support.TargetType {
+	case "deliverable":
+		return deliverables[support.TargetID].ProjectID == projectID
+	case "gate":
+		return gates[support.TargetID].ProjectID == projectID
+	case "finding":
+		return findings[support.TargetID].ProjectID == projectID
+	case "decision":
+		decision, exists := replayDecision(support.TargetID, decisions)
+		return exists && decision.ProjectID == projectID
+	default:
+		return false
+	}
+}
+
 func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *ReplayFailure) {
 	projects := make(map[string]Project)
 	decisions := make([]Decision, 0)
@@ -558,6 +702,14 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 	targetHeads := make(map[string]TargetHead)
 	deadlines := make(map[string]Deadline)
 	deadlineHeads := make(map[string]DeadlineHead)
+	evidence := make(map[string]Evidence)
+	gates := make(map[string]Gate)
+	verdicts := make(map[string]Verdict)
+	verdictHeads := make(map[string]string)
+	findings := make(map[string]Finding)
+	findingActions := make(map[string]FindingAction)
+	submissions := make(map[string]Submission)
+	submissionHeads := make(map[string]SubmissionHead)
 	activity := make([]eventProjection, 0, len(events))
 	versions := make(map[string]int64)
 	for _, event := range events {
@@ -750,6 +902,272 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			deadlineHeads[deadline.ProjectID] = DeadlineHead{ProjectID: deadline.ProjectID, DeadlineID: deadline.ID}
 			project.Version = item.AggregateVersion
 			projects[project.ID] = project
+		case "evidence.created", "evidence.superseded":
+			var record Evidence
+			if err := decodeStrictJSON(event.Payload, &record); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[record.ProjectID]
+			if !exists || record.ProjectID != item.AggregateID || record.OrganizationID != item.OrganizationID ||
+				record.ProducedBy != item.ActorID || record.ProducerKind != item.ActorKind ||
+				!equalOptionalString(record.PrincipalID, item.PrincipalID) || len(record.IntegrityDigest) != 64 || len(record.Supports) == 0 {
+				return failure("invalid_event_payload", "evidence identity, attribution, digest, or support contract is invalid")
+			}
+			for _, support := range record.Supports {
+				if !replayEvidenceTargetExists(support, record.ProjectID, deliverables, gates, findings, decisions) {
+					return failure("invalid_event_payload", "evidence support references an unknown project target")
+				}
+			}
+			if item.EventType == "evidence.created" {
+				if record.SupersedesID != nil || evidence[record.ID].ID != "" {
+					return failure("invalid_event_payload", "initial evidence conflicts with existing history")
+				}
+			} else if record.SupersedesID == nil || evidence[*record.SupersedesID].ID == "" || evidence[record.ID].ID != "" ||
+				evidence[*record.SupersedesID].ProjectID != record.ProjectID || evidence[*record.SupersedesID].OrganizationID != record.OrganizationID {
+				return failure("invalid_event_payload", "evidence supersession does not extend an existing project chain")
+			}
+			for _, prior := range evidence {
+				if record.SupersedesID != nil && prior.SupersedesID != nil && *prior.SupersedesID == *record.SupersedesID {
+					return failure("invalid_event_payload", "evidence supersession chain branches")
+				}
+			}
+			evidence[record.ID] = record
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "gate.created":
+			var gate Gate
+			if err := decodeStrictJSON(event.Payload, &gate); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[gate.ProjectID]
+			deliverable := deliverables[gate.DeliverableID]
+			if !exists || deliverable.ProjectID != gate.ProjectID || gate.ProjectID != item.AggregateID ||
+				gate.OrganizationID != item.OrganizationID || gate.CreatedBy != item.ActorID || gate.State != "pending" ||
+				gate.Version != 1 || len(gate.RequiredEvidence) == 0 || gates[gate.ID].ID != "" {
+				return failure("invalid_event_payload", "gate identity or evidence contract is invalid")
+			}
+			gates[gate.ID] = gate
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "gate.verdict_recorded":
+			var result GateVerdictEvent
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := gates[result.Gate.ID]
+			project, exists := projects[result.Gate.ProjectID]
+			deliverable := deliverables[result.Gate.DeliverableID]
+			submission := submissions[submissionHeads[result.Gate.DeliverableID].SubmissionID]
+			selectedEvidence, evidenceValid := replayEvidenceSelection(result.Verdict.EvidenceIDs, result.Gate.ProjectID, evidence)
+			submittedEvidence, submittedEvidenceValid := replayEvidenceAttributions(submission.EvidenceIDs, result.Gate.ProjectID, evidence)
+			validTransition := prior.ID != "" && result.Gate.Version == prior.Version+1 &&
+				((prior.State == "pending" && (result.Gate.State == "passed" || result.Gate.State == "failed")) ||
+					(prior.State == "failed" && result.Gate.State == "passed"))
+			validResult := (result.Verdict.Result == "pass" && result.Gate.State == "passed") ||
+				(result.Verdict.Result == "fail" && result.Gate.State == "failed")
+			validHistory := (verdictHeads[result.Gate.ID] == "" && result.Verdict.SupersedesID == nil) ||
+				(verdictHeads[result.Gate.ID] != "" && result.Verdict.SupersedesID != nil && *result.Verdict.SupersedesID == verdictHeads[result.Gate.ID])
+			if !exists || !validTransition || result.Gate.ProjectID != item.AggregateID || result.Gate.OrganizationID != item.OrganizationID ||
+				result.Verdict.GateID != result.Gate.ID || result.Verdict.ProjectID != result.Gate.ProjectID ||
+				result.Verdict.ReviewerID != item.ActorID || result.Verdict.ReviewerKind != item.ActorKind ||
+				!equalOptionalString(result.Verdict.PrincipalID, item.PrincipalID) || verdicts[result.Verdict.ID].ID != "" ||
+				deliverable.State != "submitted" || submission.ID == "" || !evidenceValid || !submittedEvidenceValid || !evidenceMeetsGate(selectedEvidence, prior) ||
+				!validResult || !validHistory || (prior.IndependenceRequired && !independentReviewer(
+				Actor{ID: item.ActorID, Kind: item.ActorKind, PrincipalID: item.PrincipalID}, deliverable, submission, submittedEvidence, selectedEvidence)) {
+				return failure("invalid_event_payload", "gate verdict transition or attribution is invalid")
+			}
+			gates[result.Gate.ID] = result.Gate
+			verdicts[result.Verdict.ID] = result.Verdict
+			verdictHeads[result.Gate.ID] = result.Verdict.ID
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "finding.created":
+			var finding Finding
+			if err := decodeStrictJSON(event.Payload, &finding); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			project, exists := projects[finding.ProjectID]
+			verdict := verdicts[finding.VerdictID]
+			if !exists || finding.ProjectID != item.AggregateID || finding.OrganizationID != item.OrganizationID ||
+				finding.CreatedBy != item.ActorID || finding.State != "open" || finding.Version != 1 ||
+				verdict.Result != "fail" || verdict.GateID != finding.GateID || verdict.DeliverableID != finding.DeliverableID ||
+				findings[finding.ID].ID != "" {
+				return failure("invalid_event_payload", "finding identity, origin verdict, or attribution is invalid")
+			}
+			findings[finding.ID] = finding
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "finding.resolved", "finding.withdrawn":
+			var result FindingActionResult
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := findings[result.Finding.ID]
+			project, exists := projects[result.Finding.ProjectID]
+			selectedEvidence, evidenceValid := replayEvidenceSelection(result.Action.EvidenceIDs, result.Finding.ProjectID, evidence)
+			evidenceLinked := evidenceValid
+			for _, record := range selectedEvidence {
+				evidenceLinked = evidenceLinked && (evidenceSupports(record, "finding", result.Finding.ID) ||
+					evidenceSupports(record, "deliverable", result.Finding.DeliverableID))
+			}
+			expectedState, expectedAction := "resolved", "resolve"
+			if item.EventType == "finding.withdrawn" {
+				expectedState, expectedAction = "withdrawn", "withdraw"
+			}
+			if !exists || prior.State != "open" || result.Finding.State != expectedState || result.Finding.Version != prior.Version+1 ||
+				result.Action.Action != expectedAction || result.Action.FindingID != result.Finding.ID ||
+				result.Action.ProjectID != result.Finding.ProjectID || result.Action.DeliverableID != result.Finding.DeliverableID ||
+				len(result.Action.EvidenceIDs) == 0 ||
+				result.Action.ActorID != item.ActorID || result.Action.ActorKind != item.ActorKind ||
+				!equalOptionalString(result.Action.PrincipalID, item.PrincipalID) || findingActions[result.Action.ID].ID != "" ||
+				!evidenceLinked {
+				return failure("invalid_event_payload", "finding disposition history is invalid")
+			}
+			findings[result.Finding.ID] = result.Finding
+			findingActions[result.Action.ID] = result.Action
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "deliverable.submitted", "deliverable.resubmitted":
+			var result SubmissionResult
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := deliverables[result.Deliverable.ID]
+			project, exists := projects[result.Deliverable.ProjectID]
+			selectedEvidence, evidenceValid := replayEvidenceSelection(result.Submission.EvidenceIDs, result.Deliverable.ProjectID, evidence)
+			gateContractValid := evidenceValid && evidenceMeetsDeliverableContract(
+				selectedEvidence, result.Deliverable.ID, replayDeliverableGates(result.Deliverable.ID, gates))
+			expectedPrior, expectedKind := "ready", "submit"
+			resolutionValid := true
+			if item.EventType == "deliverable.resubmitted" {
+				expectedPrior, expectedKind = "bounced", "resubmit"
+				resolutionValid = replayOpenFindings(result.Deliverable.ID, false, findings) == 0
+				linkedResolution := false
+				for _, action := range findingActions {
+					if action.DeliverableID != result.Deliverable.ID || action.Action != "resolve" {
+						continue
+					}
+					for _, selectedID := range result.Submission.EvidenceIDs {
+						for _, actionID := range action.EvidenceIDs {
+							linkedResolution = linkedResolution || selectedID == actionID
+						}
+					}
+				}
+				resolutionValid = resolutionValid && linkedResolution
+			}
+			if !exists || prior.State != expectedPrior || result.Deliverable.State != "submitted" ||
+				result.Deliverable.Version != prior.Version+1 || result.Submission.Kind != expectedKind ||
+				result.Submission.DeliverableID != result.Deliverable.ID || result.Submission.ProjectID != result.Deliverable.ProjectID ||
+				result.Submission.OrganizationID != item.OrganizationID || result.Submission.SubmittedBy != item.ActorID ||
+				result.Submission.SubmitterKind != item.ActorKind || !equalOptionalString(result.Submission.PrincipalID, item.PrincipalID) ||
+				len(result.Submission.EvidenceIDs) == 0 || submissions[result.Submission.ID].ID != "" ||
+				!gateContractValid || !resolutionValid {
+				return failure("invalid_event_payload", "deliverable submission transition is invalid")
+			}
+			deliverables[result.Deliverable.ID] = result.Deliverable
+			submissions[result.Submission.ID] = result.Submission
+			submissionHeads[result.Deliverable.ID] = SubmissionHead{DeliverableID: result.Deliverable.ID, SubmissionID: result.Submission.ID}
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "deliverable.bounced", "deliverable.accepted":
+			var result DeliverableReviewEvent
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := deliverables[result.Deliverable.ID]
+			project, exists := projects[result.Deliverable.ProjectID]
+			expectedState := "bounced"
+			validDetail := result.FindingID != nil && findings[*result.FindingID].DeliverableID == result.Deliverable.ID &&
+				findings[*result.FindingID].State == "open" && strings.TrimSpace(findings[*result.FindingID].Detail) != ""
+			if item.EventType == "deliverable.accepted" {
+				expectedState, validDetail = "accepted", result.FindingID == nil
+				gateCount, incompleteHard := 0, 0
+				for _, gate := range gates {
+					if gate.DeliverableID == result.Deliverable.ID {
+						gateCount++
+						if gate.Hard && gate.State != "passed" {
+							incompleteHard++
+						}
+					}
+				}
+				validDetail = validDetail && gateCount > 0 && incompleteHard == 0 && replayOpenFindings(result.Deliverable.ID, false, findings) == 0
+			}
+			if !exists || prior.State != "submitted" || result.Deliverable.State != expectedState ||
+				result.Deliverable.Version != prior.Version+1 || !validDetail || strings.TrimSpace(result.Rationale) == "" {
+				return failure("invalid_event_payload", "deliverable review transition is invalid")
+			}
+			deliverables[result.Deliverable.ID] = result.Deliverable
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "deliverable.cancelled":
+			var result DeliverableCancellation
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := deliverables[result.Deliverable.ID]
+			project, exists := projects[result.Deliverable.ProjectID]
+			validPrior := prior.State == "draft" || prior.State == "ready"
+			if !exists || !validPrior || prior.Required || result.Deliverable.Required ||
+				result.Deliverable.ProjectID != item.AggregateID || result.Deliverable.OrganizationID != item.OrganizationID ||
+				result.Deliverable.State != "cancelled" || result.Deliverable.Version != prior.Version+1 ||
+				strings.TrimSpace(result.Reason) == "" {
+				return failure("invalid_event_payload", "optional deliverable cancellation is invalid")
+			}
+			deliverables[result.Deliverable.ID] = result.Deliverable
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "deliverable.waived":
+			var result DeliverableWaiverResult
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := deliverables[result.Deliverable.ID]
+			project, exists := projects[result.Deliverable.ProjectID]
+			validPrior := prior.State == "ready" || prior.State == "submitted" || prior.State == "bounced"
+			decision, decisionExists := replayDecision(result.Decision.ID, decisions)
+			selectedEvidence, evidenceValid := replayEvidenceSelection(result.Decision.Evidence, result.Deliverable.ProjectID, evidence)
+			waiverContractValid := evidenceValid && evidenceMeetsDeliverableContract(
+				selectedEvidence, result.Deliverable.ID, replayDeliverableGates(result.Deliverable.ID, gates))
+			for _, gate := range gates {
+				if gate.DeliverableID == result.Deliverable.ID && gate.Hard && gate.State != "passed" {
+					waiverContractValid = false
+				}
+			}
+			waiverContractValid = waiverContractValid && replayOpenFindings(result.Deliverable.ID, true, findings) == 0
+			if !exists || !validPrior || result.Deliverable.State != "waived" || result.Deliverable.Version != prior.Version+1 ||
+				result.Deliverable.WaiverDecisionID == nil || *result.Deliverable.WaiverDecisionID != result.Decision.ID ||
+				!decisionExists || decision.Kind != "waiver" || decision.ActorKind != "human" || decision.ActorID != item.ActorID ||
+				!bytes.Equal(canonicalJSON(decision), canonicalJSON(result.Decision)) || !waiverContractValid {
+				return failure("invalid_event_payload", "deliverable waiver decision is invalid")
+			}
+			deliverables[result.Deliverable.ID] = result.Deliverable
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
+		case "gate.waived":
+			var result GateWaiverResult
+			if err := decodeStrictJSON(event.Payload, &result); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			prior := gates[result.Gate.ID]
+			project, exists := projects[result.Gate.ProjectID]
+			decision, decisionExists := replayDecision(result.Decision.ID, decisions)
+			selectedEvidence, evidenceValid := replayEvidenceSelection(result.Decision.Evidence, result.Gate.ProjectID, evidence)
+			waiverContractValid := evidenceValid && evidenceMeetsGate(selectedEvidence, prior) &&
+				replayOpenFindings(result.Gate.DeliverableID, true, findings) == 0
+			for _, gate := range gates {
+				if gate.DeliverableID == result.Gate.DeliverableID && gate.Hard && gate.State != "passed" {
+					waiverContractValid = false
+				}
+			}
+			if !exists || prior.Hard || (prior.State != "pending" && prior.State != "failed") || result.Gate.State != "waived" ||
+				result.Gate.Version != prior.Version+1 || result.Gate.WaiverDecisionID == nil || *result.Gate.WaiverDecisionID != result.Decision.ID ||
+				!decisionExists || decision.Kind != "waiver" || decision.ActorKind != "human" || decision.ActorID != item.ActorID ||
+				!bytes.Equal(canonicalJSON(decision), canonicalJSON(result.Decision)) || !waiverContractValid {
+				return failure("invalid_event_payload", "soft gate waiver decision is invalid")
+			}
+			gates[result.Gate.ID] = result.Gate
+			project.Version = item.AggregateVersion
+			projects[project.ID] = project
 		default:
 			return failure("unknown_event_schema", "event type is not registered in replay v1")
 		}
@@ -796,7 +1214,29 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 	for _, item := range deadlineHeads {
 		snapshot.DeadlineHeads = append(snapshot.DeadlineHeads, item)
 	}
+	for _, item := range evidence {
+		snapshot.Evidence = append(snapshot.Evidence, item)
+	}
+	for _, item := range gates {
+		snapshot.Gates = append(snapshot.Gates, item)
+	}
+	for _, item := range verdicts {
+		snapshot.Verdicts = append(snapshot.Verdicts, item)
+	}
+	for _, item := range findings {
+		snapshot.Findings = append(snapshot.Findings, item)
+	}
+	for _, item := range findingActions {
+		snapshot.FindingActions = append(snapshot.FindingActions, item)
+	}
+	for _, item := range submissions {
+		snapshot.Submissions = append(snapshot.Submissions, item)
+	}
+	for _, item := range submissionHeads {
+		snapshot.SubmissionHeads = append(snapshot.SubmissionHeads, item)
+	}
 	sortPlanningSnapshot(&snapshot)
+	sortReviewSnapshot(&snapshot)
 	return snapshot, nil
 }
 
@@ -889,6 +1329,9 @@ func loadLiveSnapshot(ctx context.Context, queryer databaseQueryer, events []eve
 	}
 	snapshot := projectionSnapshot{Projects: projects, Decisions: decisions}
 	if err := loadLivePlanning(ctx, queryer, &snapshot); err != nil {
+		return projectionSnapshot{}, err
+	}
+	if err := loadLiveReview(ctx, queryer, &snapshot); err != nil {
 		return projectionSnapshot{}, err
 	}
 	activity := make([]eventProjection, len(events))
@@ -1059,6 +1502,171 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 	return nil
 }
 
+func loadLiveReview(ctx context.Context, queryer databaseQueryer, snapshot *projectionSnapshot) error {
+	evidenceRows, err := queryer.QueryContext(ctx, selectEvidence+` ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for evidenceRows.Next() {
+		item, err := scanEvidence(evidenceRows)
+		if err != nil {
+			_ = evidenceRows.Close()
+			return err
+		}
+		snapshot.Evidence = append(snapshot.Evidence, item)
+	}
+	if err := evidenceRows.Err(); err != nil {
+		_ = evidenceRows.Close()
+		return fmt.Errorf("scan live evidence: %w", err)
+	}
+	if err := evidenceRows.Close(); err != nil {
+		return err
+	}
+	for index := range snapshot.Evidence {
+		if err := loadEvidenceSupports(ctx, queryer, &snapshot.Evidence[index]); err != nil {
+			return err
+		}
+	}
+
+	gateRows, err := queryer.QueryContext(ctx, selectGate+` ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for gateRows.Next() {
+		item, err := scanGate(gateRows)
+		if err != nil {
+			_ = gateRows.Close()
+			return err
+		}
+		snapshot.Gates = append(snapshot.Gates, item)
+	}
+	if err := gateRows.Err(); err != nil {
+		_ = gateRows.Close()
+		return fmt.Errorf("scan live gates: %w", err)
+	}
+	if err := gateRows.Close(); err != nil {
+		return err
+	}
+	for index := range snapshot.Gates {
+		if err := loadGateRequirements(ctx, queryer, &snapshot.Gates[index]); err != nil {
+			return err
+		}
+	}
+
+	verdictRows, err := queryer.QueryContext(ctx, selectVerdict+` ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for verdictRows.Next() {
+		item, err := scanVerdict(verdictRows)
+		if err != nil {
+			_ = verdictRows.Close()
+			return err
+		}
+		snapshot.Verdicts = append(snapshot.Verdicts, item)
+	}
+	if err := verdictRows.Err(); err != nil {
+		_ = verdictRows.Close()
+		return fmt.Errorf("scan live verdicts: %w", err)
+	}
+	if err := verdictRows.Close(); err != nil {
+		return err
+	}
+
+	findingRows, err := queryer.QueryContext(ctx, selectFinding+` ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for findingRows.Next() {
+		item, err := scanFinding(findingRows)
+		if err != nil {
+			_ = findingRows.Close()
+			return err
+		}
+		snapshot.Findings = append(snapshot.Findings, item)
+	}
+	if err := findingRows.Err(); err != nil {
+		_ = findingRows.Close()
+		return fmt.Errorf("scan live findings: %w", err)
+	}
+	if err := findingRows.Close(); err != nil {
+		return err
+	}
+
+	actionRows, err := queryer.QueryContext(ctx, `SELECT id,organization_id,project_id,deliverable_id,finding_id,action::text,
+		evidence_ids,rationale,actor_id,actor_kind::text,principal_id,created_at FROM finding_actions ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for actionRows.Next() {
+		var item FindingAction
+		var evidenceIDs pq.StringArray
+		var principal sql.NullString
+		var created time.Time
+		if err := actionRows.Scan(&item.ID, &item.OrganizationID, &item.ProjectID, &item.DeliverableID, &item.FindingID,
+			&item.Action, &evidenceIDs, &item.Rationale, &item.ActorID, &item.ActorKind, &principal, &created); err != nil {
+			_ = actionRows.Close()
+			return err
+		}
+		item.EvidenceIDs = []string(evidenceIDs)
+		if principal.Valid {
+			item.PrincipalID = &principal.String
+		}
+		item.CreatedAt = created.UTC().Format(timeFormat)
+		snapshot.FindingActions = append(snapshot.FindingActions, item)
+	}
+	if err := actionRows.Err(); err != nil {
+		_ = actionRows.Close()
+		return fmt.Errorf("scan live finding actions: %w", err)
+	}
+	if err := actionRows.Close(); err != nil {
+		return err
+	}
+
+	submissionRows, err := queryer.QueryContext(ctx, `SELECT id,organization_id,project_id,deliverable_id,kind::text,evidence_ids,
+		note,submitted_by,submitter_kind::text,principal_id,created_at FROM deliverable_submissions ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	for submissionRows.Next() {
+		item, err := scanSubmission(submissionRows)
+		if err != nil {
+			_ = submissionRows.Close()
+			return err
+		}
+		snapshot.Submissions = append(snapshot.Submissions, item)
+	}
+	if err := submissionRows.Err(); err != nil {
+		_ = submissionRows.Close()
+		return fmt.Errorf("scan live submissions: %w", err)
+	}
+	if err := submissionRows.Close(); err != nil {
+		return err
+	}
+
+	headRows, err := queryer.QueryContext(ctx, `SELECT deliverable_id,submission_id FROM deliverable_submission_heads ORDER BY deliverable_id`)
+	if err != nil {
+		return err
+	}
+	for headRows.Next() {
+		var item SubmissionHead
+		if err := headRows.Scan(&item.DeliverableID, &item.SubmissionID); err != nil {
+			_ = headRows.Close()
+			return err
+		}
+		snapshot.SubmissionHeads = append(snapshot.SubmissionHeads, item)
+	}
+	if err := headRows.Err(); err != nil {
+		_ = headRows.Close()
+		return fmt.Errorf("scan live submission heads: %w", err)
+	}
+	if err := headRows.Close(); err != nil {
+		return err
+	}
+	sortReviewSnapshot(snapshot)
+	return nil
+}
+
 func snapshotChecksum(snapshot projectionSnapshot) string {
 	digest := sha256.Sum256(canonicalJSON(snapshot))
 	return hex.EncodeToString(digest[:])
@@ -1066,9 +1674,9 @@ func snapshotChecksum(snapshot projectionSnapshot) string {
 
 func (store *DurableStore) ActiveProjectionHead(ctx context.Context) (ReplayReport, error) {
 	var report ReplayReport
-	err := store.db.QueryRowContext(ctx, `SELECT run_id,last_sequence,projects_count,decisions_count,activity_count,planning_count,checksum
+	err := store.db.QueryRowContext(ctx, `SELECT run_id,last_sequence,projects_count,decisions_count,activity_count,planning_count,review_count,checksum
 		FROM projection_heads WHERE name='m1-canonical'`).Scan(&report.RunID, &report.LastSequence,
-		&report.Projects, &report.Decisions, &report.Activity, &report.Planning, &report.RebuiltChecksum)
+		&report.Projects, &report.Decisions, &report.Activity, &report.Planning, &report.Review, &report.RebuiltChecksum)
 	if err != nil {
 		return ReplayReport{}, err
 	}
@@ -1213,6 +1821,100 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 	if err := planningOrphans.Close(); err != nil {
 		return nil, err
 	}
+	reviewOrphans, err := queryer.QueryContext(ctx, `
+		SELECT kind,id,project_id FROM (
+			SELECT 'evidence' kind,evidence.id::text id,evidence.project_id
+			FROM evidence LEFT JOIN domain_events event
+			  ON event.event_type IN ('evidence.created','evidence.superseded') AND event.payload->>'id'=evidence.id::text
+			WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'gate',gate.id::text,gate.project_id FROM review_gates gate LEFT JOIN domain_events event
+			  ON event.event_type='gate.created' AND event.payload->>'id'=gate.id::text WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'verdict',verdict.id::text,verdict.project_id FROM review_verdicts verdict LEFT JOIN domain_events event
+			  ON event.event_type='gate.verdict_recorded' AND event.payload->'verdict'->>'id'=verdict.id::text WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'finding',finding.id::text,finding.project_id FROM review_findings finding LEFT JOIN domain_events event
+			  ON event.event_type='finding.created' AND event.payload->>'id'=finding.id::text WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'finding-action',action.id::text,action.project_id FROM finding_actions action LEFT JOIN domain_events event
+			  ON event.event_type IN ('finding.resolved','finding.withdrawn') AND event.payload->'action'->>'id'=action.id::text WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'submission',submission.id::text,submission.project_id FROM deliverable_submissions submission LEFT JOIN domain_events event
+			  ON event.event_type IN ('deliverable.submitted','deliverable.resubmitted') AND event.payload->'submission'->>'id'=submission.id::text WHERE event.event_id IS NULL
+		) orphan ORDER BY kind,id`)
+	if err != nil {
+		return nil, err
+	}
+	for reviewOrphans.Next() {
+		var kind, id, projectID string
+		if err := reviewOrphans.Scan(&kind, &id, &projectID); err != nil {
+			_ = reviewOrphans.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "review_projection_without_event", Aggregate: "project:" + projectID,
+			Detail: fmt.Sprintf("%s projection %s lacks its immutable event", kind, id)})
+	}
+	if err := reviewOrphans.Err(); err != nil {
+		_ = reviewOrphans.Close()
+		return nil, fmt.Errorf("scan review/event coupling: %w", err)
+	}
+	if err := reviewOrphans.Close(); err != nil {
+		return nil, err
+	}
+	integrityRows, err := queryer.QueryContext(ctx, `SELECT id,project_id FROM evidence
+		WHERE integrity_digest IS DISTINCT FROM digest(convert_to(integrity_material::text,'UTF8'),'sha256') ORDER BY project_id,id`)
+	if err != nil {
+		return nil, err
+	}
+	for integrityRows.Next() {
+		var id, projectID string
+		if err := integrityRows.Scan(&id, &projectID); err != nil {
+			_ = integrityRows.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "evidence_digest_mismatch", Aggregate: "project:" + projectID,
+			Detail: fmt.Sprintf("evidence %s digest differs from its canonical material", id)})
+	}
+	if err := integrityRows.Err(); err != nil {
+		_ = integrityRows.Close()
+		return nil, fmt.Errorf("scan evidence digest integrity: %w", err)
+	}
+	_ = integrityRows.Close()
+	reviewReferences, err := queryer.QueryContext(ctx, `
+		SELECT kind,id,project_id,evidence_id FROM (
+			SELECT 'verdict' kind,verdict.id::text id,verdict.project_id,selected.evidence_id
+			FROM review_verdicts verdict CROSS JOIN LATERAL unnest(verdict.evidence_ids) selected(evidence_id)
+			LEFT JOIN evidence ON evidence.id=selected.evidence_id AND evidence.project_id=verdict.project_id
+			WHERE evidence.id IS NULL
+			UNION ALL
+			SELECT 'finding-action',action.id::text,action.project_id,selected.evidence_id
+			FROM finding_actions action CROSS JOIN LATERAL unnest(action.evidence_ids) selected(evidence_id)
+			LEFT JOIN evidence ON evidence.id=selected.evidence_id AND evidence.project_id=action.project_id
+			WHERE evidence.id IS NULL
+			UNION ALL
+			SELECT 'submission',submission.id::text,submission.project_id,selected.evidence_id
+			FROM deliverable_submissions submission CROSS JOIN LATERAL unnest(submission.evidence_ids) selected(evidence_id)
+			LEFT JOIN evidence ON evidence.id=selected.evidence_id AND evidence.project_id=submission.project_id
+			WHERE evidence.id IS NULL
+		) invalid ORDER BY kind,id,evidence_id`)
+	if err != nil {
+		return nil, err
+	}
+	for reviewReferences.Next() {
+		var kind, id, projectID, evidenceID string
+		if err := reviewReferences.Scan(&kind, &id, &projectID, &evidenceID); err != nil {
+			_ = reviewReferences.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "review_evidence_reference_invalid", Aggregate: "project:" + projectID,
+			Detail: fmt.Sprintf("%s %s references missing or cross-project evidence %s", kind, id, evidenceID)})
+	}
+	if err := reviewReferences.Err(); err != nil {
+		_ = reviewReferences.Close()
+		return nil, fmt.Errorf("scan review evidence references: %w", err)
+	}
+	_ = reviewReferences.Close()
 
 	headMismatches, err := queryer.QueryContext(ctx, `
 		SELECT kind,project_id,id FROM (
@@ -1225,6 +1927,10 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 			UNION ALL
 			SELECT 'deadline',head.project_id,head.deadline_id::text FROM project_deadline_heads head
 			JOIN project_deadlines deadline ON deadline.id=head.deadline_id WHERE deadline.project_id<>head.project_id
+			UNION ALL
+			SELECT 'submission',submission.project_id,head.submission_id::text FROM deliverable_submission_heads head
+			JOIN deliverable_submissions submission ON submission.id=head.submission_id
+			WHERE submission.deliverable_id<>head.deliverable_id
 		) mismatch ORDER BY kind,project_id`)
 	if err != nil {
 		return nil, err
@@ -1287,7 +1993,10 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 	unknownRows, err := queryer.QueryContext(ctx, `SELECT sequence,event_id,event_type,schema_version FROM domain_events
 		WHERE schema_version<>1 OR event_type NOT IN (
 			'project.created','decision.recorded','project.activated','project.held','project.resumed','project.promoted',
-			'deliverable.created','deliverable.revised','forecast.created','forecast.superseded','target.changed','deadline.changed'
+			'deliverable.created','deliverable.revised','forecast.created','forecast.superseded','target.changed','deadline.changed',
+			'evidence.created','evidence.superseded','gate.created','gate.verdict_recorded','gate.waived',
+			'finding.created','finding.resolved','finding.withdrawn','deliverable.submitted','deliverable.bounced',
+			'deliverable.resubmitted','deliverable.accepted','deliverable.cancelled','deliverable.waived'
 		) ORDER BY sequence`)
 	if err != nil {
 		return nil, err

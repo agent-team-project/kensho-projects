@@ -45,8 +45,17 @@ for artifact in \
   m2c-realtime-resume.json \
   m2c-durability.json \
   m2c-lifecycle.json \
-  m2c-summary.json; do
+  m2c-summary.json \
+  m2d-evidence.json \
+  m2d-agent-token-usage.json \
+  m2d-cancellation.json \
+  m2d-separation.json \
+  m2d-review-workflow.json \
+  m2d-authority-atomicity.json \
+  m2d-waivers.json \
+  m2d-ledger-realtime.json \
+  m2d-summary.json; do
   test -s "$artifact_root/$artifact"
 done
 
-printf '%s\n' "M2C lifecycle, deliverable, forecast, parity, durability, and authority smoke passed"
+printf '%s\n' "M2C planning and M2D evidence, review, waiver, parity, durability, and authority smoke passed"

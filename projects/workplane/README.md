@@ -4,9 +4,9 @@ An agent-native project and portfolio system for humans and autonomous software
 organizations.
 
 **Status:** M1 walking slice plus the M2A outbox/replay, M2B resumable
-realtime, and M2C planning-contract spines implemented; broader durable-core
-and release work remains explicitly unimplemented pending exact-commit
-verification and integration.
+realtime, M2C planning-contract, and M2D evidence-review spines implemented;
+broader durable-core and release work remains explicitly unimplemented pending
+exact-commit verification and integration.
 
 Workplane is not a Jira or Notion clone. It joins project briefs, deliverables,
 work, evidence, decisions, forecasts, and portfolio priority in one shared
@@ -46,9 +46,11 @@ automation, calibrated forecasting, and an empirical research protocol.
   authority-recheck, backpressure, restart, and evidence boundary.
 - `docs/planning-contracts-m2c.md` - the implemented non-terminal lifecycle,
   deliverable, forecast, target/deadline, parity, and evidence boundary.
+- `docs/evidence-review-m2d.md` - the implemented immutable evidence, review
+  gate, verdict/finding, separation-of-duty, waiver, and durability boundary.
 - `Makefile` - stable local smoke, acceptance, release, and evidence commands.
 
-## M1 + M2A + M2B + M2C local verification
+## M1 + M2A + M2B + M2C + M2D local verification
 
 Install the pinned development dependencies, then run the same gate used by
 the Workplane verifier:
@@ -64,8 +66,8 @@ PostgreSQL services, executes the equivalent human/agent transaction, captures
 production-browser evidence, exercises outbox crash/retry and deterministic
 shadow replay, validates integrity negatives and outbound-isolated Compose, and
 runs the production WebSocket/SSE authority and recovery cases, exercises the
-planning contract through both actor kinds on real PostgreSQL, and runs
-repository publication hygiene. `make evidence-smoke` runs the same
+planning and evidence-review contracts through both actor kinds on real
+PostgreSQL, and runs repository publication hygiene. `make evidence-smoke` runs the same
 commands from clean tracked source and emits a complete exact-commit manifest
 under `evidence/runs/`.
 

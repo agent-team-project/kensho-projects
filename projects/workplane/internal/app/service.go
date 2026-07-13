@@ -34,6 +34,31 @@ type Actor struct {
 	ProjectIDs     map[string]bool
 }
 
+type authenticatedAgentTokenPrefixKey struct{}
+
+func markAuthenticatedAgentRequest(request *http.Request, prefix string) {
+	if request == nil || prefix == "" {
+		return
+	}
+	*request = *request.WithContext(context.WithValue(request.Context(), authenticatedAgentTokenPrefixKey{}, prefix))
+}
+
+func (service *Service) recordAcceptedAgentRequest(ctx context.Context, request *http.Request) {
+	if request == nil {
+		return
+	}
+	prefix, _ := request.Context().Value(authenticatedAgentTokenPrefixKey{}).(string)
+	if prefix == "" {
+		return
+	}
+	_, _ = service.db.ExecContext(ctx, `UPDATE agent_tokens SET last_used_at=CURRENT_TIMESTAMP
+		WHERE token_prefix=$1 AND revoked_at IS NULL AND expires_at>CURRENT_TIMESTAMP`, prefix)
+}
+
+func (service *Service) AcceptedRequest(ctx context.Context, request generated.Request, _ generated.Response) {
+	service.recordAcceptedAgentRequest(ctx, request.HTTPRequest)
+}
+
 type Problem struct {
 	Type      string `json:"type"`
 	Title     string `json:"title"`
@@ -153,7 +178,9 @@ func (service *Service) bootstrap(ctx context.Context, seed BootstrapConfig) err
 		VALUES ($1,$2,$3,$4,$5,ARRAY[
 			'project.create','project.read','project.activate','project.hold','project.resume','project.promote',
 			'project.reforecast','project.target.write','project.deadline.write','decision.record',
-			'deliverable.read','deliverable.edit','deliverable.reforecast','realtime.subscribe','event.subscribe'
+			'deliverable.read','deliverable.edit','deliverable.submit','deliverable.cancel','deliverable.reforecast',
+			'evidence.read','evidence.create','evidence.supersede','review.request','review.verdict',
+			'finding.resolve','finding.withdraw','realtime.subscribe','event.subscribe'
 		],NULL,$6,$7,$8)
 		ON CONFLICT (id) DO UPDATE SET token_prefix=EXCLUDED.token_prefix,token_hash=EXCLUDED.token_hash,
 			scopes=EXCLUDED.scopes,expires_at=EXCLUDED.expires_at,revoked_at=NULL`,
@@ -319,6 +346,7 @@ func (service *Service) authenticateActor(ctx context.Context, request generated
 		actorStatus != "active" || principalStatus != "active" || actor.Kind != "agent" || actor.PrincipalID == nil || *actor.PrincipalID == actor.ID {
 		return Actor{}, problem(http.StatusUnauthorized, "unauthenticated", "Authentication required", "The agent token is invalid or expired.", rid), false
 	}
+	markAuthenticatedAgentRequest(request.HTTPRequest, prefix)
 	actor.Scopes = make(map[string]bool, len(scopes))
 	for _, scope := range scopes {
 		actor.Scopes[scope] = true
@@ -337,7 +365,6 @@ func (service *Service) authenticateActor(ctx context.Context, request generated
 		service.audit(ctx, "authorization.denied", rid, &actor, map[string]any{"reason": denialReason, "action": action})
 		return Actor{}, problem(http.StatusForbidden, "forbidden", "Action denied", "The delegated token does not include this action.", rid), false
 	}
-	_, _ = service.db.ExecContext(ctx, "UPDATE agent_tokens SET last_used_at=CURRENT_TIMESTAMP WHERE token_prefix=$1", prefix)
 	return actor, generated.Response{Headers: generated.ResponseHeaders{XRequestID: rid}}, true
 }
 
@@ -369,18 +396,24 @@ func organizationRoleAllows(role, action string) bool {
 }
 
 func organizationVisibilityAllows(action string) bool {
-	return action == "project.read" || action == "deliverable.read"
+	return action == "project.read" || action == "deliverable.read" || action == "evidence.read"
 }
 
 func projectRoleAllows(role, action string) bool {
 	switch action {
-	case "project.read", "deliverable.read":
+	case "project.read", "deliverable.read", "evidence.read":
 		return role == "owner" || role == "steward" || role == "contributor" ||
 			role == "reviewer" || role == "viewer" || role == "observer"
 	case "project.activate", "project.hold", "project.resume", "project.promote",
 		"project.reforecast", "project.target.write", "project.deadline.write",
-		"decision.record", "deliverable.edit", "deliverable.reforecast":
+		"decision.record", "deliverable.edit", "deliverable.cancel", "deliverable.reforecast", "deliverable.waive", "gate.soft_waive":
 		return role == "owner"
+	case "evidence.create", "evidence.supersede":
+		return role == "owner" || role == "steward" || role == "contributor" || role == "reviewer"
+	case "deliverable.submit", "review.request", "finding.resolve":
+		return role == "owner" || role == "steward" || role == "contributor"
+	case "review.verdict", "finding.withdraw":
+		return role == "owner" || role == "steward" || role == "reviewer"
 	default:
 		return false
 	}

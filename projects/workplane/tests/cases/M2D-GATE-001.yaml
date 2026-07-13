@@ -1,0 +1,8 @@
+id: M2D-GATE-001
+requirement: M2D-GATE-001
+layer: system
+title: Stable gate contracts retain failed verdict finding resolution and a later superseding pass
+given: {runtime: production_http, gate: hard_independent, evidence_contract: exact_claim}
+when: {command: scripts/test_planning.sh, operations: [createGate, recordVerdict, listVerdicts, listFindings]}
+then: {result: pass, gate_states: [pending, failed, passed], verdict_history: immutable, pass_supersedes_failure: true, finding: resolved}
+evidence: [target/agent-evidence/m2c/m2d-review-workflow.json]
