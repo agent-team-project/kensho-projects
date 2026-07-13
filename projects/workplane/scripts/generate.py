@@ -96,8 +96,15 @@ def go_schema_type(schema: dict[str, Any]) -> str:
 
 def generate_go_struct(name: str, schema: dict[str, Any]) -> str:
     required = set(schema.get("required", []))
+
+    def field_type(property_name: str, property_schema: dict[str, Any]) -> str:
+        # Required booleans need a pointer at the JSON boundary so omission is
+        # distinguishable from an explicit false value.
+        pointer = property_name not in required or property_schema.get("type") == "boolean"
+        return ("*" if pointer else "") + go_schema_type(property_schema)
+
     fields = "\n".join(
-        f'''    {go_property_name(property_name)} {'*' if property_name not in required else ''}{go_schema_type(property_schema)} `json:"{property_name}{',omitempty' if property_name not in required else ''}"`'''
+        f'''    {go_property_name(property_name)} {field_type(property_name, property_schema)} `json:"{property_name}{',omitempty' if property_name not in required else ''}"`'''
         for property_name, property_schema in schema.get("properties", {}).items()
     )
     return f"type {name} struct {{\n{fields}\n}}"

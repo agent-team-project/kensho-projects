@@ -253,7 +253,7 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	}
 	input.Question, input.Choice, input.Rationale = strings.TrimSpace(input.Question), strings.TrimSpace(input.Choice), strings.TrimSpace(input.Rationale)
 	canonical := canonicalJSON(input)
-	hash := requestHash(canonical, []byte(request.ExpectedVersion))
+	hash := requestHash([]byte(projectID), canonical, []byte(request.ExpectedVersion))
 
 	tx, err := service.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {

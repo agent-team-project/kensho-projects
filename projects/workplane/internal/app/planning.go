@@ -181,7 +181,7 @@ func (service *Service) prepareProjectMutation(ctx context.Context, request gene
 
 func (service *Service) executeProjectMutation(ctx context.Context, request generated.Request, actor Actor, rid, projectID, operation string,
 	expected int64, canonical []byte, mutate projectMutation) generated.Response {
-	hash := requestHash(canonical, []byte(request.ExpectedVersion))
+	hash := requestHash([]byte(projectID), canonical, []byte(request.ExpectedVersion))
 	tx, err := service.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return serviceUnavailable(rid)
@@ -367,7 +367,7 @@ func normalizeDeliverableInput(input generated.DeliverableInput) (generated.Deli
 		generated.DeliverableInputAcceptanceCriteriaItemMaxLength)
 	if !ok || !validText(input.Title, generated.DeliverableInputTitleMinLength, generated.DeliverableInputTitleMaxLength) ||
 		!validText(input.Description, generated.DeliverableInputDescriptionMinLength, generated.DeliverableInputDescriptionMaxLength) ||
-		input.Weight < 1 || input.Weight > 1000 || (input.State != "draft" && input.State != "ready") {
+		input.Required == nil || input.Weight < 1 || input.Weight > 1000 || (input.State != "draft" && input.State != "ready") {
 		return generated.DeliverableInput{}, false
 	}
 	input.AcceptanceCriteria = criteria
@@ -376,7 +376,7 @@ func normalizeDeliverableInput(input generated.DeliverableInput) (generated.Deli
 
 func deliverableFromInput(id, orgID, projectID, actorID string, input generated.DeliverableInput, version int64, created, updated time.Time) Deliverable {
 	return Deliverable{ID: id, OrganizationID: orgID, ProjectID: projectID, Title: input.Title, Description: input.Description,
-		Required: input.Required, Weight: input.Weight, State: input.State, AcceptanceCriteria: input.AcceptanceCriteria,
+		Required: *input.Required, Weight: input.Weight, State: input.State, AcceptanceCriteria: input.AcceptanceCriteria,
 		Version: version, CreatedBy: actorID, CreatedAt: created.Format(timeFormat), UpdatedAt: updated.Format(timeFormat)}
 }
 
@@ -544,7 +544,7 @@ func (service *Service) ReviseDeliverable(ctx context.Context, request generated
 			if item.State == "accepted" || item.State == "waived" || item.State == "cancelled" {
 				return mutationOutcome{}, rejected(problem(http.StatusConflict, "invariant_violation", "Deliverable is immutable", "Accepted, waived, and cancelled deliverables cannot be edited.", rid)), nil
 			}
-			item.Title, item.Description, item.Required, item.Weight, item.State = input.Title, input.Description, input.Required, input.Weight, input.State
+			item.Title, item.Description, item.Required, item.Weight, item.State = input.Title, input.Description, *input.Required, input.Weight, input.State
 			item.AcceptanceCriteria, item.Version, item.UpdatedAt = input.AcceptanceCriteria, item.Version+1, now.Format(timeFormat)
 			if _, err := tx.ExecContext(ctx, `UPDATE deliverables SET title=$1,description=$2,required=$3,weight=$4,state=$5,
 				acceptance_criteria=$6,version=$7,updated_at=$8 WHERE id=$9`, item.Title, item.Description, item.Required,
@@ -604,7 +604,7 @@ func (service *Service) PromoteProject(ctx context.Context, request generated.Re
 				valid = false
 				break
 			}
-			if input.Deliverables[index].Required {
+			if *input.Deliverables[index].Required {
 				requiredCount++
 			}
 		}

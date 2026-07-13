@@ -39,12 +39,14 @@ func TestM2CLifecycleGuardsAreLoadBearing(t *testing.T) {
 
 func TestM2CPlanningInputInvariants(t *testing.T) {
 	t.Parallel()
-	deliverable := generated.DeliverableInput{Title: "Release", Description: "Observable output", Required: true,
+	required := true
+	deliverable := generated.DeliverableInput{Title: "Release", Description: "Observable output", Required: &required,
 		Weight: 1000, State: "ready", AcceptanceCriteria: []string{"Exact evidence passes"}}
 	if _, ok := normalizeDeliverableInput(deliverable); !ok {
 		t.Fatal("valid deliverable rejected")
 	}
 	for name, mutation := range map[string]func(*generated.DeliverableInput){
+		"missing required": func(value *generated.DeliverableInput) { value.Required = nil },
 		"zero weight":      func(value *generated.DeliverableInput) { value.Weight = 0 },
 		"unknown state":    func(value *generated.DeliverableInput) { value.State = "accepted" },
 		"missing criteria": func(value *generated.DeliverableInput) { value.AcceptanceCriteria = nil },
@@ -55,6 +57,11 @@ func TestM2CPlanningInputInvariants(t *testing.T) {
 		if _, ok := normalizeDeliverableInput(value); ok {
 			t.Fatalf("production validator accepted %s", name)
 		}
+	}
+	optional := false
+	deliverable.Required = &optional
+	if _, ok := normalizeDeliverableInput(deliverable); !ok {
+		t.Fatal("explicit false requiredness was rejected")
 	}
 
 	forecast := generated.ForecastInput{

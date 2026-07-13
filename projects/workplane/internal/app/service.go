@@ -368,6 +368,10 @@ func organizationRoleAllows(role, action string) bool {
 			action == "realtime.subscribe" || action == "event.subscribe"))
 }
 
+func organizationVisibilityAllows(action string) bool {
+	return action == "project.read" || action == "deliverable.read"
+}
+
 func (service *Service) authorizeProject(ctx context.Context, actor Actor, projectID, organizationID, action, rid string) (generated.Response, bool) {
 	if denied, ok := service.authorizeOrganization(actor, organizationID, action, rid); !ok {
 		return denied, false
@@ -386,9 +390,15 @@ func (service *Service) authorizeProject(ctx context.Context, actor Actor, proje
 	if err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
 	}
-	if visibility == "organization" || createdBy == actor.ID || (principalID != "" && createdBy == principalID) || participant ||
+	if createdBy == actor.ID || (principalID != "" && createdBy == principalID) || participant ||
 		(privilegedProjectRole(actor.Role) && (actor.Kind != "agent" || privilegedProjectRole(actor.DelegatedRole))) {
 		return generated.Response{}, true
+	}
+	if visibility == "organization" {
+		if organizationVisibilityAllows(action) {
+			return generated.Response{}, true
+		}
+		return problem(http.StatusForbidden, "forbidden", "Action denied", "A project role is required for this action.", rid), false
 	}
 	return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
 }

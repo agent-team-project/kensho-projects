@@ -28,16 +28,20 @@ CREATE TABLE deliverables (
 CREATE FUNCTION protect_immutable_deliverable() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-  IF OLD.state IN ('accepted', 'waived', 'cancelled') AND NEW IS DISTINCT FROM OLD THEN
-    RAISE EXCEPTION 'deliverable % in immutable state % cannot be edited', OLD.id, OLD.state
+  IF OLD.state IN ('accepted', 'waived', 'cancelled')
+     AND (TG_OP = 'DELETE' OR NEW IS DISTINCT FROM OLD) THEN
+    RAISE EXCEPTION 'deliverable % in immutable state % cannot be changed', OLD.id, OLD.state
       USING ERRCODE = '23514';
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
   END IF;
   RETURN NEW;
 END;
 $$;
 
 CREATE TRIGGER deliverable_immutable_state
-  BEFORE UPDATE ON deliverables
+  BEFORE UPDATE OR DELETE ON deliverables
   FOR EACH ROW EXECUTE FUNCTION protect_immutable_deliverable();
 
 CREATE FUNCTION text_array_is_unique(items text[]) RETURNS boolean

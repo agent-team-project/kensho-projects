@@ -137,7 +137,7 @@ type LifecycleReasonRequest struct {
 type DeliverableInput struct {
 	Title              string   `json:"title"`
 	Description        string   `json:"description"`
-	Required           bool     `json:"required"`
+	Required           *bool    `json:"required"`
 	Weight             int64    `json:"weight"`
 	State              string   `json:"state"`
 	AcceptanceCriteria []string `json:"acceptance_criteria"`

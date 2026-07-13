@@ -51,6 +51,7 @@ type project struct {
 type deliverable struct {
 	ID        string `json:"id"`
 	ProjectID string `json:"project_id"`
+	Required  bool   `json:"required"`
 	State     string `json:"state"`
 	Version   int64  `json:"version"`
 }
@@ -145,6 +146,52 @@ func (run *runner) execute(ctx context.Context) error {
 
 	projectID := humanProject.ID
 	version := humanProject.Version
+	omissionBefore := run.counts(ctx)
+	omittedRequired := deliverableInput("Omitted requiredness must fail")
+	delete(omittedRequired, "required")
+	omitted := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/deliverables", omittedRequired,
+		run.versionedHuman("m2c-required-omitted-01", version))
+	if err := expect(omitted, http.StatusBadRequest, "invalid_request"); err != nil {
+		return err
+	}
+	if got := run.counts(ctx); got != omissionBefore {
+		return fmt.Errorf("omitted deliverable required field left residue: before=%+v after=%+v", omissionBefore, got)
+	}
+
+	optionalInput := deliverableInput("Explicit false remains valid")
+	optionalInput["required"] = false
+	const crossProjectKey = "m2c-cross-project-idempotency-01"
+	createdOptional := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/deliverables", optionalInput,
+		run.versionedHuman(crossProjectKey, version))
+	if err := expect(createdOptional, http.StatusCreated, ""); err != nil {
+		return err
+	}
+	var optionalDeliverable deliverable
+	if err := json.Unmarshal(createdOptional.Body, &optionalDeliverable); err != nil {
+		return err
+	}
+	if optionalDeliverable.ProjectID != projectID || optionalDeliverable.Required {
+		return fmt.Errorf("explicit false deliverable did not preserve target/requiredness: %+v", optionalDeliverable)
+	}
+	version = etagVersion(createdOptional)
+	afterFirstTarget := run.counts(ctx)
+	crossProject := run.call(run.human, http.MethodPost, "/api/v1/projects/"+agentProject.ID+"/deliverables", optionalInput,
+		run.versionedHuman(crossProjectKey, agentProject.Version))
+	if err := expect(crossProject, http.StatusConflict, "idempotency_conflict"); err != nil {
+		return err
+	}
+	if bytes.Contains(crossProject.Body, []byte(optionalDeliverable.ID)) || bytes.Contains(crossProject.Body, []byte(projectID)) {
+		return fmt.Errorf("cross-project idempotency conflict disclosed the first target: %s", crossProject.Body)
+	}
+	if got := run.counts(ctx); got != afterFirstTarget {
+		return fmt.Errorf("cross-project idempotency conflict wrote rows: before=%+v after=%+v", afterFirstTarget, got)
+	}
+	run.write("m2c-required-and-idempotency.json", map[string]any{
+		"omitted_required": "invalid-request-no-write", "explicit_false": "created",
+		"cross_project_reuse": "idempotency-conflict-no-disclosure-no-write",
+	})
+	run.checks = append(run.checks, "required-boolean-presence-and-cross-project-idempotency-target-binding")
+
 	before := run.counts(ctx)
 	missingReason := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/hold", map[string]any{}, run.versionedHuman("m2c-hold-missing-reason", version))
 	if err := expect(missingReason, http.StatusBadRequest, "invalid_request"); err != nil {
@@ -189,6 +236,28 @@ func (run *runner) execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	crossActorRevision := run.call(run.agent, http.MethodPatch, "/api/v1/deliverables/"+deliverableID,
+		deliverableInput("Cross-actor M2C revision"), merge(run.agentHeaders(), map[string]string{
+			"Idempotency-Key": "m2c-cross-actor-revise-01", "If-Match": fmt.Sprintf(`"%d"`, version),
+		}))
+	if err := expect(crossActorRevision, http.StatusOK, ""); err != nil {
+		return err
+	}
+	version = etagVersion(crossActorRevision)
+	var revised deliverable
+	if err := json.Unmarshal(crossActorRevision.Body, &revised); err != nil {
+		return err
+	}
+	var revisionActor, stableCreator string
+	if err := run.db.QueryRowContext(ctx, `SELECT actor_id::text,payload->>'created_by' FROM domain_events
+		WHERE event_type='deliverable.revised' AND payload->>'id'=$1 ORDER BY sequence DESC LIMIT 1`, deliverableID).
+		Scan(&revisionActor, &stableCreator); err != nil {
+		return err
+	}
+	if revisionActor != agentID || stableCreator != humanID || revised.ID != deliverableID {
+		return fmt.Errorf("cross-actor revision attribution diverged: actor=%s creator=%s deliverable=%+v", revisionActor, stableCreator, revised)
+	}
+	run.checks = append(run.checks, "cross-actor-deliverable-revision-attribution-and-replay")
 	for index, boundary := range []string{"after-deliverable", "after-deliverable-event"} {
 		if err := run.faultNoResidue(ctx, run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/deliverables",
 			deliverableInput("Optional fault canary"), run.versionedHuman(fmt.Sprintf("m2c-create-del-fault-%02d", index), version), boundary); err != nil {
@@ -220,8 +289,14 @@ func (run *runner) execute(ctx context.Context) error {
 	if _, err := run.db.ExecContext(ctx, `ALTER TABLE deliverables ENABLE TRIGGER deliverable_immutable_state`); err != nil {
 		return err
 	}
-	run.write("m2c-deliverables.json", map[string]any{"stable_id": deliverableID, "revision_version": 2, "accepted_edit": "denied-by-api-and-postgresql"})
-	run.checks = append(run.checks, "deliverable-stable-revision-and-accepted-edit-protection")
+	if err := run.terminalDeliverableImmutability(ctx, projectID); err != nil {
+		return err
+	}
+	run.write("m2c-deliverables.json", map[string]any{
+		"stable_id": deliverableID, "cross_actor_revision": "creator-stable-event-reviser-attributed",
+		"terminal_states": []string{"accepted", "waived", "cancelled"}, "protected_operations": []string{"update", "delete"},
+	})
+	run.checks = append(run.checks, "deliverable-stable-revision-and-terminal-update-delete-protection")
 
 	forecastPath := "/api/v1/deliverables/" + deliverableID + "/forecasts"
 	firstForecast := run.call(run.human, http.MethodPost, forecastPath, forecastInput(24, 48, -1), run.versionedHuman("m2c-deliverable-forecast-1", version))
@@ -499,6 +574,40 @@ func (run *runner) concurrentDeliverableRevision(deliverableID string, version i
 	return concurrentWinner(results, http.StatusOK)
 }
 
+func (run *runner) terminalDeliverableImmutability(ctx context.Context, projectID string) error {
+	index := 0
+	for _, state := range []string{"accepted", "waived", "cancelled"} {
+		for _, operation := range []string{"update", "delete"} {
+			index++
+			tx, err := run.db.BeginTx(ctx, nil)
+			if err != nil {
+				return err
+			}
+			id := fmt.Sprintf("00000000-0000-4000-9000-%012d", index)
+			_, err = tx.ExecContext(ctx, `INSERT INTO deliverables
+				(id,organization_id,project_id,title,description,required,weight,state,acceptance_criteria,version,created_by,created_at,updated_at)
+				VALUES ($1,$2,$3,$4,'Terminal immutability fixture',true,1,$5::deliverable_state,
+				'["PostgreSQL rejects mutation"]'::jsonb,1,$6,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+				id, organizationID, projectID, "Terminal "+state+" "+operation, state, humanID)
+			if err != nil {
+				_ = tx.Rollback()
+				return err
+			}
+			switch operation {
+			case "update":
+				_, err = tx.ExecContext(ctx, `UPDATE deliverables SET title=title || ' changed' WHERE id=$1`, id)
+			case "delete":
+				_, err = tx.ExecContext(ctx, `DELETE FROM deliverables WHERE id=$1`, id)
+			}
+			_ = tx.Rollback()
+			if err == nil || !strings.Contains(err.Error(), "immutable state") {
+				return fmt.Errorf("PostgreSQL allowed %s of %s deliverable: %v", operation, state, err)
+			}
+		}
+	}
+	return nil
+}
+
 func (run *runner) concurrentForecastConflict(projectID string, version int64) error {
 	type result struct{ response snapshot }
 	responses := make(chan result, 2)
@@ -592,6 +701,29 @@ func (run *runner) authorityDenies(ctx context.Context, deniedProjectID, allowed
 		return err
 	}
 
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='member'
+		WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	visibleRead := run.call(run.human, http.MethodGet, "/api/v1/projects/"+allowedProjectID, nil, nil)
+	if err := expect(visibleRead, http.StatusOK, ""); err != nil {
+		return fmt.Errorf("organization-visible project must remain readable: %w", err)
+	}
+	noProjectRoleBefore := run.counts(ctx)
+	noProjectRoleWrite := run.call(run.human, http.MethodPost, "/api/v1/projects/"+allowedProjectID+"/target", map[string]any{
+		"target_at": time.Now().UTC().Add(72 * time.Hour).Format(time.RFC3339), "reason": "Visibility is not write authority",
+	}, run.versionedHuman("m2c-visible-no-role-deny", allowed.Version))
+	if err := expect(noProjectRoleWrite, http.StatusForbidden, "forbidden"); err != nil {
+		return err
+	}
+	if got := run.counts(ctx); got != noProjectRoleBefore {
+		return fmt.Errorf("organization-visible no-project-role deny wrote rows: before=%+v after=%+v", noProjectRoleBefore, got)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner'
+		WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+
 	if _, err := run.db.ExecContext(ctx, `UPDATE projects SET visibility='private' WHERE id=$1`, allowedProjectID); err != nil {
 		return err
 	}
@@ -610,8 +742,12 @@ func (run *runner) authorityDenies(ctx context.Context, deniedProjectID, allowed
 	if got := run.counts(ctx); got != before {
 		return fmt.Errorf("authority denies left domain residue: before=%+v after=%+v", before, got)
 	}
-	run.write("m2c-authority-denies.json", map[string]any{"restricted_token": "deny-no-write", "revoked_token": "deny", "disabled_principal": "deny", "private_project": "not-found", "cross_organization": "not-found", "self_widening_fields": "invalid-request-no-write"})
-	run.checks = append(run.checks, "restricted-revoked-private-denies-no-write")
+	run.write("m2c-authority-denies.json", map[string]any{
+		"restricted_token": "deny-no-write", "revoked_token": "deny", "disabled_principal": "deny",
+		"organization_visible_no_project_role_write": "forbidden-no-write", "private_project": "not-found",
+		"cross_organization": "not-found", "self_widening_fields": "invalid-request-no-write",
+	})
+	run.checks = append(run.checks, "restricted-revoked-visible-no-role-private-denies-no-write")
 	return nil
 }
 

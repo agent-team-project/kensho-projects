@@ -655,7 +655,8 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			invalidRevision := item.EventType == "deliverable.revised" && (!priorExists || deliverable.Version != prior.Version+1 ||
 				deliverable.ProjectID != prior.ProjectID || deliverable.OrganizationID != prior.OrganizationID ||
 				deliverable.CreatedBy != prior.CreatedBy || deliverable.CreatedAt != prior.CreatedAt)
-			if deliverable.CreatedBy != item.ActorID || deliverable.Version < 1 ||
+			invalidAttribution := item.EventType == "deliverable.created" && deliverable.CreatedBy != item.ActorID
+			if invalidAttribution || deliverable.Version < 1 ||
 				(item.EventType == "deliverable.created" && (priorExists || deliverable.Version != 1)) || invalidRevision {
 				return failure("invalid_event_payload", "deliverable create/revision identity is inconsistent")
 			}
