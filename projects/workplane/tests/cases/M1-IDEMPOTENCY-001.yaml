@@ -1,0 +1,8 @@
+id: M1-IDEMPOTENCY-001
+requirement: PR-CORE-01
+layer: integration
+title: Idempotency version and transaction boundaries fail closed
+given: {database: real_postgresql, fault_points: [after_project, after_decision]}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, exact_retry: [status, body, request_id, etag], conflict_writes: 0, rollback_writes: 0}
+evidence: [target/agent-evidence/m1/api/human-project-create.json, target/agent-evidence/m1/api/human-project-create-retry.json, target/agent-evidence/m1/api/deny-decision-transaction-fault.json]

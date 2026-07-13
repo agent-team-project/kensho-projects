@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove gate tiers cannot silently omit an M0 gate or false-green later stages."""
+"""Prove gate tiers cannot silently omit an M1 gate or false-green later stages."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ REQUIRED_SMOKE_GATES = {
     "frontend-build",
     "compose-config",
     "postgres-migration-fixture",
+    "m1-human-agent-browser-offline",
     "repository-publication",
 }
 

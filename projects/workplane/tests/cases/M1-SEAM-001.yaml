@@ -3,6 +3,6 @@ requirement: M1-SEAM-001
 layer: contract
 title: Walking-slice seam names every required real boundary
 given: {seam_document: docs/walking-slice-m1.md}
-when: {command: python3 scripts/validate_contracts.py}
-then: {result: pass, product_behavior: explicitly_unimplemented}
-evidence: [contract-validation.log]
+when: {command: scripts/test_m1.sh}
+then: {result: pass, product_behavior: executable_m1_transaction}
+evidence: [target/agent-evidence/m1/api/smoke-summary.json]

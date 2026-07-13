@@ -37,6 +37,7 @@ GATES: dict[str, list[tuple[str, str]]] = {
     "integration": [
         ("compose-config", "docker compose config --quiet"),
         ("postgres-migration-fixture", "scripts/test_postgres.sh"),
+        ("m1-human-agent-browser-offline", "scripts/test_m1.sh"),
     ],
     "publication": [
         ("repository-publication", f"{PYTHON} ../../scripts/check_publication.py"),

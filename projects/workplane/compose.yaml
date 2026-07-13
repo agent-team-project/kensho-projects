@@ -1,8 +1,10 @@
 name: workplane
 
+x-postgres-image: &postgres-image postgres:17.5-alpine@sha256:6567bca8d7bc8c82c5922425a0baee57be8402df92bae5eacad5f01ae9544daa
+
 services:
   postgres:
-    image: postgres:17.5-alpine@sha256:6567bca8d7bc8c82c5922425a0baee57be8402df92bae5eacad5f01ae9544daa
+    image: *postgres-image
     environment:
       POSTGRES_DB: workplane
       POSTGRES_USER: workplane
@@ -10,16 +12,78 @@ services:
     ports:
       - "127.0.0.1:${WORKPLANE_POSTGRES_PORT:-54329}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U workplane -d workplane"]
+      test: ["CMD-SHELL", "PGPASSWORD=workplane-local-only psql -U workplane -d workplane -Atqc 'SELECT 1' | grep -qx 1"]
       interval: 1s
       timeout: 3s
       retries: 30
     volumes:
       - workplane-postgres:/var/lib/postgresql/data
 
+  migrate:
+    image: *postgres-image
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: workplane-local-only
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        for migration in /migrations/*.up.sql; do
+          version="$$(basename "$$migration" | cut -d_ -f1 | sed 's/^0*//')"
+          schema_exists="$$(psql -At -h postgres -U workplane -d workplane -c "SELECT to_regclass('public.schema_migrations') IS NOT NULL")"
+          if [ "$$schema_exists" = "t" ] && [ "$$(psql -At -h postgres -U workplane -d workplane -c "SELECT count(*) FROM schema_migrations WHERE version=$$version")" = "1" ]; then
+            echo "migration $$version already applied"
+          else
+            echo "applying migration $$version from $$(basename "$$migration")"
+            psql -v ON_ERROR_STOP=1 -h postgres -U workplane -d workplane < "$$migration"
+          fi
+        done
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: none
+      target: runtime
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      WORKPLANE_DATABASE_URL: postgres://workplane:workplane-local-only@postgres:5432/workplane?sslmode=disable
+      WORKPLANE_PUBLIC_ORIGIN: http://localhost:${WORKPLANE_HTTP_PORT:-8080}
+      WORKPLANE_COOKIE_SECURE: "false"
+      WORKPLANE_TOKEN_HASH_KEY: local-only-key-material-32-bytes-minimum-change-me
+      WORKPLANE_FAULT_INJECTION: ${WORKPLANE_FAULT_INJECTION:-false}
+      WORKPLANE_BOOTSTRAP_ORG_ID: 00000000-0000-4000-8000-000000000010
+      WORKPLANE_BOOTSTRAP_ORG_SLUG: walking-slice
+      WORKPLANE_BOOTSTRAP_ORG_NAME: Walking Slice Organization
+      WORKPLANE_BOOTSTRAP_HUMAN_ID: 00000000-0000-4000-8000-000000000001
+      WORKPLANE_BOOTSTRAP_HUMAN_NAME: Walking Slice Human
+      WORKPLANE_BOOTSTRAP_HUMAN_EMAIL: human@workplane.local
+      WORKPLANE_BOOTSTRAP_HUMAN_PASSWORD: walking-slice-password
+      WORKPLANE_BOOTSTRAP_AGENT_ID: 00000000-0000-4000-8000-000000000002
+      WORKPLANE_BOOTSTRAP_AGENT_NAME: Walking Slice Agent
+      WORKPLANE_BOOTSTRAP_AGENT_TOKEN: wpa_local_walking_slice_agent_token_00000000000000000001
+    ports:
+      - "127.0.0.1:${WORKPLANE_HTTP_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    healthcheck:
+      test: ["CMD", "/workplane", "healthcheck"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
 networks:
   default:
     internal: true
+    ipam:
+      config:
+        - subnet: 172.30.17.0/24
 
 volumes:
   workplane-postgres: {}

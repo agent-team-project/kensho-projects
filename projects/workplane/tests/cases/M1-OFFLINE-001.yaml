@@ -1,0 +1,8 @@
+id: M1-OFFLINE-001
+requirement: M1-SEAM-001
+layer: system
+title: Clean production Compose build and runtime remain outbound isolated
+given: {dependencies: bootstrapped_and_pinned, database_volume: empty, compose_network: internal}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, services: [postgres, migrate, api], build_network: none, runtime_outbound_probe: denied}
+evidence: [target/agent-evidence/m1/migration.log, target/agent-evidence/m1/offline-startup.txt, target/agent-evidence/m1/generated-client-zero-diff.txt]

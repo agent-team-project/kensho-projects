@@ -17,6 +17,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+REQUEST_SCHEMA_NAMES = ("LoginRequest", "CreateExplorationProject", "RecordDecision")
 
 
 def load_yaml(relative: str) -> dict[str, Any]:
@@ -87,6 +88,32 @@ def generate_go_struct(name: str, schema: dict[str, Any]) -> str:
     return f"type {name} struct {{\n{fields}\n}}"
 
 
+def generate_go_boundary_constants(openapi: dict[str, Any]) -> str:
+    lines = [f"\tRequestBodyMaxBytes = {openapi['x-request-body-max-bytes']}"]
+    keyword_names = {
+        "minLength": "MinLength",
+        "maxLength": "MaxLength",
+        "minItems": "MinItems",
+        "maxItems": "MaxItems",
+    }
+    idempotency = openapi["components"]["parameters"]["IdempotencyKey"]["schema"]
+    for keyword in ("minLength", "maxLength"):
+        lines.append(f"\tIdempotencyKey{keyword_names[keyword]} = {idempotency[keyword]}")
+    for schema_name in REQUEST_SCHEMA_NAMES:
+        schema = openapi["components"]["schemas"][schema_name]
+        for property_name, property_schema in schema.get("properties", {}).items():
+            prefix = schema_name + go_property_name(property_name)
+            for keyword, suffix in keyword_names.items():
+                if keyword in property_schema:
+                    lines.append(f"\t{prefix}{suffix} = {property_schema[keyword]}")
+            for keyword in ("minLength", "maxLength"):
+                if keyword in property_schema.get("items", {}):
+                    lines.append(
+                        f"\t{prefix}Item{keyword_names[keyword]} = {property_schema['items'][keyword]}"
+                    )
+    return "\n".join(lines)
+
+
 def generate_go(openapi: dict[str, Any]) -> str:
     ops = operations(openapi)
     response_headers = sorted({header for op in ops for header in op["response_headers"]})
@@ -94,7 +121,7 @@ def generate_go(openapi: dict[str, Any]) -> str:
     def header_field(header: str) -> str:
         if header == "ETag":
             return "ETag"
-        return "".join(part.title() for part in header.split("-"))
+        return "".join("ID" if part.lower() == "id" else part.title() for part in header.split("-"))
 
     header_fields = "\n".join(
         f"    {header_field(header)} {'VersionETag' if header == 'ETag' else 'string'}"
@@ -106,7 +133,11 @@ def generate_go(openapi: dict[str, Any]) -> str:
         }}'''
         for header in response_headers
     )
-    session_struct = generate_go_struct("Session", openapi["components"]["schemas"]["Session"])
+    generated_structs = "\n\n".join(
+        generate_go_struct(name, openapi["components"]["schemas"][name])
+        for name in (*REQUEST_SCHEMA_NAMES, "Session")
+    )
+    boundary_constants = generate_go_boundary_constants(openapi)
     constants = "\n".join(f'\tOperation{go_name(op["id"])} OperationID = "{op["id"]}"' for op in ops)
     interface = "\n".join(
         f"\t{go_name(op['id'])}(context.Context, Request) (Response, error)" for op in ops
@@ -122,6 +153,7 @@ package generated
 import (
     "context"
     "encoding/json"
+    "io"
     "net/http"
     "strings"
 )
@@ -130,6 +162,8 @@ type OperationID string
 
 const (
 {constants}
+
+{boundary_constants}
 )
 
 type RequestSecurity struct {{
@@ -140,7 +174,7 @@ type RequestSecurity struct {{
 
 type VersionETag string
 
-{session_struct}
+{generated_structs}
 
 type Request struct {{
     HTTPRequest *http.Request
@@ -156,6 +190,7 @@ type ResponseHeaders struct {{
 
 type Response struct {{
     Status int
+    ContentType string
     Headers ResponseHeaders
     Body any
 }}
@@ -175,11 +210,16 @@ func adapt(handler operationHandler) http.HandlerFunc {{
         var body json.RawMessage
         if request.Body != nil {{
             defer request.Body.Close()
-            decoder := json.NewDecoder(request.Body)
-            if err := decoder.Decode(&body); err != nil && err.Error() != "EOF" {{
-                http.Error(writer, "invalid JSON", http.StatusBadRequest)
+            value, err := io.ReadAll(io.LimitReader(request.Body, RequestBodyMaxBytes+1))
+            if err != nil {{
+                writeAdapterProblem(writer, http.StatusBadRequest, "invalid_request")
                 return
             }}
+            if len(value) > RequestBodyMaxBytes {{
+                writeAdapterProblem(writer, http.StatusRequestEntityTooLarge, "invalid_request")
+                return
+            }}
+            body = value
         }}
         sessionCookie := ""
         if cookie, err := request.Cookie("workplane_session"); err == nil {{
@@ -201,14 +241,35 @@ func adapt(handler operationHandler) http.HandlerFunc {{
             }},
         }})
         if err != nil {{
-            http.Error(writer, "unimplemented", http.StatusNotImplemented)
+            writeAdapterProblem(writer, http.StatusInternalServerError, "service_unavailable")
             return
         }}
-        writer.Header().Set("Content-Type", "application/json")
+        contentType := response.ContentType
+        if contentType == "" {{
+            contentType = "application/json"
+        }}
+        writer.Header().Set("Content-Type", contentType)
+        writer.Header().Set("Cache-Control", "no-store")
+        writer.Header().Set("X-Content-Type-Options", "nosniff")
+        writer.Header().Set("Referrer-Policy", "no-referrer")
+        writer.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
 {header_writes}
         writer.WriteHeader(response.Status)
         _ = json.NewEncoder(writer).Encode(response.Body)
     }}
+}}
+
+func writeAdapterProblem(writer http.ResponseWriter, status int, code string) {{
+    writer.Header().Set("Content-Type", "application/problem+json")
+    writer.Header().Set("Cache-Control", "no-store")
+    writer.WriteHeader(status)
+    _ = json.NewEncoder(writer).Encode(map[string]any{{
+        "type": "https://workplane.local/problems/" + code,
+        "title": http.StatusText(status),
+        "status": status,
+        "code": code,
+        "request_id": "adapter",
+    }})
 }}
 '''
     return subprocess.run(
@@ -224,6 +285,10 @@ def ts_path_expression(path: str) -> str:
 
 
 def ts_schema_type(schema: dict[str, Any]) -> str:
+    if "$ref" in schema:
+        return schema["$ref"].rsplit("/", 1)[-1]
+    if isinstance(schema.get("type"), list):
+        return " | ".join("null" if value == "null" else value for value in schema["type"])
     if "enum" in schema:
         return " | ".join(json.dumps(value) for value in schema["enum"])
     if schema.get("type") == "string":
@@ -260,14 +325,36 @@ def contract_owned_request_headers(openapi: dict[str, Any]) -> list[str]:
     return sorted(headers)
 
 
+def resolve_local_schema(openapi: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
+    reference = schema.get("$ref")
+    if not reference:
+        return schema
+    prefix = "#/components/schemas/"
+    if not reference.startswith(prefix):
+        raise ValueError(f"unsupported non-local schema reference: {reference}")
+    return openapi["components"]["schemas"][reference.removeprefix(prefix)]
+
+
 def generate_typescript(openapi: dict[str, Any]) -> str:
     ops = operations(openapi)
+    request_types = {
+        "login": "LoginRequest",
+        "createProject": "CreateExplorationProject",
+        "recordDecision": "RecordDecision",
+    }
+    response_types = {
+        "login": "Session",
+        "createProject": "Project",
+        "getProject": "Project",
+        "recordDecision": "Decision",
+        "listProjectActivity": "Array<Activity>",
+    }
     methods: list[str] = []
     for op in ops:
         path_parameters = re_path_parameters(op["path"])
         parameter_type = "{ " + "; ".join(f"{name}: string" for name in path_parameters) + " }" if path_parameters else "Record<string, never>"
         has_body = op["method"] != "GET"
-        body_argument = ", body: unknown" if has_body else ""
+        body_argument = f", body: {request_types[op['id']]}" if has_body else ""
         if "ExpectedVersion" in op["parameter_refs"]:
             options_signature = "options: VersionedMutationOptions"
         elif "IdempotencyKey" in op["parameter_refs"]:
@@ -278,7 +365,15 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
             options_signature = "options: RequestOptions = {}"
         idempotency = "\n      'Idempotency-Key': options.idempotencyKey," if "IdempotencyKey" in op["parameter_refs"] else ""
         expected_version = "\n      'If-Match': options.expectedVersion," if "ExpectedVersion" in op["parameter_refs"] else ""
-        body_line = "\n    body: JSON.stringify(body)," if has_body else ""
+        body_line = f'''\n    body: this.validateRequestBody("{request_types[op['id']]}", body),''' if has_body else ""
+        parameter_validation = []
+        if "IdempotencyKey" in op["parameter_refs"]:
+            parameter_validation.append('this.validateParameter("IdempotencyKey", options.idempotencyKey);')
+        if "ExpectedVersion" in op["parameter_refs"]:
+            parameter_validation.append('this.validateParameter("ExpectedVersion", options.expectedVersion);')
+        validation_prefix = "\n    ".join(parameter_validation)
+        if validation_prefix:
+            validation_prefix += "\n    "
         request_call = f'''this.request({ts_path_expression(op["path"])}, {{
       method: "{op["method"]}",
       headers: {{
@@ -290,25 +385,38 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
             return_type = "Session"
             result = f"return (await {request_call}).body as Session;"
         elif "ETag" in op["response_headers"]:
-            return_type = "VersionedResponse<unknown>"
+            return_type = f"VersionedResponse<{response_types[op['id']]}>"
             result = f'''const response = await {request_call};
     const version = response.headers.get("ETag");
     if (version === null || !versionETagPattern.test(version)) {{
       throw new WorkplaneContractError("recordDecision response omitted a valid ETag");
     }}
-    return {{ body: response.body, version: version as VersionETag }};'''
+    return {{ body: response.body as {response_types[op['id']]}, version: version as VersionETag }};'''
         else:
-            return_type = "unknown"
-            result = f"return (await {request_call}).body;"
+            return_type = response_types[op["id"]]
+            result = f"return (await {request_call}).body as {return_type};"
         methods.append(f'''  async {op["id"]}(params: {parameter_type}{body_argument}, {options_signature}): Promise<{return_type}> {{
-    {result}
+    {validation_prefix}{result}
   }}''')
-    session_type = generate_ts_object_type("Session", openapi["components"]["schemas"]["Session"])
+    schema_names = ["LoginRequest", "Session", "CreateExplorationProject", "Project", "RecordDecision", "Decision", "Activity", "Problem"]
+    generated_types = "\n\n".join(generate_ts_object_type(name, openapi["components"]["schemas"][name]) for name in schema_names)
     owned_request_headers = json.dumps(contract_owned_request_headers(openapi), indent=2)
+    request_contract_schemas = json.dumps(
+        {name: openapi["components"]["schemas"][name] for name in REQUEST_SCHEMA_NAMES},
+        indent=2,
+    )
+    request_contract_parameters = json.dumps(
+        {
+            name: resolve_local_schema(openapi, parameter["schema"])
+            for name, parameter in openapi["components"]["parameters"].items()
+            if name in {"IdempotencyKey", "ExpectedVersion"}
+        },
+        indent=2,
+    )
     return f'''// Code generated by scripts/generate.py from contracts/openapi.yaml; DO NOT EDIT.
 // Contract SHA-256: {digest("contracts/openapi.yaml")}
 
-{session_type}
+{generated_types}
 
 export type HumanSessionSecurity = {{
   kind: "human-session";
@@ -351,8 +459,27 @@ type TransportResponse = {{
   headers: Headers;
 }};
 
+type RuntimeSchema = {{
+  type?: string | ReadonlyArray<string>;
+  required?: ReadonlyArray<string>;
+  additionalProperties?: boolean;
+  properties?: Readonly<Record<string, RuntimeSchema>>;
+  items?: RuntimeSchema;
+  enum?: ReadonlyArray<unknown>;
+  pattern?: string;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+}};
+
 const versionETagPattern = /^"[1-9][0-9]*"$/;
 const contractOwnedRequestHeaders = new Set({owned_request_headers});
+export const requestBodyMaxBytes = {openapi["x-request-body-max-bytes"]};
+export const requestContractSchemas = {request_contract_schemas} as const;
+const requestContractParameters = {request_contract_parameters} as const;
+type RequestContractSchemaName = keyof typeof requestContractSchemas;
+type RequestContractParameterName = keyof typeof requestContractParameters;
 
 export const operationIds = {json.dumps([op["id"] for op in ops], indent=2)} as const;
 export type OperationId = (typeof operationIds)[number];
@@ -360,7 +487,7 @@ export type OperationId = (typeof operationIds)[number];
 export class WorkplaneClient {{
   constructor(
     private readonly baseUrl: string,
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {{}}
 
 {chr(10).join(methods)}
@@ -374,6 +501,76 @@ export class WorkplaneClient {{
     const payload: unknown = await response.json();
     if (!response.ok) throw new WorkplaneProblem(response.status, payload);
     return {{ body: payload, headers: response.headers }};
+  }}
+
+  private validateRequestBody(schemaName: RequestContractSchemaName, body: unknown): string {{
+    this.validateSchema(requestContractSchemas[schemaName], body, schemaName);
+    const encoded = JSON.stringify(body);
+    if (encoded === undefined) {{
+      throw new WorkplaneContractError(`${{schemaName}} cannot be serialized as JSON`);
+    }}
+    if (new TextEncoder().encode(encoded).byteLength > requestBodyMaxBytes) {{
+      throw new WorkplaneContractError(`${{schemaName}} exceeds the ${{requestBodyMaxBytes}} byte request limit`);
+    }}
+    return encoded;
+  }}
+
+  private validateParameter(name: RequestContractParameterName, value: unknown): void {{
+    this.validateSchema(requestContractParameters[name], value, name);
+  }}
+
+  private validateSchema(schema: RuntimeSchema, value: unknown, path: string): void {{
+    if (schema.type === "object") {{
+      if (value === null || typeof value !== "object" || Array.isArray(value)) {{
+        throw new WorkplaneContractError(`${{path}} must be an object`);
+      }}
+      const record = value as Record<string, unknown>;
+      for (const required of schema.required ?? []) {{
+        if (!Object.hasOwn(record, required)) {{
+          throw new WorkplaneContractError(`${{path}}.${{required}} is required`);
+        }}
+      }}
+      if (schema.additionalProperties === false) {{
+        const allowed = new Set(Object.keys(schema.properties ?? {{}}));
+        const unknown = Object.keys(record).find((key) => !allowed.has(key));
+        if (unknown !== undefined) {{
+          throw new WorkplaneContractError(`${{path}}.${{unknown}} is not declared by OpenAPI`);
+        }}
+      }}
+      for (const [name, propertySchema] of Object.entries(schema.properties ?? {{}})) {{
+        if (Object.hasOwn(record, name)) this.validateSchema(propertySchema, record[name], `${{path}}.${{name}}`);
+      }}
+      return;
+    }}
+    if (schema.type === "array") {{
+      if (!Array.isArray(value)) throw new WorkplaneContractError(`${{path}} must be an array`);
+      if (schema.minItems !== undefined && value.length < schema.minItems) {{
+        throw new WorkplaneContractError(`${{path}} must contain at least ${{schema.minItems}} items`);
+      }}
+      if (schema.maxItems !== undefined && value.length > schema.maxItems) {{
+        throw new WorkplaneContractError(`${{path}} must contain at most ${{schema.maxItems}} items`);
+      }}
+      if (schema.items !== undefined) {{
+        value.forEach((item, index) => this.validateSchema(schema.items!, item, `${{path}}[${{index}}]`));
+      }}
+      return;
+    }}
+    if (schema.type === "string") {{
+      if (typeof value !== "string") throw new WorkplaneContractError(`${{path}} must be a string`);
+      const length = Array.from(value).length;
+      if (schema.minLength !== undefined && length < schema.minLength) {{
+        throw new WorkplaneContractError(`${{path}} must contain at least ${{schema.minLength}} characters`);
+      }}
+      if (schema.maxLength !== undefined && length > schema.maxLength) {{
+        throw new WorkplaneContractError(`${{path}} must contain at most ${{schema.maxLength}} characters`);
+      }}
+      if (schema.enum !== undefined && !schema.enum.includes(value)) {{
+        throw new WorkplaneContractError(`${{path}} is not an allowed value`);
+      }}
+      if (schema.pattern !== undefined && !new RegExp(schema.pattern, "u").test(value)) {{
+        throw new WorkplaneContractError(`${{path}} does not match the public contract`);
+      }}
+    }}
   }}
 
   private securityHeaders(security?: RequestSecurity): Record<string, string> {{

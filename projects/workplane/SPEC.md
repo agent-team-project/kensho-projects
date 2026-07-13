@@ -1,6 +1,6 @@
 # Workplane - Build-Ready Specification
 
-**Status:** Specified, pre-slice; ready for specification review
+**Status:** M1 walking slice implemented; durable-core and release scope remains specified
 **Version:** 0.1
 **Audience:** Kensho managers, builders, reviewers, product verifiers, and
 research auditors

@@ -1,0 +1,8 @@
+id: M1-API-001
+requirement: PR-CORE-01
+layer: system
+title: Human and agent create read decide and inspect activity through one public API
+given: {database: empty_migrated_postgresql, actors: [human_session, scoped_agent_token]}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, operation_ids: [login, createProject, getProject, recordDecision, listProjectActivity], equivalent_versions: [1, 2]}
+evidence: [target/agent-evidence/m1/api/smoke-summary.json, target/agent-evidence/m1/event-rows.txt]

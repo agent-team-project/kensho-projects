@@ -3,8 +3,8 @@
 An agent-native project and portfolio system for humans and autonomous software
 organizations.
 
-**Status:** M0 contract substrate implemented; M1 product transaction remains
-explicitly unimplemented pending exact-commit verification and integration.
+**Status:** M1 walking slice implemented; broader durable-core and release work
+remains explicitly unimplemented pending exact-commit verification and integration.
 
 Workplane is not a Jira or Notion clone. It joins project briefs, deliverables,
 work, evidence, decisions, forecasts, and portfolio priority in one shared
@@ -40,7 +40,7 @@ automation, calibrated forecasting, and an empirical research protocol.
 - `docs/walking-slice-m1.md` - the pinned next vertical transaction.
 - `Makefile` - stable local smoke, acceptance, release, and evidence commands.
 
-## M0 local verification
+## M1 local verification
 
 Install the pinned development dependencies, then run the same gate used by
 the Workplane verifier:
@@ -51,9 +51,10 @@ make smoke
 ```
 
 `make smoke` validates all executable registries and generated artifacts,
-runs Go and frontend format/lint/type/unit/build gates, migrates an empty real
-PostgreSQL service and checks the deterministic fixture, validates Compose,
-and runs repository publication hygiene. `make evidence-smoke` runs the same
+runs Go and frontend format/lint/type/unit/build gates, migrates empty real
+PostgreSQL services, executes the equivalent human/agent transaction, captures
+production-browser evidence, validates outbound-isolated Compose, and runs
+repository publication hygiene. `make evidence-smoke` runs the same
 commands from clean tracked source and emits a complete exact-commit manifest
 under `evidence/runs/`.
 

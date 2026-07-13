@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
 
-describe("M0 shell", () => {
-  it("does not claim that the walking slice is implemented", () => {
+describe("M1 production shell", () => {
+  it("renders the complete generated-client walking-slice path", () => {
     const markup = renderToStaticMarkup(<App />);
-    expect(markup).toContain("M0 contract substrate");
-    expect(markup).toContain("Product behavior begins");
+    expect(markup).toContain("Human session");
+    expect(markup).toContain("Exploration contract");
+    expect(markup).toContain("Immutable activity");
+    expect(markup).toContain("generated public client");
   });
 });

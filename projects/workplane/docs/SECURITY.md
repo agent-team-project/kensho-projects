@@ -82,6 +82,10 @@ documented in release risk.
 - Revocation invalidates API requests, SSE, WebSocket, and future document
   grants immediately.
 - Scope and role are intersected; either may reduce authority.
+- Project restrictions are a fail-closed allowlist. Zero project ids is
+  organization-scoped; one or more ids permits only operations targeting a
+  listed existing project and therefore denies organization-level project
+  creation.
 - A token without an active principal is invalid.
 
 ### 4.3 Automation execution context

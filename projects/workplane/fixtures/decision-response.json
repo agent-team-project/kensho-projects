@@ -1,5 +1,6 @@
 {
   "actor_id": "00000000-0000-4000-8000-000000000002",
+  "actor_kind": "agent",
   "alternatives": [
     "stop"
   ],
@@ -11,6 +12,8 @@
     "evidence://experiment-001"
   ],
   "id": "00000000-0000-4000-8000-000000000101",
+  "principal_id": "00000000-0000-4000-8000-000000000001",
+  "project_id": "00000000-0000-4000-8000-000000000020",
   "kind": "continue",
   "question": "Should the exploration continue?",
   "rationale": "The preregistered falsifier was not observed.",

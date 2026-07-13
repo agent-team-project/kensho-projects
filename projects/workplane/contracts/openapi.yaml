@@ -1,8 +1,9 @@
 openapi: 3.1.0
+x-request-body-max-bytes: 65536
 info:
   title: Workplane Walking Slice API
-  version: 0.1.0-m0
-  description: Contract-only M0 surface. Operations are implemented in M1.
+  version: 0.2.0-m1
+  description: Executable M1 human and agent walking-slice surface.
 servers:
   - url: http://localhost:8080
 paths:
@@ -31,6 +32,7 @@ paths:
                 pattern: '^workplane_session=[^;]+; Path=/; HttpOnly; SameSite=Lax(?:; Secure)?$'
                 examples:
                   - 'workplane_session=opaque; Path=/; HttpOnly; SameSite=Lax; Secure'
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Session'}
@@ -40,6 +42,11 @@ paths:
       - {$ref: '#/components/parameters/OrgId'}
     post:
       operationId: createProject
+      description: >-
+        Creates an organization-level exploration project. An agent bearer may
+        call this operation only when its project allowlist is empty; any
+        nonempty project restriction denies creation because no existing
+        project can be the operation target.
       security:
         - HumanSession: []
           CsrfToken: []
@@ -54,6 +61,8 @@ paths:
       responses:
         '201':
           description: Exploration project created
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Project'}
@@ -70,6 +79,8 @@ paths:
       responses:
         '200':
           description: Project projection
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Project'}
@@ -100,6 +111,7 @@ paths:
               description: Quoted aggregate version returned by the committed mutation.
               required: true
               schema: {$ref: '#/components/schemas/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Decision'}
@@ -116,6 +128,8 @@ paths:
       responses:
         '200':
           description: Immutable activity entries
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema:
@@ -123,6 +137,11 @@ paths:
                 items: {$ref: '#/components/schemas/Activity'}
         default: {$ref: '#/components/responses/Problem'}
 components:
+  headers:
+    RequestId:
+      description: Server-generated identifier for the request and committed command.
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
   securitySchemes:
     HumanSession:
       type: apiKey
@@ -138,7 +157,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: WorkplaneAgentToken
-      description: Scoped agent token carrying the agent identity and delegated human principal.
+      description: >-
+        Scoped agent token carrying the agent identity and delegated human
+        principal. An empty project allowlist is organization-scoped. A
+        nonempty allowlist is project-scoped: only listed concrete projects
+        are eligible, and organization-level project creation is denied.
   parameters:
     OrgId:
       name: org_id
@@ -173,8 +196,8 @@ components:
       additionalProperties: false
       required: [email, password]
       properties:
-        email: {type: string, format: email}
-        password: {type: string, minLength: 1}
+        email: {type: string, format: email, minLength: 1, maxLength: 320}
+        password: {type: string, minLength: 1, maxLength: 1024}
     Session:
       type: object
       additionalProperties: false
@@ -193,54 +216,86 @@ components:
       additionalProperties: false
       required: [title, outcome, hypothesis, falsifier, decision_criteria, experiment_bound]
       properties:
-        title: {type: string, minLength: 1, maxLength: 200}
-        outcome: {type: string, minLength: 1, maxLength: 2000}
-        hypothesis: {type: string, minLength: 1, maxLength: 2000}
-        falsifier: {type: string, minLength: 1, maxLength: 2000}
+        title: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        outcome: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        hypothesis: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        falsifier: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
         decision_criteria:
           type: array
           minItems: 1
-          items: {type: string, minLength: 1}
-        experiment_bound: {type: string, minLength: 1}
+          maxItems: 32
+          items: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+        experiment_bound: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
     Project:
       type: object
       additionalProperties: false
-      required: [id, organization_id, title, outcome, mode, state, version]
+      required: [id, organization_id, title, outcome, mode, state, version, hypothesis, falsifier, decision_criteria, experiment_bound]
       properties:
         id: {type: string, format: uuid}
         organization_id: {type: string, format: uuid}
-        title: {type: string}
-        outcome: {type: string}
+        title: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        outcome: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
         mode: {type: string, enum: [exploration, exploitation]}
         state: {type: string, enum: [proposed, active, held, completed, stopped, cancelled]}
         version: {type: integer, minimum: 1}
+        hypothesis: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        falsifier: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        decision_criteria:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+        experiment_bound: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
     RecordDecision:
       type: object
       additionalProperties: false
       required: [kind, question, choice, alternatives, rationale, evidence, consequences]
       properties:
-        kind: {type: string, enum: [continue, pivot, stop, promote, scope, forecast, waiver, risk-acceptance, complete, cancel]}
-        question: {type: string, minLength: 1}
-        choice: {type: string, minLength: 1}
-        alternatives: {type: array, items: {type: string}}
-        rationale: {type: string, minLength: 1}
-        evidence: {type: array, items: {type: string}}
-        consequences: {type: array, items: {type: string}}
+        kind: {type: string, enum: [continue]}
+        question: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        choice: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        alternatives:
+          type: array
+          maxItems: 32
+          items: {type: string, maxLength: 1000}
+        rationale: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        evidence:
+          type: array
+          maxItems: 64
+          items: {type: string, maxLength: 2000}
+        consequences:
+          type: array
+          maxItems: 32
+          items: {type: string, maxLength: 2000}
     Decision:
       type: object
       additionalProperties: false
-      required: [id, actor_id, recorded_at, kind, question, choice, alternatives, rationale, evidence, consequences]
+      required: [id, project_id, actor_id, actor_kind, principal_id, recorded_at, kind, question, choice, alternatives, rationale, evidence, consequences]
       properties:
         id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
         actor_id: {type: string, format: uuid}
+        actor_kind: {type: string, enum: [human, agent]}
+        principal_id:
+          type: [string, 'null']
+          format: uuid
         recorded_at: {type: string, format: date-time}
-        kind: {type: string, enum: [continue, pivot, stop, promote, scope, forecast, waiver, risk-acceptance, complete, cancel]}
-        question: {type: string, minLength: 1}
-        choice: {type: string, minLength: 1}
-        alternatives: {type: array, items: {type: string}}
-        rationale: {type: string, minLength: 1}
-        evidence: {type: array, items: {type: string}}
-        consequences: {type: array, items: {type: string}}
+        kind: {type: string, enum: [continue]}
+        question: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        choice: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        alternatives:
+          type: array
+          maxItems: 32
+          items: {type: string, maxLength: 1000}
+        rationale: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        evidence:
+          type: array
+          maxItems: 64
+          items: {type: string, maxLength: 2000}
+        consequences:
+          type: array
+          maxItems: 32
+          items: {type: string, maxLength: 2000}
     VersionETag:
       type: string
       pattern: '^"[1-9][0-9]*"$'
@@ -248,11 +303,18 @@ components:
     Activity:
       type: object
       additionalProperties: false
-      required: [event_id, event_type, actor_id, occurred_at]
+      required: [event_id, event_type, actor_id, actor_kind, principal_id, aggregate_version, command_id, request_id, occurred_at]
       properties:
         event_id: {type: string, format: uuid}
         event_type: {type: string}
         actor_id: {type: string, format: uuid}
+        actor_kind: {type: string, enum: [human, agent]}
+        principal_id:
+          type: [string, 'null']
+          format: uuid
+        aggregate_version: {type: integer, minimum: 1}
+        command_id: {type: string, format: uuid}
+        request_id: {type: string}
         occurred_at: {type: string, format: date-time}
     Problem:
       type: object
@@ -264,3 +326,4 @@ components:
         status: {type: integer, minimum: 400, maximum: 599}
         code: {type: string}
         request_id: {type: string}
+        detail: {type: string}

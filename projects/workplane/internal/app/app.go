@@ -1,9 +1,14 @@
-// Package app defines the Workplane application seam without implementing M1 behavior.
+// Package app implements the serialized Workplane M1 application boundary.
 package app
 
-// BuildStage is returned by the M0 health surface and prevents the substrate
-// from being mistaken for an implemented walking slice.
-const BuildStage = "m0-contract-substrate"
+// BuildStage is exposed by the health surface and evidence harness.
+const BuildStage = "m1-walking-slice"
 
-// Capabilities identifies the only behavior available at M0.
-var Capabilities = []string{"health", "contract-generation", "contract-validation"}
+// Capabilities is deliberately limited to the frozen Track A transaction.
+var Capabilities = []string{
+	"human-session",
+	"agent-bearer",
+	"exploration-project",
+	"continue-decision",
+	"immutable-activity",
+}
