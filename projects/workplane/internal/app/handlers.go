@@ -158,7 +158,7 @@ func (service *Service) CreateProject(ctx context.Context, request generated.Req
 	projectID, _ := newUUID()
 	eventID, _ := newUUID()
 	commandID, _ := newUUID()
-	now := service.now()
+	now := service.now().UTC().Truncate(time.Microsecond)
 	project := Project{ID: projectID, OrganizationID: orgID, Title: input.Title, Outcome: input.Outcome,
 		Mode: "exploration", State: "proposed", Version: 1, Hypothesis: input.Hypothesis,
 		Falsifier: input.Falsifier, DecisionCriteria: criteria, ExperimentBound: input.ExperimentBound}
@@ -172,7 +172,8 @@ func (service *Service) CreateProject(ctx context.Context, request generated.Req
 	if service.config.FaultInjection && request.HTTPRequest.Header.Get("X-Workplane-Fault") == "after-project" {
 		return serviceUnavailable(rid), nil
 	}
-	if err := insertEvent(ctx, tx, eventID, orgID, projectID, 1, "project.created", actor, commandID, rid, now, project); err != nil {
+	if err := insertEvent(ctx, tx, eventID, orgID, projectID, 1, "project.created", actor, commandID, rid, now, project,
+		service.config.FaultInjection && request.HTTPRequest.Header.Get("X-Workplane-Fault") == "after-event"); err != nil {
 		return serviceUnavailable(rid), nil
 	}
 	body := canonicalJSON(project)
@@ -285,7 +286,7 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	decisionID, _ := newUUID()
 	eventID, _ := newUUID()
 	commandID, _ := newUUID()
-	now := service.now()
+	now := service.now().UTC().Truncate(time.Microsecond)
 	newVersion := project.Version + 1
 	decision := Decision{ID: decisionID, ProjectID: projectID, ActorID: actor.ID, ActorKind: actor.Kind,
 		PrincipalID: actor.PrincipalID, RecordedAt: now.Format(timeFormat), Kind: input.Kind, Question: input.Question,
@@ -303,7 +304,8 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	if service.config.FaultInjection && request.HTTPRequest.Header.Get("X-Workplane-Fault") == "after-decision" {
 		return serviceUnavailable(rid), nil
 	}
-	if err := insertEvent(ctx, tx, eventID, actor.OrganizationID, projectID, newVersion, "decision.recorded", actor, commandID, rid, now, decision); err != nil {
+	if err := insertEvent(ctx, tx, eventID, actor.OrganizationID, projectID, newVersion, "decision.recorded", actor, commandID, rid, now, decision,
+		service.config.FaultInjection && request.HTTPRequest.Header.Get("X-Workplane-Fault") == "after-event"); err != nil {
 		return serviceUnavailable(rid), nil
 	}
 	etag := fmt.Sprintf(`"%d"`, newVersion)
@@ -400,13 +402,19 @@ func storeIdempotency(ctx context.Context, tx *sql.Tx, orgID, actorID, operation
 }
 
 func insertEvent(ctx context.Context, tx *sql.Tx, eventID, orgID, projectID string, version int64, eventType string,
-	actor Actor, commandID, rid string, occurredAt any, payload any) error {
+	actor Actor, commandID, rid string, occurredAt time.Time, payload any, failAfterEvent bool) error {
 	encoded := canonicalJSON(payload)
 	_, err := tx.ExecContext(ctx, `INSERT INTO domain_events
 		(event_id,organization_id,aggregate_type,aggregate_id,aggregate_version,event_type,actor_kind,actor_id,principal_id,command_id,request_id,occurred_at,payload)
 		VALUES ($1,$2,'project',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
 		eventID, orgID, projectID, version, eventType, actor.Kind, actor.ID, actor.PrincipalID, commandID, rid, occurredAt, encoded)
-	return err
+	if err != nil {
+		return err
+	}
+	if failAfterEvent {
+		return ErrInjectedCrash
+	}
+	return nil
 }
 
 func serviceUnavailable(rid string) generated.Response {

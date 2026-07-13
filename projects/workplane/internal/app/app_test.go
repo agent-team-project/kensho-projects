@@ -2,13 +2,13 @@ package app
 
 import "testing"
 
-func TestM1ClaimsOnlyFrozenWalkingSliceBehavior(t *testing.T) {
+func TestM2ClaimsOnlyWalkingSliceAndDurableSpineBehavior(t *testing.T) {
 	t.Parallel()
-	if BuildStage != "m1-walking-slice" {
+	if BuildStage != "m2-durable-spine" {
 		t.Fatalf("unexpected build stage %q", BuildStage)
 	}
-	if len(Capabilities) != 5 {
-		t.Fatalf("unexpected M1 capability count %d", len(Capabilities))
+	if len(Capabilities) != 8 {
+		t.Fatalf("unexpected M2A capability count %d", len(Capabilities))
 	}
 }
 

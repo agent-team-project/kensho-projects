@@ -3,6 +3,7 @@ set -eu
 
 cd "$(dirname "$0")/.."
 artifact_root="${WORKPLANE_M1_EVIDENCE_DIR:-$PWD/target/agent-evidence/m1}"
+m2_artifact_root="${WORKPLANE_M2_EVIDENCE_DIR:-$PWD/target/agent-evidence/m2}"
 client_proxy_pid=""
 client_proxy_log="${TMPDIR:-/tmp}/workplane-client-api-proxy-$$.log"
 
@@ -15,7 +16,9 @@ trap cleanup EXIT INT TERM
 
 docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
 rm -rf "$artifact_root"
+rm -rf "$m2_artifact_root"
 mkdir -p "$artifact_root/api" "$artifact_root/browser"
+mkdir -p "$m2_artifact_root"
 chmod 777 "$artifact_root/api" "$artifact_root/browser"
 
 # Production frontend compilation and both Go executables run without fetching
@@ -35,11 +38,21 @@ if docker compose exec -T postgres wget -T 2 -qO- https://example.com >/dev/null
 fi
 printf '%s\n' "outbound network probe denied" >"$artifact_root/offline-startup.txt"
 
-docker build --network none --target smoke -t workplane-smoke:m1 . >/dev/null
-docker run --rm --network workplane_default \
+docker build --network none --target smoke -t workplane-smoke:m2 . >/dev/null
+if ! docker run --rm --network workplane_default \
   -e WORKPLANE_API_BASE=http://api:8080 \
   -e WORKPLANE_DATABASE_URL='postgres://workplane:workplane-local-only@postgres:5432/workplane?sslmode=disable' \
-  -v "$artifact_root/api:/evidence" workplane-smoke:m1
+  -e WORKPLANE_APP_DATABASE_URL='postgres://workplane_app:workplane-app-local-only@postgres:5432/workplane?sslmode=disable' \
+  -v "$artifact_root/api:/evidence" workplane-smoke:m2; then
+  docker compose logs --no-color >&2 || true
+  exit 1
+fi
+
+cp "$artifact_root/migration.log" "$m2_artifact_root/migration.log"
+for artifact in "$artifact_root"/api/m2-*.json; do
+  test -f "$artifact"
+  cp "$artifact" "$m2_artifact_root/"
+done
 
 api_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q api)")"
 client_base="http://127.0.0.1:18081"
@@ -71,7 +84,10 @@ docker compose exec -T postgres psql -At -F '|' -U workplane -d workplane -c \
   "SELECT sequence,event_id,event_type,aggregate_version,actor_kind,actor_id,COALESCE(principal_id::text,''),command_id,request_id FROM domain_events ORDER BY sequence" \
   >"$artifact_root/event-rows.txt"
 
-WORKPLANE_BROWSER_EVIDENCE="$artifact_root/browser" scripts/test_browser.sh
+if ! WORKPLANE_BROWSER_EVIDENCE="$artifact_root/browser" scripts/test_browser.sh; then
+  docker compose logs --no-color >&2 || true
+  exit 1
+fi
 .venv/bin/python3 scripts/generate.py --check >"$artifact_root/generated-client-zero-diff.txt"
 
-printf '%s\n' "M1 offline Compose, API parity, PostgreSQL ledger, and browser smoke passed"
+printf '%s\n' "M1 API/browser parity and M2A durable spine passed on offline PostgreSQL Compose"

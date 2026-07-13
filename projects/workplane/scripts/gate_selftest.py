@@ -24,7 +24,7 @@ REQUIRED_SMOKE_GATES = {
     "frontend-build",
     "compose-config",
     "postgres-migration-fixture",
-    "m1-human-agent-browser-offline",
+    "m1-m2-durable-browser-offline",
     "repository-publication",
 }
 

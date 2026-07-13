@@ -1,0 +1,8 @@
+id: M2-CHECKPOINT-001
+requirement: M2-OUTBOX-001
+layer: system
+title: Bounded leases duplicate publish and reordered retry preserve every logical effect
+given: {database: real_postgresql, consumer_state: empty, lease: bounded}
+when: {command: scripts/test_m1.sh, crashes: [after_claim, after_publish_before_checkpoint], reordered_delivery: true}
+then: {result: pass, missing_logical_effects: 0, duplicate_identity: event_id, checkpoint: monotonic}
+evidence: [target/agent-evidence/m2/m2-crash-retry-timeline.json, target/agent-evidence/m2/m2-reordered-delivery.json, target/agent-evidence/m2/m2-checkpoint-transitions.json]

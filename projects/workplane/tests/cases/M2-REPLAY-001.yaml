@@ -1,0 +1,8 @@
+id: M2-REPLAY-001
+requirement: M2-REPLAY-001
+layer: integration
+title: Empty shadow projections rebuild twice to the same live checksum
+given: {source: immutable_domain_events, shadow_generation: empty, side_effects: disabled}
+when: {command: scripts/test_m1.sh, replay_runs: 2}
+then: {result: pass, live_rebuilt_checksum: equal, repeated_checksum: equal, row_counts: equal}
+evidence: [target/agent-evidence/m2/m2-replay-checksums.json]

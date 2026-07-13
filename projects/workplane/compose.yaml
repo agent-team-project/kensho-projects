@@ -43,6 +43,7 @@ services:
         done
 
   api:
+    image: workplane-runtime:m2-durable-spine
     build:
       context: .
       dockerfile: Dockerfile
@@ -52,7 +53,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      WORKPLANE_DATABASE_URL: postgres://workplane:workplane-local-only@postgres:5432/workplane?sslmode=disable
+      WORKPLANE_DATABASE_URL: postgres://workplane_app:workplane-app-local-only@postgres:5432/workplane?sslmode=disable
       WORKPLANE_PUBLIC_ORIGIN: http://localhost:${WORKPLANE_HTTP_PORT:-8080}
       WORKPLANE_COOKIE_SECURE: "false"
       WORKPLANE_TOKEN_HASH_KEY: local-only-key-material-32-bytes-minimum-change-me
@@ -77,6 +78,19 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
+
+  outbox:
+    image: workplane-runtime:m2-durable-spine
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      WORKPLANE_DATABASE_URL: postgres://workplane_app:workplane-app-local-only@postgres:5432/workplane?sslmode=disable
+    entrypoint: ["/workplane", "outbox"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    restart: unless-stopped
 
 networks:
   default:

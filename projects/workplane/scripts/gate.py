@@ -37,7 +37,7 @@ GATES: dict[str, list[tuple[str, str]]] = {
     "integration": [
         ("compose-config", "docker compose config --quiet"),
         ("postgres-migration-fixture", "scripts/test_postgres.sh"),
-        ("m1-human-agent-browser-offline", "scripts/test_m1.sh"),
+        ("m1-m2-durable-browser-offline", "scripts/test_m1.sh"),
     ],
     "publication": [
         ("repository-publication", f"{PYTHON} ../../scripts/check_publication.py"),
@@ -47,6 +47,15 @@ GATES: dict[str, list[tuple[str, str]]] = {
     ],
     "release-status": [
         ("release-stage-completeness", f"{PYTHON} scripts/stage_status.py release"),
+    ],
+}
+
+EXTRA_ARTIFACT_GLOBS = {
+    "m1-m2-durable-browser-offline": [
+        "target/agent-evidence/m1/migration.log",
+        "target/agent-evidence/m1/event-rows.txt",
+        "target/agent-evidence/m2/*.json",
+        "target/agent-evidence/m2/migration.log",
     ],
 }
 
@@ -72,6 +81,11 @@ def run(suite: str, evidence: bool) -> int:
             log.write_text(completed.stdout + completed.stderr, encoding="utf-8")
             sys.stdout.write(completed.stdout)
             sys.stderr.write(completed.stderr)
+            artifacts = [{"path": str(log.relative_to(ROOT)), "sha256": sha256(log)}]
+            for pattern in EXTRA_ARTIFACT_GLOBS.get(name, []):
+                for artifact in sorted(ROOT.glob(pattern)):
+                    if artifact.is_file():
+                        artifacts.append({"path": str(artifact.relative_to(ROOT)), "sha256": sha256(artifact)})
             records.append({
                 "name": name,
                 "command": command,
@@ -79,7 +93,7 @@ def run(suite: str, evidence: bool) -> int:
                 "finished_at": now(),
                 "result": "pass" if completed.returncode == 0 else "fail",
                 "command_executions": 1,
-                "artifacts": [{"path": str(log.relative_to(ROOT)), "sha256": sha256(log)}],
+                "artifacts": artifacts,
             })
             if completed.returncode:
                 if evidence:

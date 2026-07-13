@@ -42,6 +42,22 @@ requirements:
     source: DELIVERY:6/M1
     title: The next human and agent walking-slice transaction is pinned
     begins_at: contract-freeze
+  - id: M2-OUTBOX-001
+    source: ARCHITECTURE:6.1;ISSUE:8
+    title: Every committed M1 event has an immutable transactional outbox record and crash-safe delivery
+    begins_at: durable-core
+  - id: M2-REPLAY-001
+    source: ARCHITECTURE:6.2;ISSUE:8
+    title: M1 projections rebuild deterministically into an atomic shadow generation
+    begins_at: durable-core
+  - id: M2-INTEGRITY-001
+    source: VERIFICATION:6;ISSUE:8
+    title: Executable integrity assertions detect ledger projection outbox and checkpoint corruption
+    begins_at: durable-core
+  - id: M2-EVIDENCE-001
+    source: VERIFICATION:19;ISSUE:8
+    title: Exact-head evidence records durable rows crash timelines replay checksums and negative findings
+    begins_at: durable-core
   - id: PR-CORE-01
     source: PRODUCT:4.5
     title: Actor-neutral public project creation records attributable events

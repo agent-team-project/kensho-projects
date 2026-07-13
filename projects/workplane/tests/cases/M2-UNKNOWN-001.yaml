@@ -1,0 +1,8 @@
+id: M2-UNKNOWN-001
+requirement: M2-REPLAY-001
+layer: integration
+title: Unknown schema stops at its exact event without replacing the good head
+given: {active_projection_head: known_good, seeded_schema_version: 2}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, failure_code: unknown_event_schema, failure_position: exact, active_head_replaced: false}
+evidence: [target/agent-evidence/m2/m2-unknown-schema-failure.json]

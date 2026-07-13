@@ -1,6 +1,6 @@
 # Workplane - Build-Ready Specification
 
-**Status:** M1 walking slice implemented; durable-core and release scope remains specified
+**Status:** M1 walking slice plus M2A durable delivery/replay spine implemented; remaining durable-core and release scope remains specified
 **Version:** 0.1
 **Audience:** Kensho managers, builders, reviewers, product verifiers, and
 research auditors

@@ -27,6 +27,10 @@ func main() {
 		_ = response.Body.Close()
 		return
 	}
+	if len(os.Args) == 2 && os.Args[1] == "outbox" {
+		runOutbox()
+		return
+	}
 	config, err := app.ConfigFromEnv()
 	if err != nil {
 		log.Fatal(err)
@@ -75,6 +79,33 @@ func main() {
 	}()
 	log.Printf("Workplane %s listening on %s", app.BuildStage, address)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal(err)
+	}
+}
+
+func runOutbox() {
+	databaseURL := os.Getenv("WORKPLANE_DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("WORKPLANE_DATABASE_URL is required")
+	}
+	store, err := app.NewDurableStore(databaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer store.Close()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	readyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := store.Ping(readyCtx); err != nil {
+		log.Fatal(err)
+	}
+	worker, _ := os.Hostname()
+	if worker == "" {
+		worker = "workplane-outbox"
+	}
+	log.Printf("Workplane %s outbox consumer started as %s", app.BuildStage, worker)
+	if err := store.RunOutboxLoop(ctx, "projection-v1", worker, 30*time.Second, 100*time.Millisecond); err != nil {
 		log.Fatal(err)
 	}
 }
