@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -67,6 +68,23 @@ type decisionRecord struct {
 	Rationale    string   `json:"rationale"`
 	Evidence     []string `json:"evidence"`
 	Consequences []string `json:"consequences"`
+}
+
+type replayActivityProjection struct {
+	Sequence         int64   `json:"sequence"`
+	EventID          string  `json:"event_id"`
+	EventType        string  `json:"event_type"`
+	SchemaVersion    int     `json:"schema_version"`
+	OrganizationID   string  `json:"organization_id"`
+	AggregateType    string  `json:"aggregate_type"`
+	AggregateID      string  `json:"aggregate_id"`
+	AggregateVersion int64   `json:"aggregate_version"`
+	ActorKind        string  `json:"actor_kind"`
+	ActorID          string  `json:"actor_id"`
+	PrincipalID      *string `json:"principal_id"`
+	CommandID        string  `json:"command_id"`
+	RequestID        string  `json:"request_id"`
+	OccurredAt       string  `json:"occurred_at"`
 }
 
 type session struct {
@@ -556,14 +574,14 @@ func (run *runner) execute(ctx context.Context) error {
 	}
 	run.writeJSON("postgres-ledger.json", map[string]any{"domain_events": eventRows, "decisions": decisions, "idempotency_results": idempotency, "outbox_records": outboxRows, "missing_outbox": missingOutbox, "versions": []int{1, 2}, "append_only_update": "denied"})
 	run.checks = append(run.checks, "postgres-contiguous-append-only-ledger")
-	if err := run.executeDurable(ctx); err != nil {
+	if err := run.executeDurable(ctx, []project{finalHuman, finalAgent}, []decisionRecord{humanDecision, recordedAgentDecision}); err != nil {
 		return err
 	}
 	run.writeJSON("smoke-summary.json", map[string]any{"result": "pass", "checks": run.checks, "human_project_id": humanProject.ID, "agent_project_id": agentProject.ID})
 	return nil
 }
 
-func (run *runner) executeDurable(ctx context.Context) error {
+func (run *runner) executeDurable(ctx context.Context, expectedProjects []project, expectedDecisions []decisionRecord) error {
 	store, err := app.NewDurableStore(run.database)
 	if err != nil {
 		return err
@@ -677,10 +695,25 @@ func (run *runner) executeDurable(ctx context.Context) error {
 		firstReplay.RebuiltChecksum != secondReplay.RebuiltChecksum || firstReplay.Projects != 2 || firstReplay.Decisions != 2 || firstReplay.Activity != 4 {
 		return fmt.Errorf("non-deterministic replay reports: first=%+v second=%+v", firstReplay, secondReplay)
 	}
-	run.writeJSON("m2-replay-checksums.json", map[string]any{"first": firstReplay, "second": secondReplay, "deterministic": true})
+	installedReplay, err := run.assertReplayPersistence(ctx, secondReplay, expectedProjects, expectedDecisions)
+	if err != nil {
+		return err
+	}
+	run.writeJSON("m2-replay-checksums.json", map[string]any{
+		"first": firstReplay, "second": secondReplay, "deterministic": true, "installed_generation": installedReplay,
+	})
 	baselineFindings, err := store.Doctor(ctx)
 	if err != nil || len(baselineFindings) != 0 {
 		return fmt.Errorf("healthy durable spine failed integrity doctor: findings=%+v err=%v", baselineFindings, err)
+	}
+	orphanEvidence, err := run.assertOrphanDecisionFailsClosed(ctx, store, secondReplay, expectedProjects[0].ID)
+	if err != nil {
+		return err
+	}
+	run.writeJSON("m2-orphan-decision-failure.json", orphanEvidence)
+	baselineFindings, err = store.Doctor(ctx)
+	if err != nil || len(baselineFindings) != 0 {
+		return fmt.Errorf("durable spine did not recover after orphan corruption rollback: findings=%+v err=%v", baselineFindings, err)
 	}
 
 	negatives, err := run.integrityNegatives(ctx)
@@ -708,6 +741,10 @@ func (run *runner) executeDurable(ctx context.Context) error {
 		replayFailure.Sequence != unknownSequence || replayFailure.EventID != unknownEventID || replayFailure.SchemaVersion != 2 {
 		return fmt.Errorf("unknown schema did not stop exactly: failure=%+v err=%v", replayFailure, replayErr)
 	}
+	failurePersistence, err := run.assertReplayFailurePersistence(ctx, replayFailure)
+	if err != nil {
+		return err
+	}
 	headAfter, err := store.ActiveProjectionHead(ctx)
 	if err != nil {
 		return err
@@ -720,13 +757,245 @@ func (run *runner) executeDurable(ctx context.Context) error {
 		return fmt.Errorf("integrity doctor missed unknown schema: findings=%+v err=%v", unknownFindings, err)
 	}
 	run.writeJSON("m2-unknown-schema-failure.json", map[string]any{
-		"failure": replayFailure, "head_before": headBefore, "head_after": headAfter, "last_known_good_preserved": true,
+		"failure": replayFailure, "persisted_failure": failurePersistence,
+		"head_before": headBefore, "head_after": headAfter, "last_known_good_preserved": true,
 	})
 	run.checks = append(run.checks,
 		"transactional-outbox-one-per-event", "bounded-lease-crash-retry", "duplicate-identifiable-idempotent-delivery",
 		"monotonic-checkpoint-and-reorder-recovery", "deterministic-shadow-replay-checksum",
-		"unknown-schema-exact-stop-preserves-head", "integrity-doctor-seeded-negatives", "application-ledger-outbox-immutability")
+		"installed-replay-shadow-persistence", "orphan-decision-replay-and-integrity-fail-closed",
+		"unknown-schema-exact-stop-preserves-head", "failed-replay-row-persistence",
+		"integrity-doctor-seeded-negatives", "complete-outbox-envelope-tamper-detection", "application-ledger-outbox-immutability")
 	return nil
+}
+
+func (run *runner) assertReplayPersistence(ctx context.Context, report app.ReplayReport, expectedProjects []project, expectedDecisions []decisionRecord) (map[string]any, error) {
+	var status, liveChecksum, rebuiltChecksum string
+	var finished bool
+	var lastSequence int64
+	var projectsCount, decisionsCount, activityCount int
+	if err := run.db.QueryRowContext(ctx, `SELECT status,finished_at IS NOT NULL,last_sequence,projects_count,
+		decisions_count,activity_count,live_checksum,rebuilt_checksum FROM projection_replay_runs WHERE id=$1`, report.RunID).Scan(
+		&status, &finished, &lastSequence, &projectsCount, &decisionsCount, &activityCount, &liveChecksum, &rebuiltChecksum); err != nil {
+		return nil, fmt.Errorf("read installed replay run: %w", err)
+	}
+	if status != "succeeded" || !finished || lastSequence != report.LastSequence || projectsCount != report.Projects ||
+		decisionsCount != report.Decisions || activityCount != report.Activity || liveChecksum != report.LiveChecksum ||
+		rebuiltChecksum != report.RebuiltChecksum {
+		return nil, fmt.Errorf("installed replay run differs from report: status=%s finished=%t sequence=%d counts=%d/%d/%d checksums=%s/%s report=%+v",
+			status, finished, lastSequence, projectsCount, decisionsCount, activityCount, liveChecksum, rebuiltChecksum, report)
+	}
+
+	projectRows, err := run.db.QueryContext(ctx, `SELECT organization_id,project_id,projection
+		FROM replay_project_projections WHERE run_id=$1 ORDER BY organization_id,project_id`, report.RunID)
+	if err != nil {
+		return nil, err
+	}
+	installedProjects := make([]project, 0)
+	for projectRows.Next() {
+		var organizationID, projectID string
+		var encoded []byte
+		if err := projectRows.Scan(&organizationID, &projectID, &encoded); err != nil {
+			_ = projectRows.Close()
+			return nil, err
+		}
+		var item project
+		if err := json.Unmarshal(encoded, &item); err != nil {
+			_ = projectRows.Close()
+			return nil, err
+		}
+		if item.ID != projectID || item.OrganizationID != organizationID {
+			_ = projectRows.Close()
+			return nil, fmt.Errorf("replay project identity columns differ from projection: organization=%s project=%s projection=%+v", organizationID, projectID, item)
+		}
+		installedProjects = append(installedProjects, item)
+	}
+	if err := projectRows.Close(); err != nil {
+		return nil, err
+	}
+
+	decisionRows, err := run.db.QueryContext(ctx, `SELECT organization_id,decision_id,project_id,projection
+		FROM replay_decision_projections WHERE run_id=$1 ORDER BY project_id,decision_id`, report.RunID)
+	if err != nil {
+		return nil, err
+	}
+	installedDecisions := make([]decisionRecord, 0)
+	for decisionRows.Next() {
+		var rowOrganizationID, decisionID, projectID string
+		var encoded []byte
+		if err := decisionRows.Scan(&rowOrganizationID, &decisionID, &projectID, &encoded); err != nil {
+			_ = decisionRows.Close()
+			return nil, err
+		}
+		var item decisionRecord
+		if err := json.Unmarshal(encoded, &item); err != nil {
+			_ = decisionRows.Close()
+			return nil, err
+		}
+		if rowOrganizationID != organizationID || item.ID != decisionID || item.ProjectID != projectID {
+			_ = decisionRows.Close()
+			return nil, fmt.Errorf("replay decision identity columns differ from projection: organization=%s decision=%s project=%s projection=%+v", rowOrganizationID, decisionID, projectID, item)
+		}
+		installedDecisions = append(installedDecisions, item)
+	}
+	if err := decisionRows.Close(); err != nil {
+		return nil, err
+	}
+
+	activityRows, err := run.db.QueryContext(ctx, `SELECT sequence,event_id,projection
+		FROM replay_activity_projections WHERE run_id=$1 ORDER BY sequence`, report.RunID)
+	if err != nil {
+		return nil, err
+	}
+	installedActivity := make([]replayActivityProjection, 0)
+	for activityRows.Next() {
+		var sequence int64
+		var eventID string
+		var encoded []byte
+		if err := activityRows.Scan(&sequence, &eventID, &encoded); err != nil {
+			_ = activityRows.Close()
+			return nil, err
+		}
+		var item replayActivityProjection
+		if err := json.Unmarshal(encoded, &item); err != nil {
+			_ = activityRows.Close()
+			return nil, err
+		}
+		if item.Sequence != sequence || item.EventID != eventID {
+			_ = activityRows.Close()
+			return nil, fmt.Errorf("replay activity identity columns differ from projection: sequence=%d event=%s projection=%+v", sequence, eventID, item)
+		}
+		installedActivity = append(installedActivity, item)
+	}
+	if err := activityRows.Close(); err != nil {
+		return nil, err
+	}
+
+	ledgerRows, err := run.db.QueryContext(ctx, `SELECT sequence,event_id,event_type,schema_version,organization_id,
+		aggregate_type,aggregate_id,aggregate_version,actor_kind,actor_id,principal_id,command_id,request_id,occurred_at
+		FROM domain_events WHERE sequence<=$1 ORDER BY sequence`, report.LastSequence)
+	if err != nil {
+		return nil, err
+	}
+	expectedActivity := make([]replayActivityProjection, 0)
+	for ledgerRows.Next() {
+		var item replayActivityProjection
+		var principalID sql.NullString
+		var occurredAt time.Time
+		if err := ledgerRows.Scan(&item.Sequence, &item.EventID, &item.EventType, &item.SchemaVersion, &item.OrganizationID,
+			&item.AggregateType, &item.AggregateID, &item.AggregateVersion, &item.ActorKind, &item.ActorID,
+			&principalID, &item.CommandID, &item.RequestID, &occurredAt); err != nil {
+			_ = ledgerRows.Close()
+			return nil, err
+		}
+		if principalID.Valid {
+			item.PrincipalID = &principalID.String
+		}
+		item.OccurredAt = occurredAt.UTC().Format("2006-01-02T15:04:05.000000Z")
+		expectedActivity = append(expectedActivity, item)
+	}
+	if err := ledgerRows.Close(); err != nil {
+		return nil, err
+	}
+
+	wantedProjects := append([]project(nil), expectedProjects...)
+	wantedDecisions := append([]decisionRecord(nil), expectedDecisions...)
+	sort.Slice(wantedProjects, func(i, j int) bool {
+		if wantedProjects[i].OrganizationID != wantedProjects[j].OrganizationID {
+			return wantedProjects[i].OrganizationID < wantedProjects[j].OrganizationID
+		}
+		return wantedProjects[i].ID < wantedProjects[j].ID
+	})
+	sort.Slice(wantedDecisions, func(i, j int) bool {
+		if wantedDecisions[i].ProjectID != wantedDecisions[j].ProjectID {
+			return wantedDecisions[i].ProjectID < wantedDecisions[j].ProjectID
+		}
+		return wantedDecisions[i].ID < wantedDecisions[j].ID
+	})
+	if len(installedProjects) != report.Projects || len(installedDecisions) != report.Decisions || len(installedActivity) != report.Activity ||
+		!reflect.DeepEqual(installedProjects, wantedProjects) || !reflect.DeepEqual(installedDecisions, wantedDecisions) ||
+		!reflect.DeepEqual(installedActivity, expectedActivity) {
+		return nil, fmt.Errorf("installed replay shadows differ: projects=%+v want=%+v decisions=%+v want=%+v activity=%+v want=%+v",
+			installedProjects, wantedProjects, installedDecisions, wantedDecisions, installedActivity, expectedActivity)
+	}
+	return map[string]any{
+		"run_id": report.RunID, "status": status, "last_sequence": lastSequence,
+		"projects": installedProjects, "decisions": installedDecisions, "activity": installedActivity,
+	}, nil
+}
+
+func (run *runner) assertReplayFailurePersistence(ctx context.Context, failure *app.ReplayFailure) (map[string]any, error) {
+	var status, code, detail string
+	var finished bool
+	var lastSequence, failedSequence int64
+	var failedEventID sql.NullString
+	if err := run.db.QueryRowContext(ctx, `SELECT status,finished_at IS NOT NULL,last_sequence,failed_sequence,
+		failed_event_id,failure_code,failure_detail FROM projection_replay_runs WHERE id=$1`, failure.RunID).Scan(
+		&status, &finished, &lastSequence, &failedSequence, &failedEventID, &code, &detail); err != nil {
+		return nil, fmt.Errorf("read failed replay run: %w", err)
+	}
+	if status != "failed" || !finished || lastSequence != failure.Sequence || failedSequence != failure.Sequence ||
+		failedEventID.String != failure.EventID || code != failure.Code || detail != failure.Detail {
+		return nil, fmt.Errorf("failed replay row differs from failure: status=%s finished=%t sequence=%d/%d event=%s code=%s detail=%q failure=%+v",
+			status, finished, lastSequence, failedSequence, failedEventID.String, code, detail, failure)
+	}
+	return map[string]any{
+		"run_id": failure.RunID, "status": status, "last_sequence": lastSequence, "failed_sequence": failedSequence,
+		"failed_event_id": failedEventID.String, "failure_code": code, "failure_detail": detail,
+	}, nil
+}
+
+func (run *runner) assertOrphanDecisionFailsClosed(ctx context.Context, store *app.DurableStore, expectedHead app.ReplayReport, projectID string) (evidence map[string]any, returnedErr error) {
+	const orphanDecisionID = "00000000-0000-4000-8000-000000000880"
+	if _, err := run.db.ExecContext(ctx, `ALTER TABLE decisions DISABLE TRIGGER decisions_append_only`); err != nil {
+		return nil, fmt.Errorf("disable decision immutability for corruption fixture: %w", err)
+	}
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO decisions
+		(id,organization_id,project_id,kind,question,choice,alternatives,rationale,evidence,consequences,actor_id,recorded_at)
+		VALUES ($1,$2,$3,'continue','Orphan decision corruption','continue','[]','corruption fixture','[]','[]',$4,$5)`,
+		orphanDecisionID, organizationID, projectID, humanID, time.Now().UTC()); err != nil {
+		_, _ = run.db.ExecContext(context.Background(), `ALTER TABLE decisions ENABLE TRIGGER decisions_append_only`)
+		return nil, fmt.Errorf("seed orphan decision: %w", err)
+	}
+	defer func() {
+		_, cleanupErr := run.db.ExecContext(context.Background(), `DELETE FROM decisions WHERE id=$1`, orphanDecisionID)
+		_, enableErr := run.db.ExecContext(context.Background(), `ALTER TABLE decisions ENABLE TRIGGER decisions_append_only`)
+		if cleanupErr != nil || enableErr != nil {
+			cleanupFailure := errors.Join(cleanupErr, enableErr)
+			if returnedErr == nil {
+				returnedErr = fmt.Errorf("restore decisions after orphan fixture: %w", cleanupFailure)
+			} else {
+				returnedErr = errors.Join(returnedErr, fmt.Errorf("restore decisions after orphan fixture: %w", cleanupFailure))
+			}
+		}
+	}()
+
+	_, replayErr := store.Replay(ctx)
+	var failure *app.ReplayFailure
+	if !errors.As(replayErr, &failure) || failure.Code != "checksum_mismatch" || failure.Sequence != expectedHead.LastSequence {
+		return nil, fmt.Errorf("orphan decision replay did not fail closed: failure=%+v err=%v", failure, replayErr)
+	}
+	persisted, err := run.assertReplayFailurePersistence(ctx, failure)
+	if err != nil {
+		return nil, err
+	}
+	currentHead, err := store.ActiveProjectionHead(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if currentHead.RunID != expectedHead.RunID || currentHead.LastSequence != expectedHead.LastSequence ||
+		currentHead.RebuiltChecksum != expectedHead.RebuiltChecksum || currentHead.Projects != expectedHead.Projects ||
+		currentHead.Decisions != expectedHead.Decisions || currentHead.Activity != expectedHead.Activity {
+		return nil, fmt.Errorf("orphan decision replaced last known-good head: before=%+v after=%+v", expectedHead, currentHead)
+	}
+	findings, err := store.Doctor(ctx)
+	if err != nil || !hasFinding(findings, "decision_without_event", "") || !hasFinding(findings, "projection_checksum_drift", "") {
+		return nil, fmt.Errorf("orphan decision corruption was not reported: findings=%+v err=%v", findings, err)
+	}
+	return map[string]any{
+		"decision_id": orphanDecisionID, "failure": failure, "persisted_failure": persisted,
+		"head_before": expectedHead, "head_after": currentHead, "findings": findings,
+	}, nil
 }
 
 func (run *runner) waitForConsumer(ctx context.Context, consumer string, timeout time.Duration) error {
@@ -883,6 +1152,30 @@ func (run *runner) integrityNegatives(ctx context.Context) (map[string]any, erro
 		return nil, fmt.Errorf("seeded duplicate version not detected: findings=%+v err=%v", duplicateFindings, err)
 	}
 	result["duplicate_aggregate_version"] = duplicateFindings
+
+	envelopeTamper, err := run.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := envelopeTamper.ExecContext(ctx, `ALTER TABLE outbox_records DISABLE TRIGGER outbox_records_immutable`); err != nil {
+		_ = envelopeTamper.Rollback()
+		return nil, err
+	}
+	if _, err := envelopeTamper.ExecContext(ctx, `WITH target AS (
+		SELECT event_id,jsonb_set(payload,'{actor_id}',to_jsonb('00000000-0000-4000-8000-000000008888'::text),false) changed
+		FROM outbox_records ORDER BY event_sequence LIMIT 1
+	) UPDATE outbox_records record SET payload=target.changed,
+		payload_sha256=digest(convert_to(target.changed::text,'UTF8'),'sha256')
+		FROM target WHERE record.event_id=target.event_id`); err != nil {
+		_ = envelopeTamper.Rollback()
+		return nil, err
+	}
+	envelopeFindings, err := app.DoctorTx(ctx, envelopeTamper)
+	_ = envelopeTamper.Rollback()
+	if err != nil || !hasFinding(envelopeFindings, "outbox_payload_mismatch", "") {
+		return nil, fmt.Errorf("recomputed-digest outbox envelope tamper not detected: findings=%+v err=%v", envelopeFindings, err)
+	}
+	result["recomputed_digest_outbox_envelope_tamper"] = envelopeFindings
 
 	drift, err := run.db.BeginTx(ctx, nil)
 	if err != nil {

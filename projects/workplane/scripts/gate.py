@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -67,6 +68,26 @@ TIERS = {
 }
 
 
+def snapshot_extra_artifacts(
+    name: str,
+    artifact_root: Path,
+    *,
+    source_root: Path = ROOT,
+    artifact_globs: dict[str, list[str]] = EXTRA_ARTIFACT_GLOBS,
+) -> list[dict[str, str]]:
+    snapshots = []
+    for pattern in artifact_globs.get(name, []):
+        for artifact in sorted(source_root.glob(pattern)):
+            if not artifact.is_file():
+                continue
+            relative = artifact.relative_to(source_root)
+            snapshot = artifact_root / "extra" / name / relative
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(artifact, snapshot)
+            snapshots.append({"path": str(snapshot.relative_to(source_root)), "sha256": sha256(snapshot)})
+    return snapshots
+
+
 def run(suite: str, evidence: bool) -> int:
     commit = source_commit() if evidence else ""
     started = now()
@@ -83,10 +104,7 @@ def run(suite: str, evidence: bool) -> int:
             sys.stdout.write(completed.stdout)
             sys.stderr.write(completed.stderr)
             artifacts = [{"path": str(log.relative_to(ROOT)), "sha256": sha256(log)}]
-            for pattern in EXTRA_ARTIFACT_GLOBS.get(name, []):
-                for artifact in sorted(ROOT.glob(pattern)):
-                    if artifact.is_file():
-                        artifacts.append({"path": str(artifact.relative_to(ROOT)), "sha256": sha256(artifact)})
+            artifacts.extend(snapshot_extra_artifacts(name, artifact_root))
             records.append({
                 "name": name,
                 "command": command,

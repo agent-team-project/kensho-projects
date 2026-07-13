@@ -363,8 +363,7 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 	rebuilt, failure := rebuildSnapshot(runID, events)
 	if failure != nil {
 		_ = tx.Rollback()
-		store.persistReplayFailure(ctx, failure)
-		return ReplayReport{}, failure
+		return ReplayReport{}, store.recordReplayFailure(ctx, failure)
 	}
 	liveChecksum := snapshotChecksum(live)
 	rebuiltChecksum := snapshotChecksum(rebuilt)
@@ -376,8 +375,7 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 		failure = &ReplayFailure{RunID: runID, Code: "checksum_mismatch", Sequence: lastSequence,
 			Detail: fmt.Sprintf("live checksum %s differs from rebuilt checksum %s", liveChecksum, rebuiltChecksum)}
 		_ = tx.Rollback()
-		store.persistReplayFailure(ctx, failure)
-		return ReplayReport{}, failure
+		return ReplayReport{}, store.recordReplayFailure(ctx, failure)
 	}
 	for _, project := range rebuilt.Projects {
 		encoded := canonicalJSON(project)
@@ -434,10 +432,28 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 		RebuiltChecksum: rebuiltChecksum, ActiveHeadUpdated: true}, nil
 }
 
-func (store *DurableStore) persistReplayFailure(ctx context.Context, failure *ReplayFailure) {
-	_, _ = store.db.ExecContext(ctx, `UPDATE projection_replay_runs SET status='failed',finished_at=$2,
+func (store *DurableStore) recordReplayFailure(ctx context.Context, failure *ReplayFailure) error {
+	if err := store.persistReplayFailure(ctx, failure); err != nil {
+		return errors.Join(failure, fmt.Errorf("persist replay failure: %w", err))
+	}
+	return failure
+}
+
+func (store *DurableStore) persistReplayFailure(ctx context.Context, failure *ReplayFailure) error {
+	result, err := store.db.ExecContext(ctx, `UPDATE projection_replay_runs SET status='failed',finished_at=$2,
 		last_sequence=$3,failed_sequence=$3,failed_event_id=NULLIF($4,'')::uuid,failure_code=$5,failure_detail=$6 WHERE id=$1`,
 		failure.RunID, time.Now().UTC(), failure.Sequence, failure.EventID, failure.Code, failure.Detail)
+	if err != nil {
+		return err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return fmt.Errorf("updated %d replay run rows, want 1", updated)
+	}
+	return nil
 }
 
 func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *ReplayFailure) {
@@ -554,9 +570,17 @@ func loadLiveSnapshot(ctx context.Context, queryer databaseQueryer, events []eve
 	if err := rows.Close(); err != nil {
 		return projectionSnapshot{}, err
 	}
-	decisionRows, err := queryer.QueryContext(ctx, `SELECT d.id,d.project_id,d.actor_id,e.actor_kind,e.principal_id,d.recorded_at,
+	decisionRows, err := queryer.QueryContext(ctx, `SELECT d.id,d.project_id,d.actor_id,principal.kind,event.principal_id,d.recorded_at,
 		d.kind,d.question,d.choice,d.alternatives,d.rationale,d.evidence,d.consequences
-		FROM decisions d JOIN domain_events e ON e.event_type='decision.recorded' AND e.payload->>'id'=d.id::text
+		FROM decisions d
+		JOIN principals principal ON principal.id=d.actor_id
+		LEFT JOIN LATERAL (
+			SELECT ledger.event_id,ledger.principal_id
+			FROM domain_events ledger
+			WHERE ledger.event_type='decision.recorded' AND ledger.payload->>'id'=d.id::text
+			ORDER BY ledger.sequence
+			LIMIT 1
+		) event ON true
 		ORDER BY d.project_id,d.id`)
 	if err != nil {
 		return projectionSnapshot{}, err
@@ -567,10 +591,14 @@ func loadLiveSnapshot(ctx context.Context, queryer databaseQueryer, events []eve
 		var decision Decision
 		var recordedAt time.Time
 		var alternatives, evidence, consequences []byte
+		var principalID sql.NullString
 		if err := decisionRows.Scan(&decision.ID, &decision.ProjectID, &decision.ActorID, &decision.ActorKind,
-			&decision.PrincipalID, &recordedAt, &decision.Kind, &decision.Question, &decision.Choice,
+			&principalID, &recordedAt, &decision.Kind, &decision.Question, &decision.Choice,
 			&alternatives, &decision.Rationale, &evidence, &consequences); err != nil {
 			return projectionSnapshot{}, err
+		}
+		if principalID.Valid {
+			decision.PrincipalID = &principalID.String
 		}
 		decision.RecordedAt = recordedAt.UTC().Format(timeFormat)
 		if err := json.Unmarshal(alternatives, &decision.Alternatives); err != nil {
@@ -686,32 +714,59 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 		return nil, fmt.Errorf("scan event/outbox coupling: %w", err)
 	}
 	_ = missingRows.Close()
-	outboxRows, err := queryer.QueryContext(ctx, `SELECT record.event_sequence,record.event_id,record.payload,
+	orphanDecisionRows, err := queryer.QueryContext(ctx, `SELECT decision.id,decision.project_id
+		FROM decisions decision
+		LEFT JOIN domain_events event ON event.event_type='decision.recorded' AND event.payload->>'id'=decision.id::text
+		WHERE event.event_id IS NULL ORDER BY decision.project_id,decision.id`)
+	if err != nil {
+		return nil, err
+	}
+	for orphanDecisionRows.Next() {
+		var decisionID, projectID string
+		if err := orphanDecisionRows.Scan(&decisionID, &projectID); err != nil {
+			_ = orphanDecisionRows.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "decision_without_event", Aggregate: "project:" + projectID,
+			Detail: fmt.Sprintf("decision projection %s lacks its decision.recorded event", decisionID)})
+	}
+	if err := orphanDecisionRows.Err(); err != nil {
+		_ = orphanDecisionRows.Close()
+		return nil, fmt.Errorf("scan decision/event coupling: %w", err)
+	}
+	_ = orphanDecisionRows.Close()
+	outboxRows, err := queryer.QueryContext(ctx, `SELECT record.event_sequence,record.event_id,
 		record.payload_sha256<>digest(convert_to(record.payload::text,'UTF8'),'sha256'),
-		event.event_type,event.schema_version,event.organization_id,event.aggregate_type,event.aggregate_id,event.aggregate_version
+		record.payload IS DISTINCT FROM domain_event_outbox_envelope(event),
+		record.id IS DISTINCT FROM event.event_id OR record.event_sequence IS DISTINCT FROM event.sequence
+			OR record.topic<>'domain-events' OR record.available_at IS DISTINCT FROM event.occurred_at
+			OR record.created_at IS DISTINCT FROM event.occurred_at,
+		EXISTS (
+			SELECT 1 FROM consumer_deliveries delivery
+			WHERE delivery.event_id=record.event_id AND (
+				delivery.event_sequence IS DISTINCT FROM event.sequence
+				OR delivery.payload_sha256 IS DISTINCT FROM digest(convert_to(domain_event_outbox_envelope(event)::text,'UTF8'),'sha256')
+			)
+		) OR EXISTS (
+			SELECT 1 FROM outbox_delivery_attempts attempt
+			WHERE attempt.event_id=record.event_id
+				AND attempt.payload_sha256 IS DISTINCT FROM digest(convert_to(domain_event_outbox_envelope(event)::text,'UTF8'),'sha256')
+		)
 		FROM outbox_records record JOIN domain_events event ON event.event_id=record.event_id ORDER BY record.event_sequence`)
 	if err != nil {
 		return nil, err
 	}
 	for outboxRows.Next() {
-		var sequence, aggregateVersion int64
-		var eventID, eventType, organizationID, aggregateType, aggregateID string
-		var schemaVersion int
-		var payload []byte
-		var hashMismatch bool
-		if err := outboxRows.Scan(&sequence, &eventID, &payload, &hashMismatch, &eventType, &schemaVersion,
-			&organizationID, &aggregateType, &aggregateID, &aggregateVersion); err != nil {
+		var sequence int64
+		var eventID string
+		var hashMismatch, envelopeMismatch, metadataMismatch, deliveryMismatch bool
+		if err := outboxRows.Scan(&sequence, &eventID, &hashMismatch, &envelopeMismatch, &metadataMismatch, &deliveryMismatch); err != nil {
 			_ = outboxRows.Close()
 			return nil, err
 		}
-		var envelope OutboxEnvelope
-		decodeErr := json.Unmarshal(payload, &envelope)
-		if decodeErr != nil || hashMismatch || envelope.Sequence != sequence ||
-			envelope.EventID != eventID || envelope.EventType != eventType || envelope.SchemaVersion != schemaVersion ||
-			envelope.OrganizationID != organizationID || envelope.AggregateType != aggregateType || envelope.AggregateID != aggregateID ||
-			envelope.AggregateVersion != aggregateVersion {
+		if hashMismatch || envelopeMismatch || metadataMismatch || deliveryMismatch {
 			findings = append(findings, IntegrityFinding{Code: "outbox_payload_mismatch", Sequence: sequence, EventID: eventID,
-				Detail: "outbox envelope identity or checksum differs from the event ledger"})
+				Detail: "outbox metadata, complete canonical ledger envelope, checksum, or delivered hash differs from the event ledger"})
 		}
 	}
 	if err := outboxRows.Err(); err != nil {

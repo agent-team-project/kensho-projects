@@ -31,12 +31,15 @@ Replay reads the immutable ledger in sequence order under a serializable
 snapshot, validates contiguous aggregate versions and the registered v1 event
 types, and builds empty run-scoped project, decision, and activity shadow
 tables. It compares normalized live/rebuilt row counts and a SHA-256 checksum
-before atomically replacing `projection_heads.m1-canonical`. An unknown event
+before atomically replacing `projection_heads.m1-canonical`. Live decision rows
+are counted independently of their ledger event, so an orphan projection fails
+replay rather than disappearing from the comparison. An unknown event
 type/version records `unknown_event_schema` with its exact sequence and event ID;
-the failed generation is not installed.
+every failed generation is durably recorded and is not installed.
 
-The integrity doctor checks aggregate gaps/duplicates, event/outbox coupling,
-outbox envelope identity and digest, unknown schemas, checkpoint
+The integrity doctor checks aggregate gaps/duplicates, event/outbox and
+decision/event coupling, complete canonical outbox envelope and delivered-hash
+identity, unknown schemas, checkpoint
 staleness/identity, and active-head checksum drift. Database triggers separately
 reject event/outbox mutation and backwards or identity-changing checkpoints.
 
@@ -53,5 +56,6 @@ Exact-head reproduction uses `make evidence-smoke`. Durable artifacts are
 written beneath `target/agent-evidence/m2/`: migration output, outbox rows,
 checkpoint transitions, crash/retry and reorder timelines, repeated replay
 checksums/counts, application-role denies, unknown-schema failure/head identity,
-and integrity-doctor negatives. The smoke evidence manifest includes SHA-256
-digests for each of these artifacts.
+and integrity-doctor negatives. Exact-head evidence copies those mutable outputs
+into the commit/run-scoped artifact directory before the manifest hashes them,
+so a later ordinary smoke run cannot invalidate the recorded digests.
