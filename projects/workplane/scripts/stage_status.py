@@ -9,9 +9,6 @@ import sys
 
 OMISSIONS = {
     "acceptance": [
-        "M1 real HTTP transaction and idempotency",
-        "M1 human/agent equivalent authorization flow",
-        "M1 production-browser transaction",
         "M2+ replay, outbox, realtime, and revoke behavior",
         "M3+ structured brief and complete public-plane parity",
         "M4 browser accessibility, search, recovery, and offline application startup",
@@ -31,7 +28,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("stage", choices=sorted(OMISSIONS))
     args = parser.parse_args()
-    print(f"{args.stage} is intentionally not green at M0; explicitly unimplemented:", file=sys.stderr)
+    print(f"{args.stage} is intentionally not green beyond M1; explicitly unimplemented:", file=sys.stderr)
     for omission in OMISSIONS[args.stage]:
         print(f"- {omission}", file=sys.stderr)
     return 1

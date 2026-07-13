@@ -24,18 +24,18 @@ seed_capabilities:
     requirement_id: PR-CORE-01
     public_operation_id: createProject
     ui_surface: project-create-dialog
-    agent_example: examples/agent/create-project
+    agent_example: web/src/workflow.ts#runAgentWalkingSlice
     permission_action: project.create
     parity_case_id: PARITY-PROJECT-001
-    status: specified
+    status: implemented
   - capability_id: record-decision
     requirement_id: PR-DEC-01
     public_operation_id: recordDecision
     ui_surface: judgment-decision-sheet
-    agent_example: examples/agent/record-decision
+    agent_example: web/src/workflow.ts#runAgentWalkingSlice
     permission_action: decision.record
     parity_case_id: PARITY-DECISION-001
-    status: specified
+    status: implemented
   - capability_id: reforecast-project
     requirement_id: PR-FC-01
     public_operation_id: reforecastProject

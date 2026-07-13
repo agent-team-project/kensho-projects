@@ -94,7 +94,7 @@ def generate_go(openapi: dict[str, Any]) -> str:
     def header_field(header: str) -> str:
         if header == "ETag":
             return "ETag"
-        return "".join(part.title() for part in header.split("-"))
+        return "".join("ID" if part.lower() == "id" else part.title() for part in header.split("-"))
 
     header_fields = "\n".join(
         f"    {header_field(header)} {'VersionETag' if header == 'ETag' else 'string'}"
@@ -122,6 +122,7 @@ package generated
 import (
     "context"
     "encoding/json"
+    "io"
     "net/http"
     "strings"
 )
@@ -156,6 +157,7 @@ type ResponseHeaders struct {{
 
 type Response struct {{
     Status int
+    ContentType string
     Headers ResponseHeaders
     Body any
 }}
@@ -175,11 +177,16 @@ func adapt(handler operationHandler) http.HandlerFunc {{
         var body json.RawMessage
         if request.Body != nil {{
             defer request.Body.Close()
-            decoder := json.NewDecoder(request.Body)
-            if err := decoder.Decode(&body); err != nil && err.Error() != "EOF" {{
-                http.Error(writer, "invalid JSON", http.StatusBadRequest)
+            value, err := io.ReadAll(io.LimitReader(request.Body, 65_537))
+            if err != nil {{
+                writeAdapterProblem(writer, http.StatusBadRequest, "invalid_request")
                 return
             }}
+            if len(value) > 65_536 {{
+                writeAdapterProblem(writer, http.StatusRequestEntityTooLarge, "invalid_request")
+                return
+            }}
+            body = value
         }}
         sessionCookie := ""
         if cookie, err := request.Cookie("workplane_session"); err == nil {{
@@ -201,14 +208,35 @@ func adapt(handler operationHandler) http.HandlerFunc {{
             }},
         }})
         if err != nil {{
-            http.Error(writer, "unimplemented", http.StatusNotImplemented)
+            writeAdapterProblem(writer, http.StatusInternalServerError, "service_unavailable")
             return
         }}
-        writer.Header().Set("Content-Type", "application/json")
+        contentType := response.ContentType
+        if contentType == "" {{
+            contentType = "application/json"
+        }}
+        writer.Header().Set("Content-Type", contentType)
+        writer.Header().Set("Cache-Control", "no-store")
+        writer.Header().Set("X-Content-Type-Options", "nosniff")
+        writer.Header().Set("Referrer-Policy", "no-referrer")
+        writer.Header().Set("Content-Security-Policy", "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
 {header_writes}
         writer.WriteHeader(response.Status)
         _ = json.NewEncoder(writer).Encode(response.Body)
     }}
+}}
+
+func writeAdapterProblem(writer http.ResponseWriter, status int, code string) {{
+    writer.Header().Set("Content-Type", "application/problem+json")
+    writer.Header().Set("Cache-Control", "no-store")
+    writer.WriteHeader(status)
+    _ = json.NewEncoder(writer).Encode(map[string]any{{
+        "type": "https://workplane.local/problems/" + code,
+        "title": http.StatusText(status),
+        "status": status,
+        "code": code,
+        "request_id": "adapter",
+    }})
 }}
 '''
     return subprocess.run(
@@ -224,6 +252,10 @@ def ts_path_expression(path: str) -> str:
 
 
 def ts_schema_type(schema: dict[str, Any]) -> str:
+    if "$ref" in schema:
+        return schema["$ref"].rsplit("/", 1)[-1]
+    if isinstance(schema.get("type"), list):
+        return " | ".join("null" if value == "null" else value for value in schema["type"])
     if "enum" in schema:
         return " | ".join(json.dumps(value) for value in schema["enum"])
     if schema.get("type") == "string":
@@ -262,12 +294,24 @@ def contract_owned_request_headers(openapi: dict[str, Any]) -> list[str]:
 
 def generate_typescript(openapi: dict[str, Any]) -> str:
     ops = operations(openapi)
+    request_types = {
+        "login": "LoginRequest",
+        "createProject": "CreateExplorationProject",
+        "recordDecision": "RecordDecision",
+    }
+    response_types = {
+        "login": "Session",
+        "createProject": "Project",
+        "getProject": "Project",
+        "recordDecision": "Decision",
+        "listProjectActivity": "Array<Activity>",
+    }
     methods: list[str] = []
     for op in ops:
         path_parameters = re_path_parameters(op["path"])
         parameter_type = "{ " + "; ".join(f"{name}: string" for name in path_parameters) + " }" if path_parameters else "Record<string, never>"
         has_body = op["method"] != "GET"
-        body_argument = ", body: unknown" if has_body else ""
+        body_argument = f", body: {request_types[op['id']]}" if has_body else ""
         if "ExpectedVersion" in op["parameter_refs"]:
             options_signature = "options: VersionedMutationOptions"
         elif "IdempotencyKey" in op["parameter_refs"]:
@@ -290,25 +334,26 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
             return_type = "Session"
             result = f"return (await {request_call}).body as Session;"
         elif "ETag" in op["response_headers"]:
-            return_type = "VersionedResponse<unknown>"
+            return_type = f"VersionedResponse<{response_types[op['id']]}>"
             result = f'''const response = await {request_call};
     const version = response.headers.get("ETag");
     if (version === null || !versionETagPattern.test(version)) {{
       throw new WorkplaneContractError("recordDecision response omitted a valid ETag");
     }}
-    return {{ body: response.body, version: version as VersionETag }};'''
+    return {{ body: response.body as {response_types[op['id']]}, version: version as VersionETag }};'''
         else:
-            return_type = "unknown"
-            result = f"return (await {request_call}).body;"
+            return_type = response_types[op["id"]]
+            result = f"return (await {request_call}).body as {return_type};"
         methods.append(f'''  async {op["id"]}(params: {parameter_type}{body_argument}, {options_signature}): Promise<{return_type}> {{
     {result}
   }}''')
-    session_type = generate_ts_object_type("Session", openapi["components"]["schemas"]["Session"])
+    schema_names = ["LoginRequest", "Session", "CreateExplorationProject", "Project", "RecordDecision", "Decision", "Activity", "Problem"]
+    generated_types = "\n\n".join(generate_ts_object_type(name, openapi["components"]["schemas"][name]) for name in schema_names)
     owned_request_headers = json.dumps(contract_owned_request_headers(openapi), indent=2)
     return f'''// Code generated by scripts/generate.py from contracts/openapi.yaml; DO NOT EDIT.
 // Contract SHA-256: {digest("contracts/openapi.yaml")}
 
-{session_type}
+{generated_types}
 
 export type HumanSessionSecurity = {{
   kind: "human-session";
@@ -360,7 +405,7 @@ export type OperationId = (typeof operationIds)[number];
 export class WorkplaneClient {{
   constructor(
     private readonly baseUrl: string,
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {{}}
 
 {chr(10).join(methods)}

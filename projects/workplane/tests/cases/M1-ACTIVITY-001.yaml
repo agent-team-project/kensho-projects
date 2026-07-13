@@ -1,0 +1,8 @@
+id: M1-ACTIVITY-001
+requirement: PR-DEC-01
+layer: integration
+title: Continue decisions and activity remain immutable contiguous and attributable
+given: {event_store: append_only_postgresql_ledger, decision_shape: universal}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, event_types: [project.created, decision.recorded], versions: [1, 2], attribution: [actor_id, actor_kind, delegated_principal]}
+evidence: [target/agent-evidence/m1/event-rows.txt, target/agent-evidence/m1/api/postgres-ledger.json]

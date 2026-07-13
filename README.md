@@ -15,7 +15,7 @@ history are deliberately excluded.
 | --- | --- | --- | --- |
 | [Chess Engine](projects/chess-engine/) | Working local product with documented strength gaps | Correctness-driven systems delivery: legal move generation, perft, UCI, search, and a native board | [Evaluation report](projects/chess-engine/docs/release/kensho-evaluation-report.md) |
 | [Excel Lite](projects/excel-lite/) | Local demo ready; public launch not ready | Broad parallel implementation behind a stable formula engine and native spreadsheet shell | [Kensho retrospective](projects/excel-lite/docs/release/kensho-evaluation-report.md) and [PDF](projects/excel-lite/docs/release/kensho-excel-lite-retrospective.pdf) |
-| [Workplane](projects/workplane/) | M0 contract substrate; M1 unimplemented | Agent-native project and portfolio coordination with evidence, permissions, events, and empirical dogfooding | [Specification and M0 gates](projects/workplane/README.md) |
+| [Workplane](projects/workplane/) | M1 walking slice implemented | Agent-native project and portfolio coordination with evidence, permissions, events, and empirical dogfooding | [Specification and M1 gates](projects/workplane/README.md) |
 
 ## Quick verification
 
@@ -81,8 +81,8 @@ publishing private runtime transcripts.
 - The reports distinguish measured behavior from missing or aspirational gates.
 - Excel Lite is not represented as a publicly distributable v1 release.
 - The chess engine is not represented as having a measured Elo rating.
-- Workplane has an executable M0 contract substrate, not an implemented M1
-  product transaction or release.
+- Workplane implements only its serialized M1 walking slice; broader durable-core
+  and release claims remain unimplemented.
 
 ## License
 

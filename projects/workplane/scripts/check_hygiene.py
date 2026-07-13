@@ -13,7 +13,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SECRET = re.compile(r"(?:gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)")
-EXCLUDED = {".venv", "node_modules", "dist", "__pycache__", "runs"}
+EXCLUDED = {".venv", "node_modules", "dist", "vendor", "__pycache__", "runs"}
 
 
 def main() -> int:
@@ -37,13 +37,19 @@ def main() -> int:
         if "image:" in line and (":latest" in line or "image:" == line.strip()):
             errors.append(f"unpinned Compose image: {line.strip()}")
     compose_data = yaml.safe_load(compose)
-    if set(compose_data.get("services", {})) != {"postgres"}:
-        errors.append("M0 Compose must contain only the PostgreSQL service")
+    if set(compose_data.get("services", {})) != {"postgres", "migrate", "api"}:
+        errors.append("M1 Compose must contain exactly postgres, migrate, and api")
     postgres = compose_data.get("services", {}).get("postgres", {})
     if "@sha256:" not in postgres.get("image", ""):
         errors.append("PostgreSQL image must be pinned by immutable digest")
     if compose_data.get("networks", {}).get("default", {}).get("internal") is not True:
-        errors.append("M0 runtime network must be internal/offline")
+        errors.append("M1 runtime network must be internal/offline")
+    api = compose_data.get("services", {}).get("api", {})
+    if api.get("build", {}).get("network") != "none":
+        errors.append("M1 API image must build with outbound networking disabled")
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    if "FROM golang:" not in dockerfile or "@sha256:" not in dockerfile:
+        errors.append("Go build image must be pinned by immutable digest")
     forbidden_topology = {"state", "jobs", "inbox", "outbox", "daemon", "tokens"}
     for path in (ROOT / ".agent_team").rglob("*"):
         if path.is_file() and forbidden_topology & set(path.relative_to(ROOT / ".agent_team").parts):

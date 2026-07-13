@@ -1,0 +1,8 @@
+**/.DS_Store
+**/.venv
+**/node_modules
+**/*.log
+evidence/runs
+target
+.worker_agent
+.git

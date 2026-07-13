@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Workplane Walking Slice API
-  version: 0.1.0-m0
-  description: Contract-only M0 surface. Operations are implemented in M1.
+  version: 0.2.0-m1
+  description: Executable M1 human and agent walking-slice surface.
 servers:
   - url: http://localhost:8080
 paths:
@@ -31,6 +31,7 @@ paths:
                 pattern: '^workplane_session=[^;]+; Path=/; HttpOnly; SameSite=Lax(?:; Secure)?$'
                 examples:
                   - 'workplane_session=opaque; Path=/; HttpOnly; SameSite=Lax; Secure'
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Session'}
@@ -54,6 +55,8 @@ paths:
       responses:
         '201':
           description: Exploration project created
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Project'}
@@ -70,6 +73,8 @@ paths:
       responses:
         '200':
           description: Project projection
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Project'}
@@ -100,6 +105,7 @@ paths:
               description: Quoted aggregate version returned by the committed mutation.
               required: true
               schema: {$ref: '#/components/schemas/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Decision'}
@@ -116,6 +122,8 @@ paths:
       responses:
         '200':
           description: Immutable activity entries
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
           content:
             application/json:
               schema:
@@ -123,6 +131,11 @@ paths:
                 items: {$ref: '#/components/schemas/Activity'}
         default: {$ref: '#/components/responses/Problem'}
 components:
+  headers:
+    RequestId:
+      description: Server-generated identifier for the request and committed command.
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 128}
   securitySchemes:
     HumanSession:
       type: apiKey
@@ -205,7 +218,7 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [id, organization_id, title, outcome, mode, state, version]
+      required: [id, organization_id, title, outcome, mode, state, version, hypothesis, falsifier, decision_criteria, experiment_bound]
       properties:
         id: {type: string, format: uuid}
         organization_id: {type: string, format: uuid}
@@ -214,6 +227,10 @@ components:
         mode: {type: string, enum: [exploration, exploitation]}
         state: {type: string, enum: [proposed, active, held, completed, stopped, cancelled]}
         version: {type: integer, minimum: 1}
+        hypothesis: {type: string}
+        falsifier: {type: string}
+        decision_criteria: {type: array, items: {type: string}}
+        experiment_bound: {type: string}
     RecordDecision:
       type: object
       additionalProperties: false
@@ -229,10 +246,15 @@ components:
     Decision:
       type: object
       additionalProperties: false
-      required: [id, actor_id, recorded_at, kind, question, choice, alternatives, rationale, evidence, consequences]
+      required: [id, project_id, actor_id, actor_kind, principal_id, recorded_at, kind, question, choice, alternatives, rationale, evidence, consequences]
       properties:
         id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
         actor_id: {type: string, format: uuid}
+        actor_kind: {type: string, enum: [human, agent]}
+        principal_id:
+          type: [string, 'null']
+          format: uuid
         recorded_at: {type: string, format: date-time}
         kind: {type: string, enum: [continue, pivot, stop, promote, scope, forecast, waiver, risk-acceptance, complete, cancel]}
         question: {type: string, minLength: 1}
@@ -248,11 +270,18 @@ components:
     Activity:
       type: object
       additionalProperties: false
-      required: [event_id, event_type, actor_id, occurred_at]
+      required: [event_id, event_type, actor_id, actor_kind, principal_id, aggregate_version, command_id, request_id, occurred_at]
       properties:
         event_id: {type: string, format: uuid}
         event_type: {type: string}
         actor_id: {type: string, format: uuid}
+        actor_kind: {type: string, enum: [human, agent]}
+        principal_id:
+          type: [string, 'null']
+          format: uuid
+        aggregate_version: {type: integer, minimum: 1}
+        command_id: {type: string, format: uuid}
+        request_id: {type: string}
         occurred_at: {type: string, format: date-time}
     Problem:
       type: object
@@ -264,3 +293,4 @@ components:
         status: {type: integer, minimum: 400, maximum: 599}
         code: {type: string}
         request_id: {type: string}
+        detail: {type: string}

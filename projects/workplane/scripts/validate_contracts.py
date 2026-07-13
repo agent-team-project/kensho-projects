@@ -184,7 +184,7 @@ def validate() -> dict[str, int]:
     login_response = login_operation.get("responses", {}).get("200", {})
     login_headers = login_response.get("headers", {})
     set_cookie = login_headers.get("Set-Cookie", {})
-    check(set(login_headers) == {"Set-Cookie"}, "OpenAPI: login must issue exactly the declared Set-Cookie credential header")
+    check(set(login_headers) == {"Set-Cookie", "X-Request-ID"}, "OpenAPI: login must issue the declared credential and request-id headers")
     check(set_cookie.get("required") is True, "OpenAPI: login Set-Cookie response header must be required")
     check("workplane_session=" in str(set_cookie.get("schema", {}).get("pattern", "")), "OpenAPI: login Set-Cookie must name workplane_session")
     session_schema = openapi.get("components", {}).get("schemas", {}).get("Session", {})

@@ -1,0 +1,8 @@
+id: M1-AUTH-001
+requirement: PR-CORE-01
+layer: system
+title: Browser and agent authentication enforce active delegated authority
+given: {dimensions: [principal_status, membership, organization, role, token_scope, actor_kind, transport, state]}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, denied: [missing_csrf, wrong_origin, mixed_auth, cross_org, out_of_scope, revoked, disabled, terminal_state]}
+evidence: [target/agent-evidence/m1/api/deny-create-missing-csrf.json, target/agent-evidence/m1/api/deny-agent-out-of-scope.json, target/agent-evidence/m1/api/deny-mixed-authentication.json]

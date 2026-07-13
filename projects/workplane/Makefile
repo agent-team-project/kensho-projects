@@ -2,13 +2,15 @@ SHELL := /bin/sh
 PYTHON := .venv/bin/python3
 .DEFAULT_GOAL := check
 
-.PHONY: bootstrap generate generated-check check test-contract test-unit test-integration \
+.PHONY: bootstrap generate generated-check check test-contract test-unit test-integration test-browser \
 	smoke verify-acceptance verify-release evidence-smoke evidence-acceptance evidence-release clean
 
 bootstrap:
 	python3 -m venv .venv
 	$(PYTHON) -m pip install --requirement requirements-dev.txt
 	npm --prefix web ci
+	docker pull golang:1.25.6-alpine@sha256:98e6cffc31ccc44c7c15d83df1d69891efee8115a5bb7ede2bf30a38af3e3c92
+	docker pull postgres:17.5-alpine@sha256:6567bca8d7bc8c82c5922425a0baee57be8402df92bae5eacad5f01ae9544daa
 
 generate:
 	$(PYTHON) scripts/generate.py
@@ -38,6 +40,10 @@ test-unit:
 test-integration:
 	docker compose config --quiet
 	scripts/test_postgres.sh
+	scripts/test_m1.sh
+
+test-browser:
+	scripts/test_m1.sh
 
 check: test-contract test-unit
 	docker compose config --quiet

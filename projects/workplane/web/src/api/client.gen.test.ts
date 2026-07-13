@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   WorkplaneClient,
   WorkplaneContractError,
+  type RecordDecision,
   type VersionETag,
 } from "./client.gen";
 
-const decisionBody = {
+const decisionBody: RecordDecision = {
   kind: "continue",
   question: "Continue?",
   choice: "yes",

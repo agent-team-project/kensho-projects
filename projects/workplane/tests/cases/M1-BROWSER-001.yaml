@@ -1,0 +1,8 @@
+id: M1-BROWSER-001
+requirement: PR-CORE-02
+layer: browser
+title: Production browser completes M1 through the generated TypeScript client
+given: {build: production, browser: installed_chrome_or_chromium, state_authority: server}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, rendered: [login, project, decision, activity], console_failures: 0, network_failures: 0, generated_client_in_source_map: true}
+evidence: [target/agent-evidence/m1/browser/browser-screenshot.png, target/agent-evidence/m1/browser/browser-dom.html, target/agent-evidence/m1/browser/browser-console.json, target/agent-evidence/m1/browser/browser-network.json]
