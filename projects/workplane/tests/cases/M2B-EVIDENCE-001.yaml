@@ -1,0 +1,8 @@
+id: M2B-EVIDENCE-001
+requirement: M2B-EVIDENCE-001
+layer: system
+title: Smoke manifest digests every exact M2B authority resume and fault artifact
+given: {source: clean_exact_commit, runtime: outbound_isolated_compose}
+when: {command: make evidence-smoke}
+then: {result: pass, artifact_digests: valid, source_commit: exact_head}
+evidence: [evidence/runs]

@@ -1,0 +1,8 @@
+id: M2B-BACKPRESSURE-001
+requirement: M2B-BACKPRESSURE-001
+layer: system
+title: Bounded WebSocket acknowledgements and SSE buffers fail slow consumers explicitly
+given: {websocket_unacked_limit: 8, sse_buffer_limit: 8, fault: slow_realtime_writer}
+when: {command: scripts/test_realtime.sh}
+then: {result: pass, outcome: rate_limited, silent_drop: false}
+evidence: [target/agent-evidence/m2b/m2b-websocket-backpressure.json, target/agent-evidence/m2b/m2b-sse-backpressure.json]

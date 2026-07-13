@@ -227,7 +227,12 @@ func (store *DurableStore) RunOutboxOnce(ctx context.Context, consumer, worker s
 		result.InjectedFault = string(fault)
 		return result, ErrInjectedCrash
 	}
-	checkpoint, err := store.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	// The checkpoint row lock serializes workers for this consumer, while the
+	// unique delivery effect and monotonic trigger protect identity/order. Using
+	// SSI here would make the earlier-event predicate abort an unrelated
+	// serializable domain command whenever a new outbox row commits while two
+	// production consumers are active.
+	checkpoint, err := store.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return result, err
 	}

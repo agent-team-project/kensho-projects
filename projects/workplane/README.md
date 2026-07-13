@@ -3,8 +3,8 @@
 An agent-native project and portfolio system for humans and autonomous software
 organizations.
 
-**Status:** M1 walking slice and M2A transactional-outbox/replay spine implemented;
-broader durable-core, realtime, and release work remains explicitly unimplemented
+**Status:** M1 walking slice plus the M2A outbox/replay and M2B resumable
+realtime spines implemented; broader durable-core and release work remains explicitly unimplemented
 pending exact-commit verification and integration.
 
 Workplane is not a Jira or Notion clone. It joins project briefs, deliverables,
@@ -41,9 +41,11 @@ automation, calibrated forecasting, and an empirical research protocol.
 - `docs/walking-slice-m1.md` - the pinned next vertical transaction.
 - `docs/durable-spine-m2a.md` - the implemented outbox, checkpoint, replay,
   integrity, and evidence boundary.
+- `docs/realtime-spine-m2b.md` - the implemented WebSocket/SSE, resume,
+  authority-recheck, backpressure, restart, and evidence boundary.
 - `Makefile` - stable local smoke, acceptance, release, and evidence commands.
 
-## M1 + M2A local verification
+## M1 + M2A + M2B local verification
 
 Install the pinned development dependencies, then run the same gate used by
 the Workplane verifier:
@@ -58,7 +60,8 @@ runs Go and frontend format/lint/type/unit/build gates, migrates empty real
 PostgreSQL services, executes the equivalent human/agent transaction, captures
 production-browser evidence, exercises outbox crash/retry and deterministic
 shadow replay, validates integrity negatives and outbound-isolated Compose, and
-runs repository publication hygiene. `make evidence-smoke` runs the same
+runs the production WebSocket/SSE authority and recovery cases, and runs
+repository publication hygiene. `make evidence-smoke` runs the same
 commands from clean tracked source and emits a complete exact-commit manifest
 under `evidence/runs/`.
 

@@ -1,0 +1,8 @@
+id: M2B-RESUME-001
+requirement: M2B-RESUME-001
+layer: system
+title: Actor-bound cursors resume exactly across API and outbox process restart
+given: {cursor: signed_actor_org_filter_transport_bound, committed_events: 2}
+when: {command: scripts/test_realtime.sh, restart: [api, outbox]}
+then: {result: pass, missing_events: 0, duplicate_events: 0, stale_unknown: snapshot_required}
+evidence: [target/agent-evidence/m2b/m2b-restart-resume.json, target/agent-evidence/m2b/m2b-snapshot-required.json]

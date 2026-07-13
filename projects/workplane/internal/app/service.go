@@ -150,7 +150,7 @@ func (service *Service) bootstrap(ctx context.Context, seed BootstrapConfig) err
 	prefix := tokenPrefix(seed.AgentToken)
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO agent_tokens (id,agent_id,organization_id,token_prefix,token_hash,scopes,project_ids,expires_at,created_by,created_at)
-		VALUES ($1,$2,$3,$4,$5,ARRAY['project.create','project.read','decision.record'],NULL,$6,$7,$8)
+		VALUES ($1,$2,$3,$4,$5,ARRAY['project.create','project.read','decision.record','realtime.subscribe','event.subscribe'],NULL,$6,$7,$8)
 		ON CONFLICT (id) DO UPDATE SET token_prefix=EXCLUDED.token_prefix,token_hash=EXCLUDED.token_hash,
 			scopes=EXCLUDED.scopes,expires_at=EXCLUDED.expires_at,revoked_at=NULL`,
 		tokenID, seed.AgentID, seed.OrganizationID, prefix, keyedHash(service.config.TokenHashKey, seed.AgentToken),
@@ -257,6 +257,14 @@ func (service *Service) audit(ctx context.Context, category, requestID string, a
 }
 
 func (service *Service) authenticate(ctx context.Context, request generated.Request, action, projectID string) (Actor, generated.Response, bool) {
+	return service.authenticateActor(ctx, request, action, projectID, false)
+}
+
+func (service *Service) authenticateSubscription(ctx context.Context, request generated.Request, action string) (Actor, generated.Response, bool) {
+	return service.authenticateActor(ctx, request, action, "", true)
+}
+
+func (service *Service) authenticateActor(ctx context.Context, request generated.Request, action, projectID string, subscription bool) (Actor, generated.Response, bool) {
 	rid := requestID()
 	hasSession := request.Security.SessionCookie != ""
 	hasBearer := request.Security.BearerToken != ""
@@ -318,7 +326,7 @@ func (service *Service) authenticate(ctx context.Context, request generated.Requ
 	denialReason := ""
 	if !actor.Scopes[action] {
 		denialReason = "agent_action_scope"
-	} else if !agentProjectRestrictionAllows(actor.ProjectIDs, projectID) {
+	} else if !subscription && !agentProjectRestrictionAllows(actor.ProjectIDs, projectID) {
 		denialReason = "agent_project_restriction"
 	}
 	if denialReason != "" {
@@ -351,7 +359,8 @@ func agentProjectRestrictionAllows(projectIDs map[string]bool, projectID string)
 }
 
 func organizationRoleAllows(role, action string) bool {
-	return role == "owner" || role == "admin" || role == "member" || (action == "project.read" && role == "observer")
+	return role == "owner" || role == "admin" || role == "member" ||
+		(role == "observer" && (action == "project.read" || action == "realtime.subscribe" || action == "event.subscribe"))
 }
 
 func (service *Service) requireHumanMutation(request generated.Request, actor Actor, rid string) (generated.Response, bool) {

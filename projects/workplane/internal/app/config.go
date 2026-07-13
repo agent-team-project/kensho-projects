@@ -8,13 +8,19 @@ import (
 )
 
 type Config struct {
-	DatabaseURL    string
-	PublicOrigin   string
-	TokenHashKey   []byte
-	SessionTTL     time.Duration
-	CookieSecure   bool
-	Bootstrap      *BootstrapConfig
-	FaultInjection bool
+	DatabaseURL          string
+	PublicOrigin         string
+	TokenHashKey         []byte
+	SessionTTL           time.Duration
+	CookieSecure         bool
+	Bootstrap            *BootstrapConfig
+	FaultInjection       bool
+	RealtimePollInterval time.Duration
+	RealtimeHeartbeat    time.Duration
+	RealtimeCursorTTL    time.Duration
+	RealtimeWriteTimeout time.Duration
+	RealtimeMaxUnacked   int
+	RealtimeBuffer       int
 }
 
 type BootstrapConfig struct {
@@ -32,12 +38,18 @@ type BootstrapConfig struct {
 
 func ConfigFromEnv() (Config, error) {
 	cfg := Config{
-		DatabaseURL:    os.Getenv("WORKPLANE_DATABASE_URL"),
-		PublicOrigin:   strings.TrimRight(os.Getenv("WORKPLANE_PUBLIC_ORIGIN"), "/"),
-		TokenHashKey:   []byte(os.Getenv("WORKPLANE_TOKEN_HASH_KEY")),
-		SessionTTL:     8 * time.Hour,
-		CookieSecure:   os.Getenv("WORKPLANE_COOKIE_SECURE") != "false",
-		FaultInjection: os.Getenv("WORKPLANE_FAULT_INJECTION") == "true",
+		DatabaseURL:          os.Getenv("WORKPLANE_DATABASE_URL"),
+		PublicOrigin:         strings.TrimRight(os.Getenv("WORKPLANE_PUBLIC_ORIGIN"), "/"),
+		TokenHashKey:         []byte(os.Getenv("WORKPLANE_TOKEN_HASH_KEY")),
+		SessionTTL:           8 * time.Hour,
+		CookieSecure:         os.Getenv("WORKPLANE_COOKIE_SECURE") != "false",
+		FaultInjection:       os.Getenv("WORKPLANE_FAULT_INJECTION") == "true",
+		RealtimePollInterval: 25 * time.Millisecond,
+		RealtimeHeartbeat:    time.Second,
+		RealtimeCursorTTL:    24 * time.Hour,
+		RealtimeWriteTimeout: time.Second,
+		RealtimeMaxUnacked:   8,
+		RealtimeBuffer:       8,
 	}
 	if cfg.PublicOrigin == "" {
 		cfg.PublicOrigin = "http://localhost:8080"

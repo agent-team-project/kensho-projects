@@ -1,0 +1,8 @@
+id: M2B-REALTIME-001
+requirement: M2B-REALTIME-001
+layer: system
+title: WebSocket and SSE publish the exact same checkpointed canonical envelopes
+given: {runtime: production_http, database: real_postgresql, consumer: realtime-v1}
+when: {command: scripts/test_realtime.sh, transports: [websocket, sse]}
+then: {result: pass, canonical_envelope_equal: true, committed_only: true, ordered: true}
+evidence: [target/agent-evidence/m2b/m2b-restart-resume.json, target/agent-evidence/m2b/m2b-commit-before-publish.json]
