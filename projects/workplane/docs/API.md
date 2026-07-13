@@ -256,8 +256,12 @@ POST   /api/v1/projects/{project_id}/deliverables
 GET    /api/v1/deliverables/{id}
 PATCH  /api/v1/deliverables/{id}
 POST   /api/v1/deliverables/{id}/criteria
+GET    /api/v1/deliverables/{id}/gates
 POST   /api/v1/deliverables/{id}/gates
 POST   /api/v1/deliverables/{id}/submit
+POST   /api/v1/deliverables/{id}/bounce
+POST   /api/v1/deliverables/{id}/resubmit
+POST   /api/v1/deliverables/{id}/approve
 POST   /api/v1/deliverables/{id}/waive
 POST   /api/v1/deliverables/{id}/cancel
 
@@ -268,14 +272,19 @@ POST   /api/v1/evidence/{id}/supersede
 POST   /api/v1/gates/{gate_id}/verdicts
 POST   /api/v1/gates/{gate_id}/waive
 GET    /api/v1/gates/{gate_id}/verdicts
+GET    /api/v1/deliverables/{id}/findings
 POST   /api/v1/findings/{finding_id}/resolve
 POST   /api/v1/findings/{finding_id}/withdraw
 ```
 
-Review submission rejects an actor that produced the submitted deliverable when
-the gate requires independence. `gates/{id}/waive` rejects hard gates in every
-state. Both waiver routes require a human principal and embed the closed waiver
-decision payload; neither accepts a free-form action qualifier.
+An independent gate rejects any actor whose effective identity created the
+deliverable, made the current submission, or produced its verdict evidence.
+Submit and resubmit require current evidence satisfying every stable gate
+contract; bounce requires an open actionable finding; approval requires every
+hard gate passed and every finding closed. `gates/{id}/waive` rejects hard gates
+in every state. Both waiver routes require a human actor and embed the universal
+waiver decision payload with rationale, linked evidence, consequences, and
+residual risk; neither accepts a free-form action qualifier.
 
 ## 11. Work and dependencies
 

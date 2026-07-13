@@ -11,6 +11,7 @@ import (
 )
 
 type adapterTestHandler struct {
+	Handler
 	loginResponse          Response
 	createProjectRequests  chan Request
 	recordDecisionResponse Response

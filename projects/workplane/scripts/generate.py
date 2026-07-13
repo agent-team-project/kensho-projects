@@ -27,8 +27,23 @@ REQUEST_SCHEMA_NAMES = (
     "ForecastInput",
     "TargetInput",
     "DeadlineInput",
+    "EvidenceInput",
+    "GateInput",
+    "VerdictInput",
+    "FindingDispositionInput",
+    "SubmissionInput",
+    "BounceInput",
+    "ReviewNoteInput",
+    "WaiverInput",
 )
-GO_SCHEMA_NAMES = (*REQUEST_SCHEMA_NAMES, "PromotionDecision", "Session")
+GO_SCHEMA_NAMES = (
+    *REQUEST_SCHEMA_NAMES,
+    "PromotionDecision",
+    "EvidenceSupportInput",
+    "EvidenceRequirementInput",
+    "FindingInput",
+    "Session",
+)
 
 
 def load_yaml(relative: str) -> dict[str, Any]:
@@ -76,7 +91,7 @@ def go_name(operation_id: str) -> str:
 
 
 def go_property_name(property_name: str) -> str:
-    acronyms = {"csrf": "CSRF", "id": "ID"}
+    acronyms = {"csrf": "CSRF", "id": "ID", "ids": "IDs", "uri": "URI"}
     return "".join(acronyms.get(part, part.title()) for part in property_name.split("_"))
 
 
@@ -91,6 +106,8 @@ def go_schema_type(schema: dict[str, Any]) -> str:
         return "bool"
     if schema.get("type") == "array":
         return f"[]{go_schema_type(schema.get('items', {}))}"
+    if schema.get("type") == "object" and schema.get("additionalProperties", {}).get("type") == "string":
+        return "map[string]string"
     return "any"
 
 
@@ -321,6 +338,8 @@ def ts_schema_type(schema: dict[str, Any]) -> str:
         return "boolean"
     if schema.get("type") == "array":
         return f"Array<{ts_schema_type(schema.get('items', {}))}>"
+    if schema.get("type") == "object" and schema.get("additionalProperties", {}).get("type") == "string":
+        return "Record<string, string>"
     return "unknown"
 
 
@@ -373,6 +392,18 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         "reforecastDeliverable": "ForecastInput",
         "setProjectTarget": "TargetInput",
         "setProjectDeadline": "DeadlineInput",
+        "createEvidence": "EvidenceInput",
+        "supersedeEvidence": "EvidenceInput",
+        "createGate": "GateInput",
+        "recordVerdict": "VerdictInput",
+        "resolveFinding": "FindingDispositionInput",
+        "withdrawFinding": "FindingDispositionInput",
+        "submitDeliverable": "SubmissionInput",
+        "bounceDeliverable": "BounceInput",
+        "resubmitDeliverable": "SubmissionInput",
+        "approveDeliverable": "ReviewNoteInput",
+        "waiveDeliverable": "WaiverInput",
+        "waiveGate": "WaiverInput",
     }
     response_types = {
         "login": "Session",
@@ -394,6 +425,22 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         "reforecastDeliverable": "Forecast",
         "setProjectTarget": "Target",
         "setProjectDeadline": "Deadline",
+        "listEvidence": "Array<Evidence>",
+        "createEvidence": "Evidence",
+        "supersedeEvidence": "Evidence",
+        "listGates": "Array<Gate>",
+        "createGate": "Gate",
+        "listVerdicts": "Array<Verdict>",
+        "recordVerdict": "VerdictResult",
+        "listFindings": "Array<Finding>",
+        "resolveFinding": "FindingActionResult",
+        "withdrawFinding": "FindingActionResult",
+        "submitDeliverable": "SubmissionResult",
+        "bounceDeliverable": "Deliverable",
+        "resubmitDeliverable": "SubmissionResult",
+        "approveDeliverable": "Deliverable",
+        "waiveDeliverable": "DeliverableWaiverResult",
+        "waiveGate": "GateWaiverResult",
     }
     methods: list[str] = []
     for op in ops:
@@ -446,8 +493,11 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
   }}''')
     schema_names = [
         *REQUEST_SCHEMA_NAMES,
-        "PromotionDecision", "Session", "Project", "Decision", "Deliverable",
-        "Forecast", "Target", "Deadline", "PromotionResult", "Activity", "Problem",
+        "PromotionDecision", "EvidenceSupportInput", "EvidenceRequirementInput", "FindingInput",
+        "Session", "Project", "Decision", "Deliverable", "EvidenceSupport", "Evidence", "Gate",
+        "Verdict", "Finding", "FindingAction", "Submission", "VerdictResult", "FindingActionResult",
+        "SubmissionResult", "DeliverableWaiverResult", "GateWaiverResult", "Forecast", "Target",
+        "Deadline", "PromotionResult", "Activity", "Problem",
     ]
     generated_types = "\n\n".join(generate_ts_object_type(name, openapi["components"]["schemas"][name]) for name in schema_names)
     owned_request_headers = json.dumps(contract_owned_request_headers(openapi), indent=2)
@@ -525,6 +575,7 @@ type RuntimeSchema = {{
   maxLength?: number;
   minItems?: number;
   maxItems?: number;
+  maxProperties?: number;
   minimum?: number;
   maximum?: number;
   uniqueItems?: boolean;
@@ -590,6 +641,9 @@ export class WorkplaneClient {{
         throw new WorkplaneContractError(`${{path}} must be an object`);
       }}
       const record = value as Record<string, unknown>;
+      if (schema.maxProperties !== undefined && Object.keys(record).length > schema.maxProperties) {{
+        throw new WorkplaneContractError(`${{path}} must contain at most ${{schema.maxProperties}} properties`);
+      }}
       for (const required of schema.required ?? []) {{
         if (!Object.hasOwn(record, required)) {{
           throw new WorkplaneContractError(`${{path}}.${{required}} is required`);

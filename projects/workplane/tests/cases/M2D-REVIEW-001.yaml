@@ -1,0 +1,8 @@
+id: M2D-REVIEW-001
+requirement: M2D-REVIEW-001
+layer: system
+title: Submit bounce resolve resubmit and approve retain immutable attributable state history
+given: {runtime: production_http, database: real_postgresql, deliverable_state: ready}
+when: {command: scripts/test_planning.sh, operations: [submitDeliverable, bounceDeliverable, resolveFinding, resubmitDeliverable, approveDeliverable]}
+then: {result: pass, states: [ready, submitted, bounced, submitted, accepted], invalid_residue: 0}
+evidence: [target/agent-evidence/m2c/m2d-review-workflow.json]

@@ -70,6 +70,11 @@ claim_families:
     behavior: nonterminal_lifecycle_deliverable_criteria_and_immutable_scoped_forecast_history
     suites: [domain, property, permission, api_parity, persistence_replay_idempotency, realtime, recovery, evidence_manifest]
     begins_at: durable-core
+  - id: TRACE-EVIDENCE-REVIEW
+    authority: [PRODUCT:6, DOMAIN:3.6, DOMAIN:3.7, SECURITY:8, ISSUE:15]
+    behavior: immutable_evidence_gated_review_findings_effective_principal_independence_and_human_policy_waivers
+    suites: [domain, property, permission, api_parity, persistence_replay_idempotency, realtime, recovery, security, evidence_manifest]
+    begins_at: durable-core
   - id: TRACE-OPERATIONS
     authority: [SPEC:5.8, ARCHITECTURE:deployment]
     behavior: offline_self_host_backup_restore_and_observable_recovery

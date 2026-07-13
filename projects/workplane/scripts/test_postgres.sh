@@ -37,8 +37,21 @@ durable_shape="$(docker compose --project-name "$project" exec -T postgres \
     (SELECT count(*) FROM projection_heads) || '|' ||
     COALESCE(to_regclass('public.realtime_retention')::text,'absent') || '|' ||
     COALESCE(to_regclass('public.project_memberships')::text,'absent') FROM schema_migrations;")"
-if [ "$durable_shape" != "6|2|0|realtime_retention|project_memberships" ]; then
+if [ "$durable_shape" != "7|2|0|realtime_retention|project_memberships" ]; then
   echo "unexpected durable schema shape: $durable_shape" >&2
+  exit 1
+fi
+
+review_shape="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT to_regclass('public.evidence')::text || '|' ||
+    to_regclass('public.review_gates')::text || '|' ||
+    to_regclass('public.review_verdicts')::text || '|' ||
+    to_regclass('public.review_findings')::text || '|' ||
+    to_regclass('public.deliverable_submissions')::text || '|' ||
+    to_regclass('public.replay_review_projections')::text;")"
+if [ "$review_shape" != "evidence|review_gates|review_verdicts|review_findings|deliverable_submissions|replay_review_projections" ]; then
+  echo "unexpected M2D review schema shape: $review_shape" >&2
   exit 1
 fi
 
@@ -72,4 +85,4 @@ if [ "$app_role" != "workplane_app|false" ]; then
   exit 1
 fi
 
-printf '%s\n' "PostgreSQL migration, durable/realtime/planning schema, least-privilege role, and fixture passed: counts=$counts sha256=$actual_digest"
+printf '%s\n' "PostgreSQL migration, durable/realtime/planning/review schema, least-privilege role, and fixture passed: counts=$counts sha256=$actual_digest"

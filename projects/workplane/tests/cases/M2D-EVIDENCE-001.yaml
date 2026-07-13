@@ -1,0 +1,8 @@
+id: M2D-EVIDENCE-001
+requirement: M2D-EVIDENCE-001
+layer: system
+title: Evidence preserves attributable content digest links and linear supersession while rejecting mutation and stale use
+given: {runtime: production_http, database: real_postgresql, actors: [human, agent]}
+when: {command: scripts/test_planning.sh, operations: [createEvidence, supersedeEvidence, listEvidence]}
+then: {result: pass, digest: valid, provenance: complete, database_mutation: denied, branching: denied, stale_submission_residue: 0}
+evidence: [target/agent-evidence/m2c/m2d-evidence.json]

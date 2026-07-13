@@ -1,0 +1,8 @@
+id: M2D-DURABILITY-001
+requirement: M2D-DURABILITY-001
+layer: system
+title: Review state event outbox replay realtime and doctor projections agree exactly
+given: {runtime: outbound_isolated_compose, database: real_postgresql, replay_projection: empty}
+when: {command: scripts/test_planning.sh, event_families: [evidence, gate, verdict, finding, submission, waiver]}
+then: {result: pass, ledger_outbox: one_to_one, replay_checksum: equal, realtime_delivery: complete, doctor_findings: 0}
+evidence: [target/agent-evidence/m2c/m2d-ledger-realtime.json, target/agent-evidence/m2c/m2c-durability.json]

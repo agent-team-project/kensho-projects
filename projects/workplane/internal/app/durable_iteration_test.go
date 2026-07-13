@@ -158,8 +158,8 @@ func (connection *durableIterationConn) QueryContext(_ context.Context, query st
 	case strings.Contains(query, "FROM deliverables") && strings.Contains(query, "ORDER BY project_id,id"):
 		created := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
 		return connection.rows("deliverables",
-			[]string{"id", "organization_id", "project_id", "title", "description", "required", "weight", "state", "acceptance_criteria", "version", "created_by", "created_at", "updated_at"},
-			[]driver.Value{"00000000-0000-4000-8000-000000000030", "00000000-0000-4000-8000-000000000010", "00000000-0000-4000-8000-000000000020", "Release", "Observable output", true, int64(1000), "ready", []byte(`["Exact evidence passes"]`), int64(1), "00000000-0000-4000-8000-000000000040", created, created}), nil
+			[]string{"id", "organization_id", "project_id", "title", "description", "required", "weight", "state", "acceptance_criteria", "version", "waiver_decision_id", "created_by", "created_at", "updated_at"},
+			[]driver.Value{"00000000-0000-4000-8000-000000000030", "00000000-0000-4000-8000-000000000010", "00000000-0000-4000-8000-000000000020", "Release", "Observable output", true, int64(1000), "ready", []byte(`["Exact evidence passes"]`), int64(1), nil, "00000000-0000-4000-8000-000000000040", created, created}), nil
 	case strings.Contains(query, "FROM forecasts") && strings.Contains(query, "ORDER BY project_id"):
 		created := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
 		return connection.rows("forecasts",

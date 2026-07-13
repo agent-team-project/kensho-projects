@@ -1,0 +1,8 @@
+id: M2D-POSTGRES-001
+requirement: M2D-POSTGRES-001
+layer: integration
+title: Real PostgreSQL serializes review races rolls back every fault boundary and upgrades M2C without rewrite
+given: {database: real_postgresql, prior_schema_version: 6, accepted_rows: populated}
+when: {command: make test-integration, races: [finding_resolution, approval], faults: every_m2d_write_boundary}
+then: {result: pass, race_winners: 1, version_conflicts: 1, rollback_residue: 0, prior_rows_unchanged: true, schema_version: 7}
+evidence: [target/agent-evidence/m2c/m2d-authority-atomicity.json, target/agent-evidence/m2c/migration.log]

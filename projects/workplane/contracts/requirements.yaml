@@ -106,6 +106,38 @@ requirements:
     source: VERIFICATION:19;ISSUE:12
     title: Exact-head evidence captures planning invariants parity concurrency faults replay and upgrade
     begins_at: durable-core
+  - id: M2D-EVIDENCE-001
+    source: DOMAIN:3.6;ISSUE:15
+    title: Evidence is immutable attributable integrity-digested linked and corrected only by linear supersession
+    begins_at: durable-core
+  - id: M2D-REVIEW-001
+    source: PRODUCT:6;ISSUE:15
+    title: Deliverables submit bounce resubmit approve and waive through attributable evidence-bound review history
+    begins_at: durable-core
+  - id: M2D-GATE-001
+    source: DOMAIN:3.7;ISSUE:15
+    title: Stable hard and soft gates retain immutable verdict and actionable finding histories
+    begins_at: durable-core
+  - id: M2D-SEPARATION-001
+    source: SECURITY:8;ISSUE:15
+    title: Effective principals cannot independently review their own deliverable submission or evidence
+    begins_at: durable-core
+  - id: M2D-PARITY-001
+    source: API:7-10;SECURITY:4-6;ISSUE:15
+    title: Humans and equivalently scoped agents share every evidence and review operation except declared human policy judgments
+    begins_at: durable-core
+  - id: M2D-DURABILITY-001
+    source: DOMAIN:7-9;ISSUE:15
+    title: Every evidence review finding submission and waiver atomically updates relational state ledger outbox replay and realtime
+    begins_at: durable-core
+  - id: M2D-POSTGRES-001
+    source: VERIFICATION:4,6;ISSUE:15
+    title: Real PostgreSQL proves review concurrency rollback upgrade integrity and unknown-event fail-closed behavior
+    begins_at: durable-core
+  - id: M2D-EXACT-HEAD-001
+    source: VERIFICATION:19-20;ISSUE:15
+    title: Exact-head smoke evidence captures every M2D acceptance outcome without lowering prior gates
+    begins_at: durable-core
   - id: PR-CORE-01
     source: PRODUCT:4.5
     title: Actor-neutral public project creation records attributable events

@@ -1,0 +1,8 @@
+id: M2D-PARITY-001
+requirement: M2D-PARITY-001
+layer: system
+title: Human session and agent bearer clients use the same generated public evidence and review operations
+given: {runtime: production_http, actors: [human, agent], authority: equivalent_except_written_human_policy}
+when: {command: scripts/test_planning.sh, contract: contracts/openapi.yaml, client: web/src/api/client.gen.ts}
+then: {result: pass, private_endpoint: absent, normalized_domain_equal: true, etag_idempotency_equal: true, expected_policy_deny: explicit}
+evidence: [target/agent-evidence/m2c/m2d-evidence.json, target/agent-evidence/m2c/m2d-authority-atomicity.json]

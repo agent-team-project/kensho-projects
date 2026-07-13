@@ -1,9 +1,9 @@
 openapi: 3.1.0
 x-request-body-max-bytes: 65536
 info:
-  title: Workplane Planning Contract API
-  version: 0.5.0-m2c
-  description: Executable M1/M2 durable realtime behavior plus the M2C planning-contract spine.
+  title: Workplane Evidence Review API
+  version: 0.6.0-m2d
+  description: Executable M1/M2 durable realtime and planning behavior plus the M2D immutable-evidence review spine.
 servers:
   - url: http://localhost:8080
 paths:
@@ -228,6 +228,289 @@ paths:
             schema: {$ref: '#/components/schemas/DeliverableInput'}
       responses:
         '200': *versionedDeliverableResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/projects/{project_id}/evidence:
+    parameters: [{$ref: '#/components/parameters/ProjectId'}]
+    get:
+      operationId: listEvidence
+      security: *readSecurity
+      x-permission-actions: [evidence.read]
+      responses:
+        '200':
+          description: Immutable attributable project evidence in stable chain order
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Evidence'}}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createEvidence
+      security: *mutationSecurity
+      x-permission-actions: [evidence.create]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EvidenceInput'}
+      responses:
+        '201': &versionedEvidenceResponse
+          description: Immutable attributable evidence
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Evidence'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/evidence/{id}/supersede:
+    parameters: [{$ref: '#/components/parameters/EvidenceId'}]
+    post:
+      operationId: supersedeEvidence
+      security: *mutationSecurity
+      x-permission-actions: [evidence.supersede]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EvidenceInput'}
+      responses:
+        '201': *versionedEvidenceResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/gates:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    get:
+      operationId: listGates
+      security: *readSecurity
+      x-permission-actions: [deliverable.read]
+      responses:
+        '200':
+          description: Stable current gate projections with immutable verdict history available separately
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Gate'}}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createGate
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.edit]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GateInput'}
+      responses:
+        '201': &versionedGateResponse
+          description: Stable evidence gate
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Gate'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/gates/{gate_id}/verdicts:
+    parameters: [{$ref: '#/components/parameters/GateId'}]
+    get:
+      operationId: listVerdicts
+      security: *readSecurity
+      x-permission-actions: [deliverable.read]
+      responses:
+        '200':
+          description: Immutable attributable verdict history
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Verdict'}}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: recordVerdict
+      security: *mutationSecurity
+      x-permission-actions: [review.verdict]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VerdictInput'}
+      responses:
+        '201':
+          description: Atomic gate, verdict, and actionable-finding result
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VerdictResult'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/findings:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    get:
+      operationId: listFindings
+      security: *readSecurity
+      x-permission-actions: [deliverable.read]
+      responses:
+        '200':
+          description: Current finding projections retaining immutable origin and disposition history
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Finding'}}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/findings/{finding_id}/resolve:
+    parameters: [{$ref: '#/components/parameters/FindingId'}]
+    post:
+      operationId: resolveFinding
+      security: *mutationSecurity
+      x-permission-actions: [finding.resolve]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FindingDispositionInput'}
+      responses:
+        '200': &versionedFindingActionResponse
+          description: Atomic attributable finding disposition
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FindingActionResult'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/findings/{finding_id}/withdraw:
+    parameters: [{$ref: '#/components/parameters/FindingId'}]
+    post:
+      operationId: withdrawFinding
+      security: *mutationSecurity
+      x-permission-actions: [finding.withdraw]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FindingDispositionInput'}
+      responses:
+        '200': *versionedFindingActionResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    post:
+      operationId: submitDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.submit, review.request]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SubmissionInput'}
+      responses:
+        '200': &versionedSubmissionResponse
+          description: Committed deliverable and immutable submission record
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SubmissionResult'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/bounce:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    post:
+      operationId: bounceDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [review.verdict]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BounceInput'}
+      responses:
+        '200': *versionedDeliverableResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/resubmit:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    post:
+      operationId: resubmitDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.submit, review.request]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SubmissionInput'}
+      responses:
+        '200': *versionedSubmissionResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/approve:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    post:
+      operationId: approveDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [review.verdict]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviewNoteInput'}
+      responses:
+        '200': *versionedDeliverableResponse
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/deliverables/{id}/waive:
+    parameters: [{$ref: '#/components/parameters/DeliverableId'}]
+    post:
+      operationId: waiveDeliverable
+      security: *mutationSecurity
+      x-permission-actions: [deliverable.waive, decision.record]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WaiverInput'}
+      responses:
+        '200':
+          description: Atomic human-only deliverable waiver and universal decision
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeliverableWaiverResult'}
+        default: {$ref: '#/components/responses/Problem'}
+  /api/v1/gates/{gate_id}/waive:
+    parameters: [{$ref: '#/components/parameters/GateId'}]
+    post:
+      operationId: waiveGate
+      security: *mutationSecurity
+      x-permission-actions: [gate.soft_waive, decision.record]
+      parameters: *versionedMutationParameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WaiverInput'}
+      responses:
+        '200':
+          description: Atomic human-only soft-gate waiver and universal decision
+          headers:
+            ETag: {$ref: '#/components/headers/VersionETag'}
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GateWaiverResult'}
         default: {$ref: '#/components/responses/Problem'}
   /api/v1/projects/{project_id}/forecasts:
     parameters: [{$ref: '#/components/parameters/ProjectId'}]
@@ -481,6 +764,21 @@ components:
       in: path
       required: true
       schema: {type: string, format: uuid}
+    EvidenceId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    GateId:
+      name: gate_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    FindingId:
+      name: finding_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -615,6 +913,140 @@ components:
           minItems: 1
           maxItems: 32
           items: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
+    EvidenceSupportInput:
+      type: object
+      additionalProperties: false
+      required: [target_type, target_id]
+      properties:
+        target_type: {type: string, enum: [deliverable, gate, finding, decision]}
+        target_id: {type: string, format: uuid}
+    EvidenceInput:
+      type: object
+      additionalProperties: false
+      required: [kind, title, claim, source, metadata, supports]
+      properties:
+        kind: {type: string, enum: [report, test-run, link, image, observation, measurement]}
+        title: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        claim: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        source: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        content: {type: string, minLength: 1, maxLength: 16000, pattern: '\S'}
+        uri: {type: string, format: uri-reference, minLength: 1, maxLength: 2000}
+        metadata:
+          type: object
+          maxProperties: 32
+          additionalProperties: {type: string, minLength: 1, maxLength: 2000}
+        supports:
+          type: array
+          minItems: 1
+          maxItems: 32
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/EvidenceSupportInput'}
+    EvidenceRequirementInput:
+      type: object
+      additionalProperties: false
+      required: [kind, claim]
+      properties:
+        kind: {type: string, enum: [report, test-run, link, image, observation, measurement]}
+        claim: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+    GateInput:
+      type: object
+      additionalProperties: false
+      required: [name, kind, hard, independence_required, required_evidence]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        kind: {type: string, enum: [automated, review, approval]}
+        hard: {type: boolean}
+        independence_required: {type: boolean}
+        required_evidence:
+          type: array
+          minItems: 1
+          maxItems: 32
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/EvidenceRequirementInput'}
+    FindingInput:
+      type: object
+      additionalProperties: false
+      required: [title, detail, blocking]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200, pattern: '\S'}
+        detail: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        blocking: {type: boolean}
+    VerdictInput:
+      type: object
+      additionalProperties: false
+      required: [result, evidence_ids, findings]
+      properties:
+        result: {type: string, enum: [pass, fail]}
+        evidence_ids:
+          type: array
+          minItems: 1
+          maxItems: 64
+          uniqueItems: true
+          items: {type: string, format: uuid}
+        findings:
+          type: array
+          maxItems: 32
+          items: {$ref: '#/components/schemas/FindingInput'}
+    FindingDispositionInput:
+      type: object
+      additionalProperties: false
+      required: [evidence_ids, rationale]
+      properties:
+        evidence_ids:
+          type: array
+          minItems: 1
+          maxItems: 64
+          uniqueItems: true
+          items: {type: string, format: uuid}
+        rationale: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+    SubmissionInput:
+      type: object
+      additionalProperties: false
+      required: [evidence_ids, note]
+      properties:
+        evidence_ids:
+          type: array
+          minItems: 1
+          maxItems: 64
+          uniqueItems: true
+          items: {type: string, format: uuid}
+        note: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+    BounceInput:
+      type: object
+      additionalProperties: false
+      required: [finding_id, rationale]
+      properties:
+        finding_id: {type: string, format: uuid}
+        rationale: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+    ReviewNoteInput:
+      type: object
+      additionalProperties: false
+      required: [note]
+      properties:
+        note: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+    WaiverInput:
+      type: object
+      additionalProperties: false
+      required: [question, choice, alternatives, rationale, evidence_ids, consequences, residual_risk]
+      properties:
+        question: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        choice: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
+        alternatives:
+          type: array
+          maxItems: 32
+          items: {type: string, maxLength: 1000}
+        rationale: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
+        evidence_ids:
+          type: array
+          minItems: 1
+          maxItems: 64
+          uniqueItems: true
+          items: {type: string, format: uuid}
+        consequences:
+          type: array
+          maxItems: 32
+          items: {type: string, maxLength: 2000}
+        residual_risk: {type: string, minLength: 1, maxLength: 4000, pattern: '\S'}
     PromotionDecision:
       type: object
       additionalProperties: false
@@ -690,7 +1122,7 @@ components:
           type: [string, 'null']
           format: uuid
         recorded_at: {type: string, format: date-time}
-        kind: {type: string, enum: [continue, promote]}
+        kind: {type: string, enum: [continue, promote, waiver]}
         question: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
         choice: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}
         alternatives:
@@ -709,7 +1141,7 @@ components:
     Deliverable:
       type: object
       additionalProperties: false
-      required: [id, organization_id, project_id, title, description, required, weight, state, acceptance_criteria, version, created_by, created_at, updated_at]
+      required: [id, organization_id, project_id, title, description, required, weight, state, acceptance_criteria, version, waiver_decision_id, created_by, created_at, updated_at]
       properties:
         id: {type: string, format: uuid}
         organization_id: {type: string, format: uuid}
@@ -721,9 +1153,166 @@ components:
         state: {type: string, enum: [draft, ready, submitted, bounced, accepted, waived, cancelled]}
         acceptance_criteria: {type: array, items: {type: string}}
         version: {type: integer, minimum: 1}
+        waiver_decision_id: {type: [string, 'null'], format: uuid}
         created_by: {type: string, format: uuid}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+    EvidenceSupport:
+      type: object
+      additionalProperties: false
+      required: [target_type, target_id]
+      properties:
+        target_type: {type: string, enum: [deliverable, gate, finding, decision]}
+        target_id: {type: string, format: uuid}
+    Evidence:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, kind, title, claim, source, content, uri, metadata, integrity_digest, produced_by, producer_kind, principal_id, produced_at, supersedes_id, supports]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        kind: {type: string, enum: [report, test-run, link, image, observation, measurement]}
+        title: {type: string}
+        claim: {type: string}
+        source: {type: string}
+        content: {type: [string, 'null']}
+        uri: {type: [string, 'null'], format: uri-reference}
+        metadata:
+          type: object
+          additionalProperties: {type: string}
+        integrity_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+        produced_by: {type: string, format: uuid}
+        producer_kind: {type: string, enum: [human, agent]}
+        principal_id: {type: [string, 'null'], format: uuid}
+        produced_at: {type: string, format: date-time}
+        supersedes_id: {type: [string, 'null'], format: uuid}
+        supports: {type: array, minItems: 1, items: {$ref: '#/components/schemas/EvidenceSupport'}}
+    Gate:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, deliverable_id, name, kind, hard, independence_required, state, version, waiver_decision_id, required_evidence, created_by, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        deliverable_id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {type: string, enum: [automated, review, approval]}
+        hard: {type: boolean}
+        independence_required: {type: boolean}
+        state: {type: string, enum: [pending, passed, failed, waived]}
+        version: {type: integer, minimum: 1}
+        waiver_decision_id: {type: [string, 'null'], format: uuid}
+        required_evidence: {type: array, minItems: 1, items: {$ref: '#/components/schemas/EvidenceRequirementInput'}}
+        created_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Verdict:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, deliverable_id, gate_id, result, evidence_ids, reviewer_id, reviewer_kind, principal_id, supersedes_id, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        deliverable_id: {type: string, format: uuid}
+        gate_id: {type: string, format: uuid}
+        result: {type: string, enum: [pass, fail]}
+        evidence_ids: {type: array, minItems: 1, items: {type: string, format: uuid}}
+        reviewer_id: {type: string, format: uuid}
+        reviewer_kind: {type: string, enum: [human, agent]}
+        principal_id: {type: [string, 'null'], format: uuid}
+        supersedes_id: {type: [string, 'null'], format: uuid}
+        created_at: {type: string, format: date-time}
+    Finding:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, deliverable_id, gate_id, verdict_id, title, detail, blocking, state, version, created_by, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        deliverable_id: {type: string, format: uuid}
+        gate_id: {type: string, format: uuid}
+        verdict_id: {type: string, format: uuid}
+        title: {type: string}
+        detail: {type: string}
+        blocking: {type: boolean}
+        state: {type: string, enum: [open, resolved, withdrawn]}
+        version: {type: integer, minimum: 1}
+        created_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    FindingAction:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, deliverable_id, finding_id, action, evidence_ids, rationale, actor_id, actor_kind, principal_id, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        deliverable_id: {type: string, format: uuid}
+        finding_id: {type: string, format: uuid}
+        action: {type: string, enum: [resolve, withdraw]}
+        evidence_ids: {type: array, minItems: 1, items: {type: string, format: uuid}}
+        rationale: {type: string}
+        actor_id: {type: string, format: uuid}
+        actor_kind: {type: string, enum: [human, agent]}
+        principal_id: {type: [string, 'null'], format: uuid}
+        created_at: {type: string, format: date-time}
+    Submission:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, project_id, deliverable_id, kind, evidence_ids, note, submitted_by, submitter_kind, principal_id, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        organization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        deliverable_id: {type: string, format: uuid}
+        kind: {type: string, enum: [submit, resubmit]}
+        evidence_ids: {type: array, minItems: 1, items: {type: string, format: uuid}}
+        note: {type: string}
+        submitted_by: {type: string, format: uuid}
+        submitter_kind: {type: string, enum: [human, agent]}
+        principal_id: {type: [string, 'null'], format: uuid}
+        created_at: {type: string, format: date-time}
+    VerdictResult:
+      type: object
+      additionalProperties: false
+      required: [gate, verdict, findings]
+      properties:
+        gate: {$ref: '#/components/schemas/Gate'}
+        verdict: {$ref: '#/components/schemas/Verdict'}
+        findings: {type: array, items: {$ref: '#/components/schemas/Finding'}}
+    FindingActionResult:
+      type: object
+      additionalProperties: false
+      required: [finding, action]
+      properties:
+        finding: {$ref: '#/components/schemas/Finding'}
+        action: {$ref: '#/components/schemas/FindingAction'}
+    SubmissionResult:
+      type: object
+      additionalProperties: false
+      required: [deliverable, submission]
+      properties:
+        deliverable: {$ref: '#/components/schemas/Deliverable'}
+        submission: {$ref: '#/components/schemas/Submission'}
+    DeliverableWaiverResult:
+      type: object
+      additionalProperties: false
+      required: [deliverable, decision]
+      properties:
+        deliverable: {$ref: '#/components/schemas/Deliverable'}
+        decision: {$ref: '#/components/schemas/Decision'}
+    GateWaiverResult:
+      type: object
+      additionalProperties: false
+      required: [gate, decision]
+      properties:
+        gate: {$ref: '#/components/schemas/Gate'}
+        decision: {$ref: '#/components/schemas/Decision'}
     Forecast:
       type: object
       additionalProperties: false

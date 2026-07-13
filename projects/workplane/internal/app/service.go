@@ -153,7 +153,9 @@ func (service *Service) bootstrap(ctx context.Context, seed BootstrapConfig) err
 		VALUES ($1,$2,$3,$4,$5,ARRAY[
 			'project.create','project.read','project.activate','project.hold','project.resume','project.promote',
 			'project.reforecast','project.target.write','project.deadline.write','decision.record',
-			'deliverable.read','deliverable.edit','deliverable.reforecast','realtime.subscribe','event.subscribe'
+			'deliverable.read','deliverable.edit','deliverable.submit','deliverable.reforecast',
+			'evidence.read','evidence.create','evidence.supersede','review.request','review.verdict',
+			'finding.resolve','finding.withdraw','realtime.subscribe','event.subscribe'
 		],NULL,$6,$7,$8)
 		ON CONFLICT (id) DO UPDATE SET token_prefix=EXCLUDED.token_prefix,token_hash=EXCLUDED.token_hash,
 			scopes=EXCLUDED.scopes,expires_at=EXCLUDED.expires_at,revoked_at=NULL`,
@@ -337,7 +339,6 @@ func (service *Service) authenticateActor(ctx context.Context, request generated
 		service.audit(ctx, "authorization.denied", rid, &actor, map[string]any{"reason": denialReason, "action": action})
 		return Actor{}, problem(http.StatusForbidden, "forbidden", "Action denied", "The delegated token does not include this action.", rid), false
 	}
-	_, _ = service.db.ExecContext(ctx, "UPDATE agent_tokens SET last_used_at=CURRENT_TIMESTAMP WHERE token_prefix=$1", prefix)
 	return actor, generated.Response{Headers: generated.ResponseHeaders{XRequestID: rid}}, true
 }
 
@@ -369,18 +370,24 @@ func organizationRoleAllows(role, action string) bool {
 }
 
 func organizationVisibilityAllows(action string) bool {
-	return action == "project.read" || action == "deliverable.read"
+	return action == "project.read" || action == "deliverable.read" || action == "evidence.read"
 }
 
 func projectRoleAllows(role, action string) bool {
 	switch action {
-	case "project.read", "deliverable.read":
+	case "project.read", "deliverable.read", "evidence.read":
 		return role == "owner" || role == "steward" || role == "contributor" ||
 			role == "reviewer" || role == "viewer" || role == "observer"
 	case "project.activate", "project.hold", "project.resume", "project.promote",
 		"project.reforecast", "project.target.write", "project.deadline.write",
-		"decision.record", "deliverable.edit", "deliverable.reforecast":
+		"decision.record", "deliverable.edit", "deliverable.reforecast", "deliverable.waive", "gate.soft_waive":
 		return role == "owner"
+	case "evidence.create", "evidence.supersede":
+		return role == "owner" || role == "steward" || role == "contributor" || role == "reviewer"
+	case "deliverable.submit", "review.request", "finding.resolve":
+		return role == "owner" || role == "steward" || role == "contributor"
+	case "review.verdict", "finding.withdraw":
+		return role == "owner" || role == "steward" || role == "reviewer"
 	default:
 		return false
 	}

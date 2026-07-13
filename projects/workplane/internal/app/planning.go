@@ -28,6 +28,7 @@ type Deliverable struct {
 	State              string   `json:"state"`
 	AcceptanceCriteria []string `json:"acceptance_criteria"`
 	Version            int64    `json:"version"`
+	WaiverDecisionID   *string  `json:"waiver_decision_id"`
 	CreatedBy          string   `json:"created_by"`
 	CreatedAt          string   `json:"created_at"`
 	UpdatedAt          string   `json:"updated_at"`
@@ -382,30 +383,34 @@ func deliverableFromInput(id, orgID, projectID, actorID string, input generated.
 
 func insertDeliverable(ctx context.Context, tx *sql.Tx, item Deliverable) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO deliverables
-		(id,organization_id,project_id,title,description,required,weight,state,acceptance_criteria,version,created_by,created_at,updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, item.ID, item.OrganizationID, item.ProjectID,
+		(id,organization_id,project_id,title,description,required,weight,state,acceptance_criteria,version,waiver_decision_id,created_by,created_at,updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, item.ID, item.OrganizationID, item.ProjectID,
 		item.Title, item.Description, item.Required, item.Weight, item.State, canonicalJSON(item.AcceptanceCriteria), item.Version,
-		item.CreatedBy, item.CreatedAt, item.UpdatedAt)
+		item.WaiverDecisionID, item.CreatedBy, item.CreatedAt, item.UpdatedAt)
 	return err
 }
 
 func scanDeliverable(row interface{ Scan(...any) error }) (Deliverable, error) {
 	var item Deliverable
 	var criteria []byte
+	var waiverDecision sql.NullString
 	var created, updated time.Time
 	err := row.Scan(&item.ID, &item.OrganizationID, &item.ProjectID, &item.Title, &item.Description, &item.Required,
-		&item.Weight, &item.State, &criteria, &item.Version, &item.CreatedBy, &created, &updated)
+		&item.Weight, &item.State, &criteria, &item.Version, &waiverDecision, &item.CreatedBy, &created, &updated)
 	if err != nil {
 		return Deliverable{}, err
 	}
 	if err := json.Unmarshal(criteria, &item.AcceptanceCriteria); err != nil {
 		return Deliverable{}, err
 	}
+	if waiverDecision.Valid {
+		item.WaiverDecisionID = &waiverDecision.String
+	}
 	item.CreatedAt, item.UpdatedAt = created.UTC().Format(timeFormat), updated.UTC().Format(timeFormat)
 	return item, nil
 }
 
-const selectDeliverable = `SELECT id,organization_id,project_id,title,description,required,weight,state,acceptance_criteria,version,created_by,created_at,updated_at FROM deliverables`
+const selectDeliverable = `SELECT id,organization_id,project_id,title,description,required,weight,state,acceptance_criteria,version,waiver_decision_id,created_by,created_at,updated_at FROM deliverables`
 
 func (service *Service) CreateDeliverable(ctx context.Context, request generated.Request) (generated.Response, error) {
 	projectID := request.HTTPRequest.PathValue("project_id")
@@ -541,8 +546,9 @@ func (service *Service) ReviseDeliverable(ctx context.Context, request generated
 			if err != nil {
 				return mutationOutcome{}, rejected(problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid)), nil
 			}
-			if item.State == "accepted" || item.State == "waived" || item.State == "cancelled" {
-				return mutationOutcome{}, rejected(problem(http.StatusConflict, "invariant_violation", "Deliverable is immutable", "Accepted, waived, and cancelled deliverables cannot be edited.", rid)), nil
+			if (item.State != "draft" && item.State != "ready") ||
+				(input.State != item.State && !(item.State == "draft" && input.State == "ready")) {
+				return mutationOutcome{}, rejected(problem(http.StatusConflict, "invariant_violation", "Deliverable is immutable", "Review and terminal states change only through their declared commands.", rid)), nil
 			}
 			item.Title, item.Description, item.Required, item.Weight, item.State = input.Title, input.Description, *input.Required, input.Weight, input.State
 			item.AcceptanceCriteria, item.Version, item.UpdatedAt = input.AcceptanceCriteria, item.Version+1, now.Format(timeFormat)

@@ -241,13 +241,16 @@ participate in cycle detection.
 
 ```go
 type Gate struct {
-    ID            ID
-    DeliverableID ID
-    Name          string
-    Kind          GateKind // automated | review | approval
-    Hard          bool
-    State         GateState
-    Version       Version
+    ID                   ID
+    DeliverableID        ID
+    Name                 string
+    Kind                 GateKind // automated | review | approval
+    Hard                 bool
+    IndependenceRequired bool
+    RequiredEvidence     []EvidenceRequirement
+    State                GateState
+    Version              Version
+    WaiverDecisionID     *ID
 }
 
 type GateState string
@@ -264,9 +267,13 @@ type Evidence struct {
     ProjectID   ID
     Kind        EvidenceKind // report | test-run | link | image | observation | measurement
     Title       string
-    Body        string
+    Claim       string
+    Source      string
+    Content     *string
     URI         *string
-    Digest      *string
+    Metadata    map[string]string
+    Digest      string
+    Supports    []EvidenceSupport
     ProducedBy  ActorRef
     ProducedAt  time.Time
     SupersedesID *ID
@@ -276,15 +283,19 @@ type ReviewVerdict struct {
     ID            ID
     GateID        ID
     Reviewer      ActorRef
-    Result        VerdictResult // approve | bounce
+    Result        VerdictResult // pass | fail
     EvidenceIDs   []ID
-    FindingIDs    []ID
+    SupersedesID  *ID
     CreatedAt     time.Time
 }
 ```
 
-Evidence is immutable. Corrections supersede. Findings have `open`, `resolved`,
-or `withdrawn` state and record resolution evidence.
+Evidence content, provenance, digest material, and typed target links are
+immutable. Corrections create a new record in a non-branching supersession
+chain. Verdicts are also immutable; a later pass supersedes the prior failure
+without deleting it. Fail verdicts atomically create one or more actionable
+findings. Findings have `open`, `resolved`, or `withdrawn` state and retain an
+immutable disposition record with resolution evidence.
 
 A soft gate can enter `waived` only through `gate.soft_waive` plus a
 policy-designated human `soft-gate` waiver decision with rationale and residual

@@ -77,13 +77,45 @@ seed_capabilities:
     parity_case_id: PARITY-BRIEF-001
     status: specified
   - capability_id: submit-deliverable
-    requirement_id: PR-EXE-03
-    public_operation_id: submitDeliverable
-    ui_surface: deliverable-submit-sheet
-    agent_example: examples/agent/submit-deliverable
+    requirement_id: M2D-REVIEW-001
+    public_operation_id: submitDeliverable|resubmitDeliverable
+    ui_surface: headless-m2d-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#submitDeliverable
     permission_action: deliverable.submit
-    parity_case_id: PARITY-DELIVERABLE-001
-    status: specified
+    parity_case_id: M2D-PARITY-001
+    status: implemented
+  - capability_id: create-and-supersede-evidence
+    requirement_id: M2D-EVIDENCE-001
+    public_operation_id: createEvidence|supersedeEvidence
+    ui_surface: headless-m2d-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#createEvidence
+    permission_action: evidence.create
+    parity_case_id: M2D-PARITY-001
+    status: implemented
+  - capability_id: review-deliverable
+    requirement_id: M2D-GATE-001
+    public_operation_id: createGate|recordVerdict|bounceDeliverable|approveDeliverable
+    ui_surface: headless-m2d-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#recordVerdict
+    permission_action: review.verdict
+    parity_case_id: M2D-PARITY-001
+    status: implemented
+  - capability_id: resolve-review-finding
+    requirement_id: M2D-REVIEW-001
+    public_operation_id: resolveFinding|withdrawFinding
+    ui_surface: headless-m2d-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#resolveFinding
+    permission_action: finding.resolve
+    parity_case_id: M2D-PARITY-001
+    status: implemented
+  - capability_id: human-policy-waiver
+    requirement_id: M2D-SEPARATION-001
+    public_operation_id: waiveGate|waiveDeliverable
+    ui_surface: headless-m2d-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#waiveGate-expected-human-required-deny
+    permission_action: gate.soft_waive
+    parity_case_id: M2D-PARITY-001
+    status: implemented
 
 ci_failures:
   - ui_mutation_without_operation

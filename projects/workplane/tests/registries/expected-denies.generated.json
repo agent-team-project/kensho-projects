@@ -819,6 +819,30 @@
     },
     {
       "actions": [
+        "deliverable.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/deliverables/{id}/findings"
+    },
+    {
+      "actions": [
+        "deliverable.read"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "GET /api/v1/deliverables/{id}/gates"
+    },
+    {
+      "actions": [
         "event.subscribe"
       ],
       "deny_templates": [
@@ -1504,6 +1528,30 @@
     },
     {
       "actions": [
+        "review.verdict"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/approve"
+    },
+    {
+      "actions": [
+        "review.verdict"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/bounce"
+    },
+    {
+      "actions": [
         "deliverable.cancel",
         "decision.record"
       ],
@@ -1538,6 +1586,19 @@
         "DENY-UNAUTHENTICATED"
       ],
       "operation": "POST /api/v1/deliverables/{id}/gates"
+    },
+    {
+      "actions": [
+        "deliverable.submit",
+        "review.request"
+      ],
+      "deny_templates": [
+        "DENY-CROSS-ORG",
+        "DENY-OUT-OF-SCOPE-AGENT",
+        "DENY-REVOKED",
+        "DENY-UNAUTHENTICATED"
+      ],
+      "operation": "POST /api/v1/deliverables/{id}/resubmit"
     },
     {
       "actions": [
@@ -2286,7 +2347,7 @@
   "schema_version": 1,
   "sources": {
     "expected_denies": "853adc4afc73e28142cd65199f33995d2aceab4ad5a8ad178fa655a5e5043989",
-    "operation_permissions": "0d02b38f3048e629d7502206fe567bdd9fd89bc161b316c32242aaeae8bb555d",
+    "operation_permissions": "5fb3d5f20533c07112fce6e0d48059774c4ea0b5b1df2615d6dc7ce115f8391d",
     "permissions": "eac6199b62bc009cc609249cee53e0f4fe1679965e8a96f21e9166d8f48c8214"
   }
 }

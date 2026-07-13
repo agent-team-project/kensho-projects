@@ -4,10 +4,10 @@ import "testing"
 
 func TestM2ClaimsOnlyAcceptedWalkingSliceBehavior(t *testing.T) {
 	t.Parallel()
-	if BuildStage != "m2-planning-contracts" {
+	if BuildStage != "m2-evidence-review" {
 		t.Fatalf("unexpected build stage %q", BuildStage)
 	}
-	if len(Capabilities) != 18 {
+	if len(Capabilities) != 27 {
 		t.Fatalf("unexpected accepted capability count %d", len(Capabilities))
 	}
 }
