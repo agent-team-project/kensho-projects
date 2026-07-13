@@ -1,0 +1,8 @@
+id: M2-EVIDENCE-001
+requirement: M2-EVIDENCE-001
+layer: system
+title: Smoke manifest digests every exact durable-spine evidence artifact
+given: {source: clean_exact_commit, runtime: offline_compose}
+when: {command: make evidence-smoke}
+then: {result: pass, artifact_digests: valid, source_commit: exact_head}
+evidence: [evidence/runs]

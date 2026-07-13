@@ -31,4 +31,20 @@ shape="$(docker compose --project-name "$project" exec -T postgres \
   "SELECT slug || '|' || name FROM organizations ORDER BY id;")"
 test "$shape" = "reference|Reference Organization"
 
-printf '%s\n' "PostgreSQL migration and fixture passed: counts=$counts sha256=$actual_digest"
+durable_shape="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT max(version) || '|' || (SELECT count(*) FROM outbox_consumers) || '|' || (SELECT count(*) FROM projection_heads) FROM schema_migrations;")"
+if [ "$durable_shape" != "3|1|0" ]; then
+  echo "unexpected durable schema shape: $durable_shape" >&2
+  exit 1
+fi
+
+app_role="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT rolname || '|' || rolsuper FROM pg_roles WHERE rolname='workplane_app';")"
+if [ "$app_role" != "workplane_app|false" ]; then
+  echo "unexpected application role: $app_role" >&2
+  exit 1
+fi
+
+printf '%s\n' "PostgreSQL migration, durable schema, least-privilege role, and fixture passed: counts=$counts sha256=$actual_digest"

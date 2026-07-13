@@ -1,0 +1,8 @@
+id: M2-OUTBOX-001
+requirement: M2-OUTBOX-001
+layer: integration
+title: Project and decision commits atomically create immutable outbox rows
+given: {database: real_postgresql, commands: [project.create, decision.record], fault: after_event_before_return}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, event_outbox_cardinality: one_to_one, rollback_partial_rows: 0, application_payload_update: denied}
+evidence: [target/agent-evidence/m2/m2-outbox-rows.json, target/agent-evidence/m2/m2-application-credentials.json]

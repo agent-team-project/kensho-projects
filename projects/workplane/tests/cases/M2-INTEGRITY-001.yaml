@@ -1,0 +1,8 @@
+id: M2-INTEGRITY-001
+requirement: M2-INTEGRITY-001
+layer: integration
+title: Integrity doctor and database guards reject every registered corruption class
+given: {baseline: healthy, corruptions: [event_gap, duplicate_aggregate_version, checksum_drift, stale_checkpoint, non_monotonic_checkpoint]}
+when: {command: scripts/test_m1.sh}
+then: {result: pass, false_negatives: 0, baseline_findings: 0}
+evidence: [target/agent-evidence/m2/m2-integrity-doctor-negatives.json, target/agent-evidence/m2/m2-checkpoint-transitions.json]

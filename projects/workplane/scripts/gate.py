@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -37,7 +38,8 @@ GATES: dict[str, list[tuple[str, str]]] = {
     "integration": [
         ("compose-config", "docker compose config --quiet"),
         ("postgres-migration-fixture", "scripts/test_postgres.sh"),
-        ("m1-human-agent-browser-offline", "scripts/test_m1.sh"),
+        ("m1-upgrade-outbox-backfill", "scripts/test_m1_upgrade.sh"),
+        ("m1-m2-durable-browser-offline", "scripts/test_m1.sh"),
     ],
     "publication": [
         ("repository-publication", f"{PYTHON} ../../scripts/check_publication.py"),
@@ -50,11 +52,40 @@ GATES: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+EXTRA_ARTIFACT_GLOBS = {
+    "m1-m2-durable-browser-offline": [
+        "target/agent-evidence/m1/migration.log",
+        "target/agent-evidence/m1/event-rows.txt",
+        "target/agent-evidence/m2/*.json",
+        "target/agent-evidence/m2/migration.log",
+    ],
+}
+
 TIERS = {
     "smoke": ["contract", "unit", "integration", "publication"],
     "acceptance": ["contract", "unit", "integration", "publication", "acceptance-status"],
     "release": ["contract", "unit", "integration", "publication", "acceptance-status", "release-status"],
 }
+
+
+def snapshot_extra_artifacts(
+    name: str,
+    artifact_root: Path,
+    *,
+    source_root: Path = ROOT,
+    artifact_globs: dict[str, list[str]] = EXTRA_ARTIFACT_GLOBS,
+) -> list[dict[str, str]]:
+    snapshots = []
+    for pattern in artifact_globs.get(name, []):
+        for artifact in sorted(source_root.glob(pattern)):
+            if not artifact.is_file():
+                continue
+            relative = artifact.relative_to(source_root)
+            snapshot = artifact_root / "extra" / name / relative
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(artifact, snapshot)
+            snapshots.append({"path": str(snapshot.relative_to(source_root)), "sha256": sha256(snapshot)})
+    return snapshots
 
 
 def run(suite: str, evidence: bool) -> int:
@@ -72,6 +103,8 @@ def run(suite: str, evidence: bool) -> int:
             log.write_text(completed.stdout + completed.stderr, encoding="utf-8")
             sys.stdout.write(completed.stdout)
             sys.stderr.write(completed.stderr)
+            artifacts = [{"path": str(log.relative_to(ROOT)), "sha256": sha256(log)}]
+            artifacts.extend(snapshot_extra_artifacts(name, artifact_root))
             records.append({
                 "name": name,
                 "command": command,
@@ -79,7 +112,7 @@ def run(suite: str, evidence: bool) -> int:
                 "finished_at": now(),
                 "result": "pass" if completed.returncode == 0 else "fail",
                 "command_executions": 1,
-                "artifacts": [{"path": str(log.relative_to(ROOT)), "sha256": sha256(log)}],
+                "artifacts": artifacts,
             })
             if completed.returncode:
                 if evidence:

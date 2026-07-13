@@ -17,7 +17,7 @@ mkdir -p target/agent-evidence
 
 docker run -d --name "$container" --network workplane_default --ip "$browser_ip" \
   --read-only --tmpfs /tmp:size=16m,mode=1777 \
-  -e WORKPLANE_DATABASE_URL='postgres://workplane:workplane-local-only@postgres:5432/workplane?sslmode=disable' \
+  -e WORKPLANE_DATABASE_URL='postgres://workplane_app:workplane-app-local-only@postgres:5432/workplane?sslmode=disable' \
   -e WORKPLANE_PUBLIC_ORIGIN="$browser_base" \
   -e WORKPLANE_COOKIE_SECURE=false \
   -e WORKPLANE_TOKEN_HASH_KEY=local-only-key-material-32-bytes-minimum-change-me \
@@ -27,7 +27,7 @@ docker run -d --name "$container" --network workplane_default --ip "$browser_ip"
   -e WORKPLANE_BOOTSTRAP_HUMAN_PASSWORD=walking-slice-password \
   -e WORKPLANE_BOOTSTRAP_AGENT_ID=00000000-0000-4000-8000-000000000002 \
   -e WORKPLANE_BOOTSTRAP_AGENT_TOKEN=wpa_local_walking_slice_agent_token_00000000000000000001 \
-  workplane-api >/dev/null
+  workplane-runtime:m2-durable-spine >/dev/null
 
 WORKPLANE_PROXY_TARGET="http://${browser_ip}:8080" WORKPLANE_PROXY_ADDR="${browser_base#http://}" \
   python3 scripts/http_proxy.py >target/agent-evidence/browser-proxy.log 2>&1 &

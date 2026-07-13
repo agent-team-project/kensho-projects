@@ -9,7 +9,7 @@ import sys
 
 OMISSIONS = {
     "acceptance": [
-        "M2+ replay, outbox, realtime, and revoke behavior",
+        "remaining M2 realtime, broad aggregate, conflict, and revoke behavior",
         "M3+ structured brief and complete public-plane parity",
         "M4 browser accessibility, search, recovery, and offline application startup",
     ],
