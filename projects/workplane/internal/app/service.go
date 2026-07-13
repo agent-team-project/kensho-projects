@@ -315,8 +315,14 @@ func (service *Service) authenticate(ctx context.Context, request generated.Requ
 	for _, id := range projectIDs {
 		actor.ProjectIDs[id] = true
 	}
-	if !actor.Scopes[action] || (projectID != "" && len(actor.ProjectIDs) > 0 && !actor.ProjectIDs[projectID]) {
-		service.audit(ctx, "authorization.denied", rid, &actor, map[string]any{"reason": "agent_scope", "action": action})
+	denialReason := ""
+	if !actor.Scopes[action] {
+		denialReason = "agent_action_scope"
+	} else if !agentProjectRestrictionAllows(actor.ProjectIDs, projectID) {
+		denialReason = "agent_project_restriction"
+	}
+	if denialReason != "" {
+		service.audit(ctx, "authorization.denied", rid, &actor, map[string]any{"reason": denialReason, "action": action})
 		return Actor{}, problem(http.StatusForbidden, "forbidden", "Action denied", "The delegated token does not include this action.", rid), false
 	}
 	_, _ = service.db.ExecContext(ctx, "UPDATE agent_tokens SET last_used_at=CURRENT_TIMESTAMP WHERE token_prefix=$1", prefix)
@@ -331,6 +337,17 @@ func (service *Service) authorizeOrganization(actor Actor, organizationID, actio
 		return problem(http.StatusForbidden, "forbidden", "Action denied", "The active role does not permit this action.", rid), false
 	}
 	return generated.Response{}, true
+}
+
+// agentProjectRestrictionAllows implements the token's fail-closed project
+// allowlist. An empty allowlist is organization-scoped. A nonempty allowlist is
+// project-scoped and therefore cannot authorize an operation, such as project
+// creation, that has no existing project target.
+func agentProjectRestrictionAllows(projectIDs map[string]bool, projectID string) bool {
+	if len(projectIDs) == 0 {
+		return true
+	}
+	return projectID != "" && projectIDs[projectID]
 }
 
 func organizationRoleAllows(role, action string) bool {

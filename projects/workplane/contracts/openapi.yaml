@@ -42,6 +42,11 @@ paths:
       - {$ref: '#/components/parameters/OrgId'}
     post:
       operationId: createProject
+      description: >-
+        Creates an organization-level exploration project. An agent bearer may
+        call this operation only when its project allowlist is empty; any
+        nonempty project restriction denies creation because no existing
+        project can be the operation target.
       security:
         - HumanSession: []
           CsrfToken: []
@@ -152,7 +157,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: WorkplaneAgentToken
-      description: Scoped agent token carrying the agent identity and delegated human principal.
+      description: >-
+        Scoped agent token carrying the agent identity and delegated human
+        principal. An empty project allowlist is organization-scoped. A
+        nonempty allowlist is project-scoped: only listed concrete projects
+        are eligible, and organization-level project creation is denied.
   parameters:
     OrgId:
       name: org_id

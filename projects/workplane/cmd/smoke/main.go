@@ -283,6 +283,12 @@ func (run *runner) execute(ctx context.Context) error {
 	}
 	run.checks = append(run.checks, "decision-version-idempotency-atomicity", "human-immutable-attribution")
 
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	if err := run.assertAgentCreateAuthority(ctx, 0); err != nil {
+		return fmt.Errorf("unrestricted agent create precondition: %w", err)
+	}
 	agentHeaders := map[string]string{"Authorization": "Bearer " + agentToken, "Idempotency-Key": "agent-create-000000000001"}
 	agentCreated := run.call(run.agent, "agent-project-create", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", humanInput, agentHeaders)
 	if err := run.expect(agentCreated, http.StatusCreated, "agent project create"); err != nil {
@@ -412,6 +418,42 @@ func (run *runner) execute(ctx context.Context) error {
 	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
 	}
+	restrictedCreateTitle := "Project-restricted token cannot create"
+	restrictedCreateKey := "agent-create-000000000004"
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[$1::uuid] WHERE token_prefix=$2`, agentProject.ID, agentToken[:16]); err != nil {
+		return err
+	}
+	if err := run.assertAgentCreateAuthority(ctx, 1); err != nil {
+		return fmt.Errorf("project-restricted agent create precondition: %w", err)
+	}
+	if err := run.expect(run.call(run.agent, "agent-project-read-restricted-allowed", http.MethodGet, "/api/v1/projects/"+agentProject.ID, nil, agentAuthorization), http.StatusOK, "project-restricted allowed project read"); err != nil {
+		return err
+	}
+	beforeRestrictedCreate, err := run.loadDomainCounts(ctx)
+	if err != nil {
+		return err
+	}
+	restrictedCreate := run.call(run.agent, "deny-agent-project-restricted-create", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", projectInput(restrictedCreateTitle), map[string]string{"Authorization": "Bearer " + agentToken, "Idempotency-Key": restrictedCreateKey})
+	if err := expectProblem(restrictedCreate, http.StatusForbidden, "forbidden"); err != nil {
+		return err
+	}
+	afterRestrictedCreate, err := run.loadDomainCounts(ctx)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(beforeRestrictedCreate, afterRestrictedCreate) {
+		return fmt.Errorf("project-restricted create changed domain rows: before=%+v after=%+v", beforeRestrictedCreate, afterRestrictedCreate)
+	}
+	if err := run.assertCreateRowsAbsent(ctx, restrictedCreateTitle, restrictedCreateKey); err != nil {
+		return fmt.Errorf("project-restricted create: %w", err)
+	}
+	run.checks = append(run.checks, "agent-project-restriction-create-deny-no-write")
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	if err := run.assertAgentCreateAuthority(ctx, 0); err != nil {
+		return fmt.Errorf("restored unrestricted agent create precondition: %w", err)
+	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET scopes=ARRAY['project.read'] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
 	}
@@ -517,6 +559,30 @@ func (run *runner) assertCreateRowsAbsent(ctx context.Context, title, idempotenc
 	}
 	if projects != 0 || events != 0 || idempotency != 0 {
 		return fmt.Errorf("partial create rows projects=%d events=%d idempotency=%d", projects, events, idempotency)
+	}
+	return nil
+}
+
+func (run *runner) assertAgentCreateAuthority(ctx context.Context, projectRestrictionCount int) error {
+	var agentStatus, delegatedStatus, agentRole, delegatedRole string
+	var createScope bool
+	var actualRestrictionCount int
+	err := run.db.QueryRowContext(ctx, `
+		SELECT a.status,h.status,m.role,hm.role,'project.create'=ANY(t.scopes),
+			cardinality(COALESCE(t.project_ids,ARRAY[]::uuid[]))
+		FROM agent_tokens t
+		JOIN principals a ON a.id=t.agent_id
+		JOIN principals h ON h.id=a.human_principal_id
+		JOIN organization_memberships m ON m.organization_id=t.organization_id AND m.principal_id=a.id
+		JOIN organization_memberships hm ON hm.organization_id=t.organization_id AND hm.principal_id=h.id
+		WHERE t.token_prefix=$1`, agentToken[:16]).Scan(
+		&agentStatus, &delegatedStatus, &agentRole, &delegatedRole, &createScope, &actualRestrictionCount)
+	if err != nil {
+		return err
+	}
+	if agentStatus != "active" || delegatedStatus != "active" || agentRole != "member" || delegatedRole != "owner" || !createScope || actualRestrictionCount != projectRestrictionCount {
+		return fmt.Errorf("authority status/roles/scope/restrictions = %s/%s/%s/%s/%t/%d, want active/active/member/owner/true/%d",
+			agentStatus, delegatedStatus, agentRole, delegatedRole, createScope, actualRestrictionCount, projectRestrictionCount)
 	}
 	return nil
 }
