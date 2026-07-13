@@ -40,6 +40,7 @@ test-unit:
 test-integration:
 	docker compose config --quiet
 	scripts/test_postgres.sh
+	scripts/test_m1_upgrade.sh
 	scripts/test_m1.sh
 
 test-browser:

@@ -137,6 +137,31 @@ CREATE TRIGGER outbox_seed_consumers
   AFTER INSERT ON outbox_records
   FOR EACH ROW EXECUTE FUNCTION seed_outbox_delivery_state();
 
+CREATE FUNCTION domain_event_outbox_envelope(source_event domain_events) RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = pg_catalog, public
+AS $$
+  SELECT jsonb_build_object(
+    'sequence', ($1).sequence,
+    'event_id', ($1).event_id,
+    'event_type', ($1).event_type,
+    'schema_version', ($1).schema_version,
+    'organization_id', ($1).organization_id,
+    'aggregate_type', ($1).aggregate_type,
+    'aggregate_id', ($1).aggregate_id,
+    'aggregate_version', ($1).aggregate_version,
+    'command_id', ($1).command_id,
+    'request_id', ($1).request_id,
+    'actor_kind', ($1).actor_kind,
+    'actor_id', ($1).actor_id,
+    'principal_id', ($1).principal_id,
+    'occurred_at', to_char(($1).occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'payload', ($1).payload
+  )
+$$;
+
 CREATE FUNCTION create_event_outbox() RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -145,23 +170,7 @@ AS $$
 DECLARE
   envelope jsonb;
 BEGIN
-  envelope := jsonb_build_object(
-    'sequence', NEW.sequence,
-    'event_id', NEW.event_id,
-    'event_type', NEW.event_type,
-    'schema_version', NEW.schema_version,
-    'organization_id', NEW.organization_id,
-    'aggregate_type', NEW.aggregate_type,
-    'aggregate_id', NEW.aggregate_id,
-    'aggregate_version', NEW.aggregate_version,
-    'command_id', NEW.command_id,
-    'request_id', NEW.request_id,
-    'actor_kind', NEW.actor_kind,
-    'actor_id', NEW.actor_id,
-    'principal_id', NEW.principal_id,
-    'occurred_at', to_char(NEW.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-    'payload', NEW.payload
-  );
+  envelope := domain_event_outbox_envelope(NEW);
   INSERT INTO outbox_records
     (id,event_sequence,event_id,topic,payload,payload_sha256,available_at,created_at)
   VALUES
@@ -200,6 +209,55 @@ CREATE TRIGGER consumer_checkpoint_monotonic
 
 INSERT INTO outbox_consumers (name) VALUES ('projection-v1');
 INSERT INTO consumer_checkpoints (consumer_name) VALUES ('projection-v1');
+
+WITH existing_events AS MATERIALIZED (
+  SELECT event.*, domain_event_outbox_envelope(event) AS envelope
+  FROM domain_events AS event
+)
+INSERT INTO outbox_records
+  (id,event_sequence,event_id,topic,payload,payload_sha256,available_at,created_at)
+SELECT event_id,sequence,event_id,'domain-events',envelope,
+  digest(convert_to(envelope::text,'UTF8'),'sha256'),occurred_at,occurred_at
+FROM existing_events
+ORDER BY sequence;
+
+DO $$
+DECLARE
+  event_count bigint;
+  outbox_count bigint;
+  state_count bigint;
+BEGIN
+  SELECT count(*) INTO event_count FROM domain_events;
+  SELECT count(*) INTO outbox_count FROM outbox_records;
+  SELECT count(*) INTO state_count FROM outbox_delivery_state WHERE consumer_name = 'projection-v1';
+
+  IF event_count <> outbox_count OR event_count <> state_count THEN
+    RAISE EXCEPTION 'M1 outbox backfill coverage mismatch: events=%, outbox=%, projection-v1 state=%',
+      event_count, outbox_count, state_count USING ERRCODE = '23514';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM domain_events AS event
+    LEFT JOIN outbox_records AS record
+      ON record.event_sequence = event.sequence AND record.event_id = event.event_id
+    LEFT JOIN outbox_delivery_state AS state
+      ON state.consumer_name = 'projection-v1' AND state.event_id = event.event_id
+    WHERE record.event_id IS NULL OR state.event_id IS NULL
+      OR record.id <> event.event_id
+      OR record.topic <> 'domain-events'
+      OR record.payload IS DISTINCT FROM domain_event_outbox_envelope(event)
+      OR record.payload_sha256 IS DISTINCT FROM digest(convert_to(record.payload::text,'UTF8'),'sha256')
+      OR record.available_at IS DISTINCT FROM event.occurred_at
+      OR record.created_at IS DISTINCT FROM event.occurred_at
+      OR state.attempts <> 0 OR state.lease_owner IS NOT NULL OR state.lease_until IS NOT NULL
+      OR state.delivered_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'M1 outbox backfill failed canonical event/outbox/state validation'
+      USING ERRCODE = '23514';
+  END IF;
+END;
+$$;
 
 DO $$
 BEGIN
