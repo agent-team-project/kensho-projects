@@ -61,6 +61,7 @@ type promotion struct {
 }
 type forecast struct {
 	ID            string  `json:"id"`
+	DeliverableID *string `json:"deliverable_id"`
 	Scope         string  `json:"scope"`
 	SupersedesID  *string `json:"supersedes_id"`
 	Current       bool    `json:"current"`
@@ -232,6 +233,10 @@ func (run *runner) execute(ctx context.Context) error {
 			return err
 		}
 	}
+	version, err = run.crossDeliverableRevisionIdempotency(ctx, deliverableID, optionalDeliverable.ID, version)
+	if err != nil {
+		return err
+	}
 	version, err = run.concurrentDeliverableRevision(deliverableID, version)
 	if err != nil {
 		return err
@@ -299,11 +304,15 @@ func (run *runner) execute(ctx context.Context) error {
 	run.checks = append(run.checks, "deliverable-stable-revision-and-terminal-update-delete-protection")
 
 	forecastPath := "/api/v1/deliverables/" + deliverableID + "/forecasts"
-	firstForecast := run.call(run.human, http.MethodPost, forecastPath, forecastInput(24, 48, -1), run.versionedHuman("m2c-deliverable-forecast-1", version))
-	if err := expect(firstForecast, http.StatusCreated, ""); err != nil {
+	version, err = run.crossDeliverableReforecastIdempotency(ctx, deliverableID, optionalDeliverable.ID, version)
+	if err != nil {
 		return err
 	}
-	version = etagVersion(firstForecast)
+	run.write("m2c-leaf-idempotency.json", map[string]any{
+		"revision_cross_deliverable_reuse":   "idempotency-conflict-no-disclosure-no-write",
+		"reforecast_cross_deliverable_reuse": "idempotency-conflict-no-disclosure-no-write",
+	})
+	run.checks = append(run.checks, "complete-deliverable-leaf-idempotency-target-binding")
 	for index, boundary := range []string{"after-forecast", "after-forecast-superseded-event", "after-forecast-created-event"} {
 		if err := run.faultNoResidue(ctx, run.human, http.MethodPost, forecastPath, forecastInput(36, 72, -1),
 			run.versionedHuman(fmt.Sprintf("m2c-del-forecast-fault-%02d", index), version), boundary); err != nil {
@@ -574,6 +583,92 @@ func (run *runner) concurrentDeliverableRevision(deliverableID string, version i
 	return concurrentWinner(results, http.StatusOK)
 }
 
+func (run *runner) crossDeliverableRevisionIdempotency(ctx context.Context, firstID, secondID string, version int64) (int64, error) {
+	const key = "m2c-cross-deliverable-revise-target-01"
+	input := deliverableInput("Leaf-target-bound M2C revision")
+	headers := run.versionedHuman(key, version)
+	first := run.call(run.human, http.MethodPatch, "/api/v1/deliverables/"+firstID, input, headers)
+	if err := expect(first, http.StatusOK, ""); err != nil {
+		return 0, fmt.Errorf("first leaf-bound revision: %w", err)
+	}
+	var revised deliverable
+	if err := json.Unmarshal(first.Body, &revised); err != nil {
+		return 0, err
+	}
+	if revised.ID != firstID {
+		return 0, fmt.Errorf("first leaf-bound revision targeted %s, want %s", revised.ID, firstID)
+	}
+	var beforeTitle string
+	var beforeVersion int64
+	if err := run.db.QueryRowContext(ctx, `SELECT title,version FROM deliverables WHERE id=$1`, secondID).Scan(&beforeTitle, &beforeVersion); err != nil {
+		return 0, err
+	}
+	afterFirst := run.counts(ctx)
+	conflict := run.call(run.human, http.MethodPatch, "/api/v1/deliverables/"+secondID, input, headers)
+	if err := expect(conflict, http.StatusConflict, "idempotency_conflict"); err != nil {
+		return 0, fmt.Errorf("cross-deliverable revision reuse: %w", err)
+	}
+	if bytes.Contains(conflict.Body, []byte(firstID)) || bytes.Contains(conflict.Body, first.Body) {
+		return 0, fmt.Errorf("cross-deliverable revision conflict disclosed the first response: %s", conflict.Body)
+	}
+	if got := run.counts(ctx); got != afterFirst {
+		return 0, fmt.Errorf("cross-deliverable revision conflict wrote rows: before=%+v after=%+v", afterFirst, got)
+	}
+	var afterTitle string
+	var afterVersion int64
+	if err := run.db.QueryRowContext(ctx, `SELECT title,version FROM deliverables WHERE id=$1`, secondID).Scan(&afterTitle, &afterVersion); err != nil {
+		return 0, err
+	}
+	if afterTitle != beforeTitle || afterVersion != beforeVersion {
+		return 0, fmt.Errorf("cross-deliverable revision conflict mutated second target: title=%q/%q version=%d/%d", beforeTitle, afterTitle, beforeVersion, afterVersion)
+	}
+	return etagVersion(first), nil
+}
+
+func (run *runner) crossDeliverableReforecastIdempotency(ctx context.Context, firstID, secondID string, version int64) (int64, error) {
+	const key = "m2c-cross-deliverable-reforecast-target-01"
+	input := forecastInput(24, 48, -1)
+	headers := run.versionedHuman(key, version)
+	first := run.call(run.human, http.MethodPost, "/api/v1/deliverables/"+firstID+"/forecasts", input, headers)
+	if err := expect(first, http.StatusCreated, ""); err != nil {
+		return 0, fmt.Errorf("first leaf-bound reforecast: %w", err)
+	}
+	var created forecast
+	if err := json.Unmarshal(first.Body, &created); err != nil {
+		return 0, err
+	}
+	if created.DeliverableID == nil || *created.DeliverableID != firstID {
+		return 0, fmt.Errorf("first leaf-bound reforecast targeted %+v, want %s", created.DeliverableID, firstID)
+	}
+	var beforeForecasts, beforeHeads int
+	if err := run.db.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM forecasts WHERE deliverable_id=$1),
+		(SELECT count(*) FROM forecast_heads WHERE deliverable_id=$1)`, secondID).Scan(&beforeForecasts, &beforeHeads); err != nil {
+		return 0, err
+	}
+	afterFirst := run.counts(ctx)
+	conflict := run.call(run.human, http.MethodPost, "/api/v1/deliverables/"+secondID+"/forecasts", input, headers)
+	if err := expect(conflict, http.StatusConflict, "idempotency_conflict"); err != nil {
+		return 0, fmt.Errorf("cross-deliverable reforecast reuse: %w", err)
+	}
+	if bytes.Contains(conflict.Body, []byte(firstID)) || bytes.Contains(conflict.Body, []byte(created.ID)) || bytes.Contains(conflict.Body, first.Body) {
+		return 0, fmt.Errorf("cross-deliverable reforecast conflict disclosed the first response: %s", conflict.Body)
+	}
+	if got := run.counts(ctx); got != afterFirst {
+		return 0, fmt.Errorf("cross-deliverable reforecast conflict wrote rows: before=%+v after=%+v", afterFirst, got)
+	}
+	var afterForecasts, afterHeads int
+	if err := run.db.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM forecasts WHERE deliverable_id=$1),
+		(SELECT count(*) FROM forecast_heads WHERE deliverable_id=$1)`, secondID).Scan(&afterForecasts, &afterHeads); err != nil {
+		return 0, err
+	}
+	if afterForecasts != beforeForecasts || afterHeads != beforeHeads {
+		return 0, fmt.Errorf("cross-deliverable reforecast conflict mutated second target: forecasts=%d/%d heads=%d/%d", beforeForecasts, afterForecasts, beforeHeads, afterHeads)
+	}
+	return etagVersion(first), nil
+}
+
 func (run *runner) terminalDeliverableImmutability(ctx context.Context, projectID string) error {
 	index := 0
 	for _, state := range []string{"accepted", "waived", "cancelled"} {
@@ -719,6 +814,9 @@ func (run *runner) authorityDenies(ctx context.Context, deniedProjectID, allowed
 	if got := run.counts(ctx); got != noProjectRoleBefore {
 		return fmt.Errorf("organization-visible no-project-role deny wrote rows: before=%+v after=%+v", noProjectRoleBefore, got)
 	}
+	if err := run.observerPlanningWriteExpectedDeny(ctx, allowedProjectID, allowed.Version); err != nil {
+		return err
+	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner'
 		WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
@@ -745,9 +843,35 @@ func (run *runner) authorityDenies(ctx context.Context, deniedProjectID, allowed
 	run.write("m2c-authority-denies.json", map[string]any{
 		"restricted_token": "deny-no-write", "revoked_token": "deny", "disabled_principal": "deny",
 		"organization_visible_no_project_role_write": "forbidden-no-write", "private_project": "not-found",
-		"cross_organization": "not-found", "self_widening_fields": "invalid-request-no-write",
+		"observer_project_role_write": "expected-deny-no-state-event-outbox-idempotency-residue",
+		"cross_organization":          "not-found", "self_widening_fields": "invalid-request-no-write",
 	})
-	run.checks = append(run.checks, "restricted-revoked-visible-no-role-private-denies-no-write")
+	run.checks = append(run.checks, "restricted-revoked-visible-no-role-observer-private-denies-no-write")
+	return nil
+}
+
+func (run *runner) observerPlanningWriteExpectedDeny(ctx context.Context, projectID string, version int64) error {
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'observer',CURRENT_TIMESTAMP)
+		ON CONFLICT (project_id,principal_id) DO UPDATE SET role='observer'`, projectID, humanID); err != nil {
+		return err
+	}
+	if err := expect(run.call(run.human, http.MethodGet, "/api/v1/projects/"+projectID, nil, nil), http.StatusOK, ""); err != nil {
+		return fmt.Errorf("observer project read: %w", err)
+	}
+	before := run.counts(ctx)
+	denied := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/target", map[string]any{
+		"target_at": time.Now().UTC().Add(72 * time.Hour).Format(time.RFC3339), "reason": "Observer visibility is read-only",
+	}, run.versionedHuman("m2c-observer-target-expected-deny", version))
+	if err := expect(denied, http.StatusForbidden, "forbidden"); err != nil {
+		return fmt.Errorf("observer target expected deny: %w", err)
+	}
+	if got := run.counts(ctx); got != before {
+		return fmt.Errorf("observer target expected deny left residue: before=%+v after=%+v", before, got)
+	}
+	if _, err := run.db.ExecContext(ctx, `DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, projectID, humanID); err != nil {
+		return err
+	}
 	return nil
 }
 

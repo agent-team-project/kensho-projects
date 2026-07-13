@@ -37,3 +37,32 @@ func TestAgentProjectRestrictionAllows(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectRoleAllowsRequestedAction(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, role, action string
+		want               bool
+	}{
+		{name: "owner can write target", role: "owner", action: "project.target.write", want: true},
+		{name: "owner can satisfy compound decision", role: "owner", action: "decision.record", want: true},
+		{name: "contributor can read deliverables", role: "contributor", action: "deliverable.read", want: true},
+		{name: "reviewer can read projects", role: "reviewer", action: "project.read", want: true},
+		{name: "canonical viewer can read projects", role: "viewer", action: "project.read", want: true},
+		{name: "existing observer can read projects", role: "observer", action: "project.read", want: true},
+		{name: "existing observer cannot write target", role: "observer", action: "project.target.write", want: false},
+		{name: "canonical viewer cannot revise deliverable", role: "viewer", action: "deliverable.edit", want: false},
+		{name: "contributor cannot promote project", role: "contributor", action: "project.promote", want: false},
+		{name: "unknown role denies", role: "future-role", action: "project.read", want: false},
+		{name: "unknown action denies", role: "owner", action: "project.future", want: false},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := projectRoleAllows(test.role, test.action); got != test.want {
+				t.Fatalf("projectRoleAllows(%q, %q) = %t, want %t", test.role, test.action, got, test.want)
+			}
+		})
+	}
+}

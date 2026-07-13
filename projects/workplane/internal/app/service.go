@@ -372,27 +372,50 @@ func organizationVisibilityAllows(action string) bool {
 	return action == "project.read" || action == "deliverable.read"
 }
 
+func projectRoleAllows(role, action string) bool {
+	switch action {
+	case "project.read", "deliverable.read":
+		return role == "owner" || role == "steward" || role == "contributor" ||
+			role == "reviewer" || role == "viewer" || role == "observer"
+	case "project.activate", "project.hold", "project.resume", "project.promote",
+		"project.reforecast", "project.target.write", "project.deadline.write",
+		"decision.record", "deliverable.edit", "deliverable.reforecast":
+		return role == "owner"
+	default:
+		return false
+	}
+}
+
 func (service *Service) authorizeProject(ctx context.Context, actor Actor, projectID, organizationID, action, rid string) (generated.Response, bool) {
 	if denied, ok := service.authorizeOrganization(actor, organizationID, action, rid); !ok {
 		return denied, false
 	}
 	var visibility, createdBy string
-	var participant bool
+	var membershipRole sql.NullString
 	principalID := ""
 	if actor.PrincipalID != nil {
 		principalID = *actor.PrincipalID
 	}
 	err := service.db.QueryRowContext(ctx, `SELECT visibility::text,created_by,
-		EXISTS (SELECT 1 FROM project_memberships membership WHERE membership.project_id=projects.id
-			AND (membership.principal_id=$3 OR membership.principal_id=NULLIF($4,'')::uuid))
+		(SELECT membership.role FROM project_memberships membership WHERE membership.project_id=projects.id
+			AND (membership.principal_id=$3 OR membership.principal_id=NULLIF($4,'')::uuid)
+			ORDER BY CASE WHEN membership.principal_id=$3 THEN 0 ELSE 1 END LIMIT 1)
 		FROM projects WHERE id=$1 AND organization_id=$2`, projectID, organizationID, actor.ID, principalID).
-		Scan(&visibility, &createdBy, &participant)
+		Scan(&visibility, &createdBy, &membershipRole)
 	if err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
 	}
-	if createdBy == actor.ID || (principalID != "" && createdBy == principalID) || participant ||
-		(privilegedProjectRole(actor.Role) && (actor.Kind != "agent" || privilegedProjectRole(actor.DelegatedRole))) {
+	if privilegedProjectRole(actor.Role) && (actor.Kind != "agent" || privilegedProjectRole(actor.DelegatedRole)) {
 		return generated.Response{}, true
+	}
+	if createdBy == actor.ID || (principalID != "" && createdBy == principalID) {
+		membershipRole = sql.NullString{String: "owner", Valid: true}
+	}
+	if membershipRole.Valid {
+		if projectRoleAllows(membershipRole.String, action) {
+			return generated.Response{}, true
+		}
+		return problem(http.StatusForbidden, "forbidden", "Action denied", "The active project role does not permit this action.", rid), false
 	}
 	if visibility == "organization" {
 		if organizationVisibilityAllows(action) {

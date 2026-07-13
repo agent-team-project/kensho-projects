@@ -36,6 +36,8 @@ fi
 
 for artifact in \
   m2c-human-agent-parity.json \
+  m2c-required-and-idempotency.json \
+  m2c-leaf-idempotency.json \
   m2c-deliverables.json \
   m2c-forecasts.json \
   m2c-authority-denies.json \

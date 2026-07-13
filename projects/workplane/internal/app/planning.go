@@ -165,23 +165,23 @@ func (service *Service) prepareProjectMutation(ctx context.Context, request gene
 		return Actor{}, "", 0, problem(http.StatusPreconditionRequired, "version_conflict", "Expected version required", "If-Match must contain the quoted aggregate version.", rid), false
 	}
 	expected, _ := strconv.ParseInt(match[1], 10, 64)
-	if actor.Kind == "agent" {
-		for _, action := range actions[1:] {
+	for index, action := range actions {
+		if actor.Kind == "agent" && index > 0 {
 			if !actor.Scopes[action] {
 				service.audit(ctx, "authorization.denied", rid, &actor, map[string]any{"reason": "agent_action_scope", "action": action})
 				return Actor{}, "", 0, problem(http.StatusForbidden, "forbidden", "Action denied", "The delegated token does not include every required action.", rid), false
 			}
 		}
-	}
-	if denied, ok := service.authorizeProject(ctx, actor, projectID, actor.OrganizationID, actions[0], rid); !ok {
-		return Actor{}, "", 0, denied, false
+		if denied, ok := service.authorizeProject(ctx, actor, projectID, actor.OrganizationID, action, rid); !ok {
+			return Actor{}, "", 0, denied, false
+		}
 	}
 	return actor, rid, expected, generated.Response{}, true
 }
 
 func (service *Service) executeProjectMutation(ctx context.Context, request generated.Request, actor Actor, rid, projectID, operation string,
 	expected int64, canonical []byte, mutate projectMutation) generated.Response {
-	hash := requestHash([]byte(projectID), canonical, []byte(request.ExpectedVersion))
+	hash := requestHash([]byte(request.HTTPRequest.URL.EscapedPath()), canonical, []byte(request.ExpectedVersion))
 	tx, err := service.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return serviceUnavailable(rid)
