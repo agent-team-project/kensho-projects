@@ -905,6 +905,9 @@ func (service *Service) listForecasts(ctx context.Context, request generated.Req
 		item.P50At, item.P90At, item.ReviewAfter, item.CreatedAt = p50.UTC().Format(timeFormat), p90.UTC().Format(timeFormat), review.UTC().Format(timeFormat), created.UTC().Format(timeFormat)
 		items = append(items, forecastView(item, current, service.now()))
 	}
+	if err := rows.Err(); err != nil {
+		return serviceUnavailable(rid), nil
+	}
 	return generated.Response{Status: http.StatusOK, Headers: generated.ResponseHeaders{XRequestID: rid}, Body: items}, nil
 }
 
