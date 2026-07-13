@@ -386,7 +386,15 @@ func projectRoleAllows(role, action string) bool {
 	}
 }
 
+type projectAuthorizationQuery interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 func (service *Service) authorizeProject(ctx context.Context, actor Actor, projectID, organizationID, action, rid string) (generated.Response, bool) {
+	return service.authorizeProjectWith(ctx, service.db, actor, projectID, organizationID, action, rid)
+}
+
+func (service *Service) authorizeProjectWith(ctx context.Context, query projectAuthorizationQuery, actor Actor, projectID, organizationID, action, rid string) (generated.Response, bool) {
 	if denied, ok := service.authorizeOrganization(actor, organizationID, action, rid); !ok {
 		return denied, false
 	}
@@ -396,7 +404,7 @@ func (service *Service) authorizeProject(ctx context.Context, actor Actor, proje
 	if actor.PrincipalID != nil {
 		principalID = *actor.PrincipalID
 	}
-	err := service.db.QueryRowContext(ctx, `SELECT visibility::text,created_by,
+	err := query.QueryRowContext(ctx, `SELECT visibility::text,created_by,
 		(SELECT membership.role FROM project_memberships membership WHERE membership.project_id=projects.id
 			AND (membership.principal_id=$3 OR membership.principal_id=NULLIF($4,'')::uuid)
 			ORDER BY CASE WHEN membership.principal_id=$3 THEN 0 ELSE 1 END LIMIT 1)
@@ -408,7 +416,7 @@ func (service *Service) authorizeProject(ctx context.Context, actor Actor, proje
 	if privilegedProjectRole(actor.Role) && (actor.Kind != "agent" || privilegedProjectRole(actor.DelegatedRole)) {
 		return generated.Response{}, true
 	}
-	if createdBy == actor.ID || (principalID != "" && createdBy == principalID) {
+	if !membershipRole.Valid && (createdBy == actor.ID || (principalID != "" && createdBy == principalID)) {
 		membershipRole = sql.NullString{String: "owner", Valid: true}
 	}
 	if membershipRole.Valid {

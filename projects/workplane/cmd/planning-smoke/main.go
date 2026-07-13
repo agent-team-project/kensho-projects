@@ -144,6 +144,9 @@ func (run *runner) execute(ctx context.Context) error {
 		"actors": []string{"human", "agent"}, "excluded": []string{"generated ids", "timestamps", "attributable actor identity"},
 	})
 	run.checks = append(run.checks, "human-agent-planning-field-and-event-parity")
+	if err := run.idempotentDecisionReauthorizationExpectedDeny(ctx); err != nil {
+		return err
+	}
 
 	projectID := humanProject.ID
 	version := humanProject.Version
@@ -508,6 +511,82 @@ func (run *runner) parityFlow(ctx context.Context, client *http.Client, actor st
 	return result.Project, result, types, nil
 }
 
+func (run *runner) idempotentDecisionReauthorizationExpectedDeny(ctx context.Context) error {
+	created := run.call(run.agent, http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects",
+		projectInput("Decision reauthorization fixture"), merge(run.agentHeaders(), map[string]string{
+			"Idempotency-Key": "m2c-reauthorization-project-01",
+		}))
+	if err := expect(created, http.StatusCreated, ""); err != nil {
+		return fmt.Errorf("decision reauthorization project: %w", err)
+	}
+	var item project
+	if err := json.Unmarshal(created.Body, &item); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP)
+		ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, item.ID, humanID); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='member'
+		WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+
+	input := decisionInput()
+	headers := run.versionedHuman("m2c-demoted-decision-retry-01", item.Version)
+	first := run.call(run.human, http.MethodPost, "/api/v1/projects/"+item.ID+"/decisions", input, headers)
+	if err := expect(first, http.StatusCreated, ""); err != nil {
+		return fmt.Errorf("authorized decision before demotion: %w", err)
+	}
+	var recorded struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(first.Body, &recorded); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='observer'
+		WHERE project_id=$1 AND principal_id=$2`, item.ID, humanID); err != nil {
+		return err
+	}
+
+	before := run.counts(ctx)
+	retry := run.call(run.human, http.MethodPost, "/api/v1/projects/"+item.ID+"/decisions", input, headers)
+	if err := expect(retry, http.StatusForbidden, "forbidden"); err != nil {
+		return fmt.Errorf("demoted owner idempotent decision retry expected deny: %w", err)
+	}
+	if recorded.ID == "" || bytes.Contains(retry.Body, []byte(recorded.ID)) || bytes.Equal(retry.Body, first.Body) {
+		return fmt.Errorf("demoted owner retry disclosed the stored decision response: %s", retry.Body)
+	}
+	if got := run.counts(ctx); got != before {
+		return fmt.Errorf("demoted owner retry left residue: before=%+v after=%+v", before, got)
+	}
+	var decisions, events, outbox, idempotency int
+	if err := run.db.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM decisions WHERE project_id=$1),
+		(SELECT count(*) FROM domain_events WHERE aggregate_id=$1),
+		(SELECT count(*) FROM outbox_records record JOIN domain_events event ON event.event_id=record.event_id WHERE event.aggregate_id=$1),
+		(SELECT count(*) FROM idempotency_results WHERE actor_id=$2 AND operation_id='recordDecision' AND idempotency_key=$3)`,
+		item.ID, humanID, "m2c-demoted-decision-retry-01").Scan(&decisions, &events, &outbox, &idempotency); err != nil {
+		return err
+	}
+	if decisions != 1 || events != 2 || outbox != 2 || idempotency != 1 {
+		return fmt.Errorf("demoted owner retry changed accepted residue: decisions=%d events=%d outbox=%d idempotency=%d",
+			decisions, events, outbox, idempotency)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner'
+		WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	run.write("m2c-idempotent-reauthorization.json", map[string]any{
+		"actor_relation": "non-creator-project-owner", "role_change": "owner-to-observer",
+		"exact_retry":     "forbidden-no-disclosure-no-additional-residue",
+		"accepted_counts": map[string]int{"decisions": decisions, "events": events, "outbox": outbox, "idempotency": idempotency},
+	})
+	run.checks = append(run.checks, "current-project-role-authorized-before-idempotency-replay")
+	return nil
+}
+
 func (run *runner) faultNoResidue(ctx context.Context, client *http.Client, method, path string, input any, headers map[string]string, boundary string) error {
 	before := run.counts(ctx)
 	faultHeaders := clone(headers)
@@ -817,6 +896,9 @@ func (run *runner) authorityDenies(ctx context.Context, deniedProjectID, allowed
 	if err := run.observerPlanningWriteExpectedDeny(ctx, allowedProjectID, allowed.Version); err != nil {
 		return err
 	}
+	if err := run.creatorObserverPlanningWriteExpectedDeny(ctx, deniedProjectID, version); err != nil {
+		return err
+	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner'
 		WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
@@ -843,10 +925,11 @@ func (run *runner) authorityDenies(ctx context.Context, deniedProjectID, allowed
 	run.write("m2c-authority-denies.json", map[string]any{
 		"restricted_token": "deny-no-write", "revoked_token": "deny", "disabled_principal": "deny",
 		"organization_visible_no_project_role_write": "forbidden-no-write", "private_project": "not-found",
-		"observer_project_role_write": "expected-deny-no-state-event-outbox-idempotency-residue",
-		"cross_organization":          "not-found", "self_widening_fields": "invalid-request-no-write",
+		"observer_project_role_write":     "expected-deny-no-state-event-outbox-idempotency-residue",
+		"creator_explicit_observer_write": "expected-deny-no-state-event-outbox-idempotency-residue",
+		"cross_organization":              "not-found", "self_widening_fields": "invalid-request-no-write",
 	})
-	run.checks = append(run.checks, "restricted-revoked-visible-no-role-observer-private-denies-no-write")
+	run.checks = append(run.checks, "restricted-revoked-visible-no-role-observer-creator-demotion-private-denies-no-write")
 	return nil
 }
 
@@ -872,6 +955,39 @@ func (run *runner) observerPlanningWriteExpectedDeny(ctx context.Context, projec
 	if _, err := run.db.ExecContext(ctx, `DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, projectID, humanID); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (run *runner) creatorObserverPlanningWriteExpectedDeny(ctx context.Context, projectID string, version int64) error {
+	var createdBy string
+	if err := run.db.QueryRowContext(ctx, `SELECT created_by FROM projects WHERE id=$1`, projectID).Scan(&createdBy); err != nil {
+		return err
+	}
+	if createdBy != humanID {
+		return fmt.Errorf("creator demotion fixture created_by=%s want=%s", createdBy, humanID)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='observer'
+		WHERE project_id=$1 AND principal_id=$2`, projectID, humanID); err != nil {
+		return err
+	}
+	if err := expect(run.call(run.human, http.MethodGet, "/api/v1/projects/"+projectID, nil, nil), http.StatusOK, ""); err != nil {
+		return fmt.Errorf("demoted creator project read: %w", err)
+	}
+	before := run.counts(ctx)
+	denied := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/target", map[string]any{
+		"target_at": time.Now().UTC().Add(72 * time.Hour).Format(time.RFC3339), "reason": "Explicit creator membership is authoritative",
+	}, run.versionedHuman("m2c-creator-observer-target-deny", version))
+	if err := expect(denied, http.StatusForbidden, "forbidden"); err != nil {
+		return fmt.Errorf("creator observer target expected deny: %w", err)
+	}
+	if got := run.counts(ctx); got != before {
+		return fmt.Errorf("creator observer target expected deny left residue: before=%+v after=%+v", before, got)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='owner'
+		WHERE project_id=$1 AND principal_id=$2`, projectID, humanID); err != nil {
+		return err
+	}
+	run.checks = append(run.checks, "explicit-creator-membership-overrides-creator-owner-fallback")
 	return nil
 }
 
@@ -1087,6 +1203,9 @@ func etagVersion(response snapshot) int64 {
 }
 func projectInput(title string) map[string]any {
 	return map[string]any{"title": title, "outcome": "Prove the M2C planning contract", "hypothesis": "One public planning plane preserves parity", "falsifier": "Either actor requires private state", "decision_criteria": []string{"Exact replay and parity"}, "experiment_bound": "M2C Track B only"}
+}
+func decisionInput() map[string]any {
+	return map[string]any{"kind": "continue", "question": "Continue the bounded exploration?", "choice": "Continue", "alternatives": []string{"Stop"}, "rationale": "The bounded evidence remains informative", "evidence": []string{"Current planning evidence"}, "consequences": []string{"Preserve the non-terminal project"}}
 }
 func deliverableInput(title string) map[string]any {
 	return map[string]any{"title": title, "description": "Observable planning-contract outcome", "required": true, "weight": 1000, "state": "ready", "acceptance_criteria": []string{"Exact-head smoke evidence passes"}}
