@@ -38,11 +38,33 @@ type snapshot struct {
 }
 
 type project struct {
-	ID             string `json:"id"`
-	OrganizationID string `json:"organization_id"`
-	Mode           string `json:"mode"`
-	State          string `json:"state"`
-	Version        int64  `json:"version"`
+	ID               string   `json:"id"`
+	OrganizationID   string   `json:"organization_id"`
+	Title            string   `json:"title"`
+	Outcome          string   `json:"outcome"`
+	Mode             string   `json:"mode"`
+	State            string   `json:"state"`
+	Version          int64    `json:"version"`
+	Hypothesis       string   `json:"hypothesis"`
+	Falsifier        string   `json:"falsifier"`
+	DecisionCriteria []string `json:"decision_criteria"`
+	ExperimentBound  string   `json:"experiment_bound"`
+}
+
+type decisionRecord struct {
+	ID           string   `json:"id"`
+	ProjectID    string   `json:"project_id"`
+	ActorID      string   `json:"actor_id"`
+	ActorKind    string   `json:"actor_kind"`
+	PrincipalID  *string  `json:"principal_id"`
+	RecordedAt   string   `json:"recorded_at"`
+	Kind         string   `json:"kind"`
+	Question     string   `json:"question"`
+	Choice       string   `json:"choice"`
+	Alternatives []string `json:"alternatives"`
+	Rationale    string   `json:"rationale"`
+	Evidence     []string `json:"evidence"`
+	Consequences []string `json:"consequences"`
 }
 
 type session struct {
@@ -59,6 +81,42 @@ type activity struct {
 	ActorKind        string  `json:"actor_kind"`
 	PrincipalID      *string `json:"principal_id"`
 	AggregateVersion int64   `json:"aggregate_version"`
+}
+
+type eventGroupEntry struct {
+	OrganizationID   string          `json:"organization_id"`
+	AggregateType    string          `json:"aggregate_type"`
+	EventType        string          `json:"event_type"`
+	SchemaVersion    int             `json:"schema_version"`
+	AggregateVersion int64           `json:"aggregate_version"`
+	Payload          json.RawMessage `json:"payload"`
+}
+
+type normalizedEvent struct {
+	OrganizationID   string `json:"organization_id"`
+	AggregateType    string `json:"aggregate_type"`
+	EventType        string `json:"event_type"`
+	SchemaVersion    int    `json:"schema_version"`
+	AggregateVersion int64  `json:"aggregate_version"`
+	Payload          any    `json:"payload"`
+}
+
+type normalizedActivityEntry struct {
+	EventType        string `json:"event_type"`
+	AggregateVersion int64  `json:"aggregate_version"`
+}
+
+type normalizedResult struct {
+	Project  project           `json:"project"`
+	Decision decisionRecord    `json:"decision"`
+	Activity []normalizedEvent `json:"event_group"`
+}
+
+type domainCounts struct {
+	Projects    int `json:"projects"`
+	Events      int `json:"events"`
+	Decisions   int `json:"decisions"`
+	Idempotency int `json:"idempotency"`
 }
 
 type runner struct {
@@ -112,8 +170,19 @@ func (run *runner) execute(ctx context.Context) error {
 	run.checks = append(run.checks, "human-session-cookie-and-csrf")
 	run.saveRedactedLogin("human-login", login, authenticated)
 
-	humanInput := projectInput("Human M1 transaction")
+	humanInput := projectInput("Human/agent M1 parity transaction")
 	humanHeaders := map[string]string{"Origin": publicOrigin, "X-CSRF-Token": authenticated.CSRF, "Idempotency-Key": "human-create-000000000001"}
+	projectFaultHeaders := clone(humanHeaders)
+	projectFaultHeaders["X-Workplane-Fault"] = "after-project"
+	projectFault := run.call(run.human, "deny-project-transaction-fault", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", humanInput, projectFaultHeaders)
+	if err := expectProblem(projectFault, http.StatusServiceUnavailable, "service_unavailable"); err != nil {
+		return err
+	}
+	if err := run.assertCreateRowsAbsent(ctx, humanInput["title"].(string), humanHeaders["Idempotency-Key"]); err != nil {
+		return fmt.Errorf("after-project rollback: %w", err)
+	}
+	run.checks = append(run.checks, "project-create-atomic-rollback-before-retry")
+
 	created := run.call(run.human, "human-project-create", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", humanInput, humanHeaders)
 	if err := run.expect(created, http.StatusCreated, "human project create"); err != nil {
 		return err
@@ -168,11 +237,11 @@ func (run *runner) execute(ctx context.Context) error {
 	if err := expectProblem(run.call(run.human, "deny-decision-stale-version", http.MethodPost, decisionPath, decisionInput, staleHeaders), http.StatusConflict, "version_conflict"); err != nil {
 		return err
 	}
-	faultHeaders := clone(baseDecisionHeaders)
-	faultHeaders["If-Match"] = `"1"`
-	faultHeaders["Idempotency-Key"] = "human-decision-00000003"
-	faultHeaders["X-Workplane-Fault"] = "after-decision"
-	if err := expectProblem(run.call(run.human, "deny-decision-transaction-fault", http.MethodPost, decisionPath, decisionInput, faultHeaders), http.StatusServiceUnavailable, "service_unavailable"); err != nil {
+	decisionFaultHeaders := clone(baseDecisionHeaders)
+	decisionFaultHeaders["If-Match"] = `"1"`
+	decisionFaultHeaders["Idempotency-Key"] = "human-decision-00000003"
+	decisionFaultHeaders["X-Workplane-Fault"] = "after-decision"
+	if err := expectProblem(run.call(run.human, "deny-decision-transaction-fault", http.MethodPost, decisionPath, decisionInput, decisionFaultHeaders), http.StatusServiceUnavailable, "service_unavailable"); err != nil {
 		return err
 	}
 	afterFault := run.call(run.human, "human-project-after-fault", http.MethodGet, "/api/v1/projects/"+humanProject.ID, nil, nil)
@@ -189,6 +258,10 @@ func (run *runner) execute(ctx context.Context) error {
 	if err := run.expect(decision, http.StatusCreated, "human decision"); err != nil {
 		return err
 	}
+	var humanDecision decisionRecord
+	if err := json.Unmarshal(decision.Body, &humanDecision); err != nil {
+		return err
+	}
 	if decision.Headers["ETag"] != `"2"` {
 		return fmt.Errorf("decision ETag = %q", decision.Headers["ETag"])
 	}
@@ -200,10 +273,18 @@ func (run *runner) execute(ctx context.Context) error {
 	if err := validateActivity(humanActivity, "human", humanID, nil); err != nil {
 		return err
 	}
+	humanFinalResponse := run.call(run.human, "human-project-final", http.MethodGet, "/api/v1/projects/"+humanProject.ID, nil, nil)
+	if err := run.expect(humanFinalResponse, http.StatusOK, "human final project read"); err != nil {
+		return err
+	}
+	var finalHuman project
+	if err := json.Unmarshal(humanFinalResponse.Body, &finalHuman); err != nil {
+		return err
+	}
 	run.checks = append(run.checks, "decision-version-idempotency-atomicity", "human-immutable-attribution")
 
 	agentHeaders := map[string]string{"Authorization": "Bearer " + agentToken, "Idempotency-Key": "agent-create-000000000001"}
-	agentCreated := run.call(run.agent, "agent-project-create", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", projectInput("Agent M1 transaction"), agentHeaders)
+	agentCreated := run.call(run.agent, "agent-project-create", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", humanInput, agentHeaders)
 	if err := run.expect(agentCreated, http.StatusCreated, "agent project create"); err != nil {
 		return err
 	}
@@ -216,20 +297,46 @@ func (run *runner) execute(ctx context.Context) error {
 	if err := run.expect(agentDecision, http.StatusCreated, "agent decision"); err != nil {
 		return err
 	}
+	var recordedAgentDecision decisionRecord
+	if err := json.Unmarshal(agentDecision.Body, &recordedAgentDecision); err != nil {
+		return err
+	}
 	agentRead := run.call(run.agent, "agent-project-read", http.MethodGet, "/api/v1/projects/"+agentProject.ID, nil, map[string]string{"Authorization": "Bearer " + agentToken})
 	if err := run.expect(agentRead, http.StatusOK, "agent project read"); err != nil {
 		return err
 	}
 	var finalAgent project
-	_ = json.Unmarshal(agentRead.Body, &finalAgent)
+	if err := json.Unmarshal(agentRead.Body, &finalAgent); err != nil {
+		return err
+	}
 	agentActivity := run.activity(run.agent, "agent-activity", agentProject.ID, map[string]string{"Authorization": "Bearer " + agentToken})
 	principal := humanID
 	if err := validateActivity(agentActivity, "agent", agentID, &principal); err != nil {
 		return err
 	}
-	if finalAgent.Version != 2 || len(agentActivity) != len(humanActivity) {
-		return fmt.Errorf("human/agent domain parity mismatch")
+	if finalAgent.Version != 2 || finalHuman.Version != 2 {
+		return fmt.Errorf("human/agent final versions differ: human=%d agent=%d", finalHuman.Version, finalAgent.Version)
 	}
+	humanEvents, err := run.loadEventGroup(ctx, humanProject.ID)
+	if err != nil {
+		return err
+	}
+	agentEvents, err := run.loadEventGroup(ctx, agentProject.ID)
+	if err != nil {
+		return err
+	}
+	normalizedHuman, err := normalizeResult(finalHuman, humanDecision, humanEvents)
+	if err != nil {
+		return err
+	}
+	normalizedAgent, err := normalizeResult(finalAgent, recordedAgentDecision, agentEvents)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(normalizedHuman, normalizedAgent) || !reflect.DeepEqual(normalizeActivity(humanActivity), normalizeActivity(agentActivity)) {
+		return fmt.Errorf("human/agent field-level domain or event parity mismatch: human=%+v agent=%+v", normalizedHuman, normalizedAgent)
+	}
+	run.writeJSON("human-agent-parity.json", map[string]any{"human": normalizedHuman, "agent": normalizedAgent, "excluded": []string{"generated identifiers", "timestamps", "attributable actor identity"}})
 	run.checks = append(run.checks, "agent-public-operation-parity", "agent-delegated-attribution")
 
 	mixed := run.call(run.human, "deny-mixed-authentication", http.MethodGet, "/api/v1/projects/"+humanProject.ID, nil, map[string]string{"Authorization": "Bearer " + agentToken})
@@ -251,10 +358,57 @@ func (run *runner) execute(ctx context.Context) error {
 	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='observer' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
 	}
+	beforeDelegatedDenies, err := run.loadDomainCounts(ctx)
+	if err != nil {
+		return err
+	}
 	observerCreate := run.call(run.human, "deny-observer-create", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", projectInput("Observer cannot create"), map[string]string{"Origin": publicOrigin, "X-CSRF-Token": authenticated.CSRF, "Idempotency-Key": "human-create-000000000005"})
 	if err := expectProblem(observerCreate, http.StatusForbidden, "forbidden"); err != nil {
 		return err
 	}
+	agentObserverTitle := "Delegated observer cannot create"
+	agentObserverKey := "agent-create-000000000003"
+	agentAuthorization := map[string]string{"Authorization": "Bearer " + agentToken}
+	agentObserverCreate := run.call(run.agent, "deny-agent-delegated-observer-create", http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects", projectInput(agentObserverTitle), map[string]string{"Authorization": "Bearer " + agentToken, "Idempotency-Key": agentObserverKey})
+	if err := expectProblem(agentObserverCreate, http.StatusForbidden, "forbidden"); err != nil {
+		return err
+	}
+	agentObserverDecision := run.call(run.agent, "deny-agent-delegated-observer-decision", http.MethodPost, "/api/v1/projects/"+agentProject.ID+"/decisions", decisionInput, map[string]string{"Authorization": "Bearer " + agentToken, "Idempotency-Key": "agent-decision-00000002", "If-Match": `"2"`})
+	if err := expectProblem(agentObserverDecision, http.StatusForbidden, "forbidden"); err != nil {
+		return err
+	}
+	if err := run.expect(run.call(run.agent, "agent-delegated-observer-read", http.MethodGet, "/api/v1/projects/"+agentProject.ID, nil, agentAuthorization), http.StatusOK, "delegated observer read"); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `DELETE FROM organization_memberships WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	if err := expectProblem(run.call(run.agent, "deny-agent-missing-delegated-membership", http.MethodGet, "/api/v1/projects/"+agentProject.ID, nil, agentAuthorization), http.StatusUnauthorized, "unauthenticated"); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO organization_memberships (organization_id,principal_id,role,created_at) VALUES ($1,$2,'observer',CURRENT_TIMESTAMP)`, organizationID, humanID); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE principals SET status='disabled' WHERE id=$1`, humanID); err != nil {
+		return err
+	}
+	if err := expectProblem(run.call(run.agent, "deny-agent-disabled-delegated-principal", http.MethodGet, "/api/v1/projects/"+agentProject.ID, nil, agentAuthorization), http.StatusUnauthorized, "unauthenticated"); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE principals SET status='active' WHERE id=$1`, humanID); err != nil {
+		return err
+	}
+	afterDelegatedDenies, err := run.loadDomainCounts(ctx)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(beforeDelegatedDenies, afterDelegatedDenies) {
+		return fmt.Errorf("delegated-authority deny changed domain rows: before=%+v after=%+v", beforeDelegatedDenies, afterDelegatedDenies)
+	}
+	if err := run.assertCreateRowsAbsent(ctx, agentObserverTitle, agentObserverKey); err != nil {
+		return fmt.Errorf("delegated observer create: %w", err)
+	}
+	run.checks = append(run.checks, "delegated-human-agent-authority-intersection-no-write")
 	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
 	}
@@ -293,15 +447,6 @@ func (run *runner) execute(ctx context.Context) error {
 		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `INSERT INTO organization_memberships (organization_id,principal_id,role,created_at) VALUES ($1,$2,'member',CURRENT_TIMESTAMP)`, organizationID, agentID); err != nil {
-		return err
-	}
-	if _, err := run.db.ExecContext(ctx, `UPDATE principals SET status='disabled' WHERE id=$1`, humanID); err != nil {
-		return err
-	}
-	if err := expectProblem(run.call(run.agent, "deny-agent-disabled-principal", http.MethodGet, "/api/v1/projects/"+agentProject.ID, nil, map[string]string{"Authorization": "Bearer " + agentToken}), http.StatusUnauthorized, "unauthenticated"); err != nil {
-		return err
-	}
-	if _, err := run.db.ExecContext(ctx, `UPDATE principals SET status='active' WHERE id=$1`, humanID); err != nil {
 		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE projects SET state='stopped' WHERE id=$1`, agentProject.ID); err != nil {
@@ -357,6 +502,106 @@ func validateActivity(events []activity, kind, actorID string, principalID *stri
 		}
 	}
 	return nil
+}
+
+func (run *runner) assertCreateRowsAbsent(ctx context.Context, title, idempotencyKey string) error {
+	var projects, events, idempotency int
+	err := run.db.QueryRowContext(ctx, `
+		SELECT
+			(SELECT count(*) FROM projects WHERE title=$1),
+			(SELECT count(*) FROM domain_events WHERE event_type='project.created' AND payload->>'title'=$1),
+			(SELECT count(*) FROM idempotency_results WHERE idempotency_key=$2)`,
+		title, idempotencyKey).Scan(&projects, &events, &idempotency)
+	if err != nil {
+		return err
+	}
+	if projects != 0 || events != 0 || idempotency != 0 {
+		return fmt.Errorf("partial create rows projects=%d events=%d idempotency=%d", projects, events, idempotency)
+	}
+	return nil
+}
+
+func (run *runner) loadDomainCounts(ctx context.Context) (domainCounts, error) {
+	var result domainCounts
+	err := run.db.QueryRowContext(ctx, `
+		SELECT
+			(SELECT count(*) FROM projects),
+			(SELECT count(*) FROM domain_events),
+			(SELECT count(*) FROM decisions),
+			(SELECT count(*) FROM idempotency_results)`).Scan(
+		&result.Projects, &result.Events, &result.Decisions, &result.Idempotency)
+	return result, err
+}
+
+func (run *runner) loadEventGroup(ctx context.Context, projectID string) ([]eventGroupEntry, error) {
+	rows, err := run.db.QueryContext(ctx, `
+		SELECT organization_id,aggregate_type,event_type,schema_version,aggregate_version,payload
+		FROM domain_events
+		WHERE organization_id=$1 AND aggregate_type='project' AND aggregate_id=$2
+		ORDER BY sequence`, organizationID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]eventGroupEntry, 0)
+	for rows.Next() {
+		var entry eventGroupEntry
+		if err := rows.Scan(&entry.OrganizationID, &entry.AggregateType, &entry.EventType, &entry.SchemaVersion, &entry.AggregateVersion, &entry.Payload); err != nil {
+			return nil, err
+		}
+		result = append(result, entry)
+	}
+	return result, rows.Err()
+}
+
+func normalizeResult(projectValue project, decisionValue decisionRecord, events []eventGroupEntry) (normalizedResult, error) {
+	projectValue.ID = ""
+	decisionValue.ID = ""
+	decisionValue.ProjectID = ""
+	decisionValue.ActorID = ""
+	decisionValue.ActorKind = ""
+	decisionValue.PrincipalID = nil
+	decisionValue.RecordedAt = ""
+	result := normalizedResult{Project: projectValue, Decision: decisionValue, Activity: make([]normalizedEvent, 0, len(events))}
+	for _, event := range events {
+		normalized := normalizedEvent{
+			OrganizationID: event.OrganizationID, AggregateType: event.AggregateType,
+			EventType: event.EventType, SchemaVersion: event.SchemaVersion, AggregateVersion: event.AggregateVersion,
+		}
+		switch event.EventType {
+		case "project.created":
+			var payload project
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return normalizedResult{}, err
+			}
+			payload.ID = ""
+			normalized.Payload = payload
+		case "decision.recorded":
+			var payload decisionRecord
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return normalizedResult{}, err
+			}
+			payload.ID = ""
+			payload.ProjectID = ""
+			payload.ActorID = ""
+			payload.ActorKind = ""
+			payload.PrincipalID = nil
+			payload.RecordedAt = ""
+			normalized.Payload = payload
+		default:
+			return normalizedResult{}, fmt.Errorf("unexpected event type in parity group: %s", event.EventType)
+		}
+		result.Activity = append(result.Activity, normalized)
+	}
+	return result, nil
+}
+
+func normalizeActivity(events []activity) []normalizedActivityEntry {
+	result := make([]normalizedActivityEntry, len(events))
+	for index, event := range events {
+		result[index] = normalizedActivityEntry{EventType: event.EventType, AggregateVersion: event.AggregateVersion}
+	}
+	return result
 }
 
 func (run *runner) call(client *http.Client, name, method, path string, input any, headers map[string]string) snapshot {

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/agent-team-project/kensho-projects/projects/workplane/internal/api/generated"
 )
@@ -21,11 +22,12 @@ var (
 
 func (service *Service) Login(ctx context.Context, request generated.Request) (generated.Response, error) {
 	rid := requestID()
-	input, err := decodeStrict[struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}](request.Body)
-	if err != nil || !strings.Contains(input.Email, "@") || len(input.Email) > 320 || len(input.Password) < 1 || len(input.Password) > 1024 {
+	input, err := decodeStrict[generated.LoginRequest](request.Body)
+	if err != nil || !strings.Contains(input.Email, "@") ||
+		utf8.RuneCountInString(input.Email) < generated.LoginRequestEmailMinLength ||
+		utf8.RuneCountInString(input.Email) > generated.LoginRequestEmailMaxLength ||
+		utf8.RuneCountInString(input.Password) < generated.LoginRequestPasswordMinLength ||
+		utf8.RuneCountInString(input.Password) > generated.LoginRequestPasswordMaxLength {
 		return problem(http.StatusBadRequest, "invalid_request", "Invalid request", "The login request does not match the public contract.", rid), nil
 	}
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
@@ -108,23 +110,26 @@ func (service *Service) CreateProject(ctx context.Context, request generated.Req
 	if denied, ok := service.authorizeOrganization(actor, orgID, "project.create", rid); !ok {
 		return denied, nil
 	}
-	if len(request.IdempotencyKey) < 16 || len(request.IdempotencyKey) > 128 {
+	if utf8.RuneCountInString(request.IdempotencyKey) < generated.IdempotencyKeyMinLength ||
+		utf8.RuneCountInString(request.IdempotencyKey) > generated.IdempotencyKeyMaxLength {
 		return problem(http.StatusBadRequest, "invalid_request", "Idempotency key required", "Idempotency-Key must contain 16 to 128 characters.", rid), nil
 	}
-	input, err := decodeStrict[CreateExplorationProject](request.Body)
-	if err != nil || !validText(input.Title, 1, 200) || !validText(input.Outcome, 1, 2000) ||
-		!validText(input.Hypothesis, 1, 2000) || !validText(input.Falsifier, 1, 2000) ||
-		!validText(input.ExperimentBound, 1, 1000) || len(input.DecisionCriteria) < 1 {
+	input, err := decodeStrict[generated.CreateExplorationProject](request.Body)
+	if err != nil ||
+		!validText(input.Title, generated.CreateExplorationProjectTitleMinLength, generated.CreateExplorationProjectTitleMaxLength) ||
+		!validText(input.Outcome, generated.CreateExplorationProjectOutcomeMinLength, generated.CreateExplorationProjectOutcomeMaxLength) ||
+		!validText(input.Hypothesis, generated.CreateExplorationProjectHypothesisMinLength, generated.CreateExplorationProjectHypothesisMaxLength) ||
+		!validText(input.Falsifier, generated.CreateExplorationProjectFalsifierMinLength, generated.CreateExplorationProjectFalsifierMaxLength) ||
+		!validText(input.ExperimentBound, generated.CreateExplorationProjectExperimentBoundMinLength, generated.CreateExplorationProjectExperimentBoundMaxLength) {
 		return problem(http.StatusBadRequest, "invalid_request", "Invalid project contract", "The exploration project does not match the public contract.", rid), nil
 	}
-	criteria, valid := normalizeStrings(input.DecisionCriteria, 32, 500)
+	criteria, valid := normalizeStrings(input.DecisionCriteria,
+		generated.CreateExplorationProjectDecisionCriteriaMinItems,
+		generated.CreateExplorationProjectDecisionCriteriaMaxItems,
+		generated.CreateExplorationProjectDecisionCriteriaItemMinLength,
+		generated.CreateExplorationProjectDecisionCriteriaItemMaxLength)
 	if !valid {
 		return problem(http.StatusBadRequest, "invalid_request", "Invalid project contract", "Decision criteria exceed the public limits.", rid), nil
-	}
-	for _, criterion := range criteria {
-		if criterion == "" {
-			return problem(http.StatusBadRequest, "invalid_request", "Invalid project contract", "Decision criteria cannot be empty.", rid), nil
-		}
 	}
 	input.Title = strings.TrimSpace(input.Title)
 	input.Outcome = strings.TrimSpace(input.Outcome)
@@ -216,7 +221,8 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 	if !uuidPattern.MatchString(projectID) {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if len(request.IdempotencyKey) < 16 || len(request.IdempotencyKey) > 128 {
+	if utf8.RuneCountInString(request.IdempotencyKey) < generated.IdempotencyKeyMinLength ||
+		utf8.RuneCountInString(request.IdempotencyKey) > generated.IdempotencyKeyMaxLength {
 		return problem(http.StatusBadRequest, "invalid_request", "Idempotency key required", "Idempotency-Key must contain 16 to 128 characters.", rid), nil
 	}
 	match := versionETagPattern.FindStringSubmatch(string(request.ExpectedVersion))
@@ -224,19 +230,24 @@ func (service *Service) RecordDecision(ctx context.Context, request generated.Re
 		return problem(http.StatusPreconditionRequired, "version_conflict", "Expected version required", "If-Match must contain the quoted aggregate version.", rid), nil
 	}
 	expectedVersion, _ := strconv.ParseInt(match[1], 10, 64)
-	input, err := decodeStrict[RecordDecision](request.Body)
-	if err != nil || input.Kind != "continue" || !validText(input.Question, 1, 2000) || !validText(input.Choice, 1, 2000) ||
-		!validText(input.Rationale, 1, 4000) {
+	input, err := decodeStrict[generated.RecordDecision](request.Body)
+	if err != nil || input.Kind != "continue" ||
+		!validText(input.Question, generated.RecordDecisionQuestionMinLength, generated.RecordDecisionQuestionMaxLength) ||
+		!validText(input.Choice, generated.RecordDecisionChoiceMinLength, generated.RecordDecisionChoiceMaxLength) ||
+		!validText(input.Rationale, generated.RecordDecisionRationaleMinLength, generated.RecordDecisionRationaleMaxLength) {
 		return problem(http.StatusBadRequest, "invalid_request", "Invalid decision", "M1 accepts the complete universal continue-decision shape.", rid), nil
 	}
 	var valid bool
-	if input.Alternatives, valid = normalizeStrings(input.Alternatives, 32, 1000); !valid {
+	if input.Alternatives, valid = normalizeStrings(input.Alternatives, 0,
+		generated.RecordDecisionAlternativesMaxItems, 0, generated.RecordDecisionAlternativesItemMaxLength); !valid {
 		return problem(http.StatusBadRequest, "invalid_request", "Invalid decision", "Decision alternatives exceed the public limits.", rid), nil
 	}
-	if input.Evidence, valid = normalizeStrings(input.Evidence, 64, 2000); !valid {
+	if input.Evidence, valid = normalizeStrings(input.Evidence, 0,
+		generated.RecordDecisionEvidenceMaxItems, 0, generated.RecordDecisionEvidenceItemMaxLength); !valid {
 		return problem(http.StatusBadRequest, "invalid_request", "Invalid decision", "Decision evidence exceeds the public limits.", rid), nil
 	}
-	if input.Consequences, valid = normalizeStrings(input.Consequences, 32, 2000); !valid {
+	if input.Consequences, valid = normalizeStrings(input.Consequences, 0,
+		generated.RecordDecisionConsequencesMaxItems, 0, generated.RecordDecisionConsequencesItemMaxLength); !valid {
 		return problem(http.StatusBadRequest, "invalid_request", "Invalid decision", "Decision consequences exceed the public limits.", rid), nil
 	}
 	input.Question, input.Choice, input.Rationale = strings.TrimSpace(input.Question), strings.TrimSpace(input.Choice), strings.TrimSpace(input.Rationale)

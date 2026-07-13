@@ -3,8 +3,12 @@ set -eu
 
 cd "$(dirname "$0")/.."
 artifact_root="${WORKPLANE_M1_EVIDENCE_DIR:-$PWD/target/agent-evidence/m1}"
+client_proxy_pid=""
+client_proxy_log="${TMPDIR:-/tmp}/workplane-client-api-proxy-$$.log"
 
 cleanup() {
+  if [ -n "$client_proxy_pid" ]; then kill "$client_proxy_pid" >/dev/null 2>&1 || true; fi
+  rm -f "$client_proxy_log"
   docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -36,6 +40,32 @@ docker run --rm --network workplane_default \
   -e WORKPLANE_API_BASE=http://api:8080 \
   -e WORKPLANE_DATABASE_URL='postgres://workplane:workplane-local-only@postgres:5432/workplane?sslmode=disable' \
   -v "$artifact_root/api:/evidence" workplane-smoke:m1
+
+api_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q api)")"
+client_base="http://127.0.0.1:18081"
+WORKPLANE_PROXY_TARGET="http://${api_ip}:8080" WORKPLANE_PROXY_ADDR="${client_base#http://}" \
+  python3 scripts/http_proxy.py >"$client_proxy_log" 2>&1 &
+client_proxy_pid=$!
+i=0
+until curl -fsS "$client_base/readyz" >/dev/null 2>&1; do
+  i=$((i + 1))
+  test "$i" -lt 30
+  sleep 1
+done
+client_boundary_raw="$artifact_root/.generated-client-api-boundaries.raw"
+if ! env WORKPLANE_LIVE_API_URL="$client_base" \
+  npm --prefix web test -- --run src/api/client.live.test.ts \
+  >"$client_boundary_raw" 2>&1; then
+  sed "s|$PWD|<workplane>|g" "$client_boundary_raw" >&2
+  rm -f "$client_boundary_raw"
+  exit 1
+fi
+sed "s|$PWD|<workplane>|g" "$client_boundary_raw" >"$artifact_root/generated-client-api-boundaries.txt"
+rm -f "$client_boundary_raw"
+cat "$artifact_root/generated-client-api-boundaries.txt"
+kill "$client_proxy_pid" >/dev/null 2>&1 || true
+client_proxy_pid=""
+rm -f "$client_proxy_log"
 
 docker compose exec -T postgres psql -At -F '|' -U workplane -d workplane -c \
   "SELECT sequence,event_id,event_type,aggregate_version,actor_kind,actor_id,COALESCE(principal_id::text,''),command_id,request_id FROM domain_events ORDER BY sequence" \

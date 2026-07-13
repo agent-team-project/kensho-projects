@@ -223,6 +223,59 @@ def validate() -> dict[str, int]:
     check("ETag" in decision_operation.get("responses", {}).get("201", {}).get("headers", {}), "OpenAPI: recordDecision response lacks committed version ETag")
     decision_schema = openapi.get("components", {}).get("schemas", {}).get("Decision", {})
     check(decision_schema.get("additionalProperties") is False and "allOf" not in decision_schema, "OpenAPI: Decision must be one closed composable response object")
+    schemas = openapi.get("components", {}).get("schemas", {})
+    check(openapi.get("x-request-body-max-bytes") == 65_536, "OpenAPI: request body byte boundary must be authoritative")
+    expected_string_limits = {
+        ("LoginRequest", "email"): (1, 320),
+        ("LoginRequest", "password"): (1, 1024),
+        ("CreateExplorationProject", "title"): (1, 200),
+        ("CreateExplorationProject", "outcome"): (1, 2000),
+        ("CreateExplorationProject", "hypothesis"): (1, 2000),
+        ("CreateExplorationProject", "falsifier"): (1, 2000),
+        ("CreateExplorationProject", "experiment_bound"): (1, 1000),
+        ("RecordDecision", "question"): (1, 2000),
+        ("RecordDecision", "choice"): (1, 2000),
+        ("RecordDecision", "rationale"): (1, 4000),
+    }
+    for (schema_name, property_name), (minimum, maximum) in expected_string_limits.items():
+        property_schema = schemas.get(schema_name, {}).get("properties", {}).get(property_name, {})
+        check(
+            property_schema.get("minLength") == minimum and property_schema.get("maxLength") == maximum,
+            f"OpenAPI: {schema_name}.{property_name} must own min/max length {minimum}/{maximum}",
+        )
+    expected_array_limits = {
+        ("CreateExplorationProject", "decision_criteria"): (1, 32, 1, 500),
+        ("RecordDecision", "alternatives"): (0, 32, 0, 1000),
+        ("RecordDecision", "evidence"): (0, 64, 0, 2000),
+        ("RecordDecision", "consequences"): (0, 32, 0, 2000),
+    }
+    for (schema_name, property_name), (minimum, maximum, item_minimum, item_maximum) in expected_array_limits.items():
+        property_schema = schemas.get(schema_name, {}).get("properties", {}).get(property_name, {})
+        item_schema = property_schema.get("items", {})
+        check(
+            property_schema.get("minItems", 0) == minimum
+            and property_schema.get("maxItems") == maximum
+            and item_schema.get("minLength", 0) == item_minimum
+            and item_schema.get("maxLength") == item_maximum,
+            f"OpenAPI: {schema_name}.{property_name} must own item/cardinality boundaries",
+        )
+    project_request_schema = schemas.get("CreateExplorationProject", {})
+    project_boundary = {
+        "title": "t" * 200,
+        "outcome": "o" * 2000,
+        "hypothesis": "h" * 2000,
+        "falsifier": "f" * 2000,
+        "decision_criteria": ["c" * 500] * 32,
+        "experiment_bound": "b" * 1000,
+    }
+    project_validator = Draft202012Validator(project_request_schema)
+    check(not list(project_validator.iter_errors(project_boundary)), "OpenAPI: declared project boundary values must be accepted")
+    project_over_boundary = dict(project_boundary, decision_criteria=["criterion"] * 33)
+    check(bool(list(project_validator.iter_errors(project_over_boundary))), "OpenAPI: 33 decision criteria must be rejected")
+    check(
+        schemas.get("RecordDecision", {}).get("properties", {}).get("kind", {}).get("enum") == ["continue"],
+        "OpenAPI: the M1 decision request must expose only the implemented continue kind",
+    )
     try:
         decision_errors = sorted(
             Draft202012Validator(decision_schema, format_checker=FormatChecker()).iter_errors(load_json(ROOT / "fixtures/decision-response.json")),
@@ -234,12 +287,12 @@ def validate() -> dict[str, int]:
 
     generated_go = (ROOT / "internal/api/generated/server.gen.go").read_text(encoding="utf-8")
     generated_ts = (ROOT / "web/src/api/client.gen.ts").read_text(encoding="utf-8")
-    for surface in ("SessionCookie", "CSRFToken", "BearerToken", "ExpectedVersion", "ResponseHeaders", "type Session struct"):
+    for surface in ("SessionCookie", "CSRFToken", "BearerToken", "ExpectedVersion", "ResponseHeaders", "type Session struct", "RequestBodyMaxBytes", "CreateExplorationProjectDecisionCriteriaMaxItems"):
         check(surface in generated_go, f"generated Go: missing typed security/version surface {surface}")
     check('CSRFToken string `json:"csrf_token"`' in generated_go, "generated Go: login session body drops the CSRF token source")
     check(bool(re.search(r"SetCookie\s+string", generated_go)) and 'Header().Set("Set-Cookie"' in generated_go, "generated Go: login response cannot emit Set-Cookie")
     check(bool(re.search(r"ETag\s+VersionETag", generated_go)) and 'Header().Set("ETag"' in generated_go, "generated Go: versioned response cannot emit ETag")
-    for surface in ("HumanMutationSecurity", "AgentBearerSecurity", "X-CSRF-Token", "Authorization", "expectedVersion", "If-Match", "csrf_token", "VersionedResponse"):
+    for surface in ("HumanMutationSecurity", "AgentBearerSecurity", "X-CSRF-Token", "Authorization", "expectedVersion", "If-Match", "csrf_token", "VersionedResponse", "requestContractSchemas", "validateRequestBody"):
         check(surface in generated_ts, f"generated TypeScript: missing typed security/version surface {surface}")
     check("options: VersionedMutationOptions" in generated_ts, "generated TypeScript: recordDecision does not require versioned mutation options")
     check('response.headers.get("ETag")' in generated_ts and "version: version as VersionETag" in generated_ts, "generated TypeScript: recordDecision drops the committed response version")

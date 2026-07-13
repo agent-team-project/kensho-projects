@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/agent-team-project/kensho-projects/projects/workplane/internal/api/generated"
 	_ "github.com/lib/pq"
@@ -28,6 +29,7 @@ type Actor struct {
 	PrincipalID    *string
 	OrganizationID string
 	Role           string
+	DelegatedRole  string
 	Scopes         map[string]bool
 	ProjectIDs     map[string]bool
 }
@@ -39,15 +41,6 @@ type Problem struct {
 	Code      string `json:"code"`
 	RequestID string `json:"request_id"`
 	Detail    string `json:"detail,omitempty"`
-}
-
-type CreateExplorationProject struct {
-	Title            string   `json:"title"`
-	Outcome          string   `json:"outcome"`
-	Hypothesis       string   `json:"hypothesis"`
-	Falsifier        string   `json:"falsifier"`
-	DecisionCriteria []string `json:"decision_criteria"`
-	ExperimentBound  string   `json:"experiment_bound"`
 }
 
 type Project struct {
@@ -62,16 +55,6 @@ type Project struct {
 	Falsifier        string   `json:"falsifier"`
 	DecisionCriteria []string `json:"decision_criteria"`
 	ExperimentBound  string   `json:"experiment_bound"`
-}
-
-type RecordDecision struct {
-	Kind         string   `json:"kind"`
-	Question     string   `json:"question"`
-	Choice       string   `json:"choice"`
-	Alternatives []string `json:"alternatives"`
-	Rationale    string   `json:"rationale"`
-	Evidence     []string `json:"evidence"`
-	Consequences []string `json:"consequences"`
 }
 
 type Decision struct {
@@ -231,14 +214,17 @@ func decodeStrict[T any](body json.RawMessage) (T, error) {
 	return target, nil
 }
 
-func normalizeStrings(values []string, maxItems, maxLength int) ([]string, bool) {
-	if values == nil || len(values) > maxItems {
+func normalizeStrings(values []string, minItems, maxItems, minLength, maxLength int) ([]string, bool) {
+	if values == nil || len(values) < minItems || len(values) > maxItems {
 		return nil, false
 	}
 	result := make([]string, len(values))
 	for index, value := range values {
+		if utf8.RuneCountInString(value) > maxLength {
+			return nil, false
+		}
 		value = strings.TrimSpace(value)
-		if len(value) > maxLength {
+		if utf8.RuneCountInString(value) < minLength {
 			return nil, false
 		}
 		result[index] = value
@@ -247,8 +233,7 @@ func normalizeStrings(values []string, maxItems, maxLength int) ([]string, bool)
 }
 
 func validText(value string, min, max int) bool {
-	length := len(strings.TrimSpace(value))
-	return length >= min && length <= max
+	return utf8.RuneCountInString(value) <= max && utf8.RuneCountInString(strings.TrimSpace(value)) >= min
 }
 
 func (service *Service) audit(ctx context.Context, category, requestID string, actor *Actor, detail map[string]any) {
@@ -302,7 +287,7 @@ func (service *Service) authenticate(ctx context.Context, request generated.Requ
 	var tokenHash []byte
 	var scopesJSON, projectIDsJSON string
 	err := service.db.QueryRowContext(ctx, `
-		SELECT a.id,a.kind,a.status,a.human_principal_id,h.status,t.organization_id,m.role,t.token_hash,
+		SELECT a.id,a.kind,a.status,a.human_principal_id,h.status,t.organization_id,m.role,hm.role,t.token_hash,
 			array_to_json(t.scopes)::text,array_to_json(COALESCE(t.project_ids,ARRAY[]::uuid[]))::text
 		FROM agent_tokens t JOIN principals a ON a.id=t.agent_id
 		JOIN principals h ON h.id=a.human_principal_id
@@ -310,7 +295,7 @@ func (service *Service) authenticate(ctx context.Context, request generated.Requ
 		JOIN organization_memberships hm ON hm.organization_id=t.organization_id AND hm.principal_id=h.id
 		WHERE t.token_prefix=$1 AND t.revoked_at IS NULL AND t.expires_at > CURRENT_TIMESTAMP`, prefix).Scan(
 		&actor.ID, &actor.Kind, &actorStatus, &actor.PrincipalID, &principalStatus,
-		&actor.OrganizationID, &actor.Role, &tokenHash, &scopesJSON, &projectIDsJSON)
+		&actor.OrganizationID, &actor.Role, &actor.DelegatedRole, &tokenHash, &scopesJSON, &projectIDsJSON)
 	var scopes, projectIDs []string
 	if err == nil {
 		err = json.Unmarshal([]byte(scopesJSON), &scopes)
@@ -342,11 +327,14 @@ func (service *Service) authorizeOrganization(actor Actor, organizationID, actio
 	if actor.OrganizationID != organizationID {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
 	}
-	allowed := actor.Role == "owner" || actor.Role == "admin" || actor.Role == "member" || (action == "project.read" && actor.Role == "observer")
-	if !allowed {
+	if !organizationRoleAllows(actor.Role, action) || (actor.Kind == "agent" && !organizationRoleAllows(actor.DelegatedRole, action)) {
 		return problem(http.StatusForbidden, "forbidden", "Action denied", "The active role does not permit this action.", rid), false
 	}
 	return generated.Response{}, true
+}
+
+func organizationRoleAllows(role, action string) bool {
+	return role == "owner" || role == "admin" || role == "member" || (action == "project.read" && role == "observer")
 }
 
 func (service *Service) requireHumanMutation(request generated.Request, actor Actor, rid string) (generated.Response, bool) {
