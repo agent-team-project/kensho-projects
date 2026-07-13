@@ -138,6 +138,38 @@ requirements:
     source: VERIFICATION:19-20;ISSUE:15
     title: Exact-head smoke evidence captures every M2D acceptance outcome without lowering prior gates
     begins_at: durable-core
+  - id: M2E-CONTRACT-001
+    source: API:11;ISSUE:17
+    title: Public generated human and agent consumers expose the complete work-item and dependency command plane
+    begins_at: durable-core
+  - id: M2E-LIFECYCLE-001
+    source: DOMAIN:11;ISSUE:17
+    title: Work items enforce only the fixed lifecycle with presence-aware reasons evidence and derived blocking
+    begins_at: durable-core
+  - id: M2E-DEPENDENCY-001
+    source: DOMAIN:3.6,8;ISSUE:17
+    title: Same-organization typed cross-project dependencies reject only blocking cycles without private disclosure
+    begins_at: durable-core
+  - id: M2E-ATOMICITY-001
+    source: API:11;DOMAIN:8;ISSUE:17
+    title: Versioned work assignment dependency and multi-item transitions commit completely or leave zero residue
+    begins_at: durable-core
+  - id: M2E-AUTHORITY-001
+    source: SECURITY:4-6;ISSUE:17
+    title: Current concrete project roles delegation token bounds expiry and revocation govern every retry and read
+    begins_at: durable-core
+  - id: M2E-DURABILITY-001
+    source: DOMAIN:7-9;ISSUE:17
+    title: Work state assignment and dependencies atomically feed ledger outbox replay checksums and realtime
+    begins_at: durable-core
+  - id: M2E-POSTGRES-001
+    source: VERIFICATION:4,6;ISSUE:17
+    title: Real PostgreSQL proves upgrade cycle concurrency batch rollback and corrupt graph failure boundaries
+    begins_at: durable-core
+  - id: M2E-EXACT-HEAD-001
+    source: VERIFICATION:19-20;ISSUE:17
+    title: Exact-head evidence captures every M2E outcome mutation proof checksum and artifact digest
+    begins_at: durable-core
   - id: PR-CORE-01
     source: PRODUCT:4.5
     title: Actor-neutral public project creation records attributable events

@@ -2,12 +2,12 @@ package app
 
 import "testing"
 
-func TestM2ClaimsOnlyAcceptedWalkingSliceBehavior(t *testing.T) {
+func TestM2EClaimsOnlyAcceptedWorkDependencyBehavior(t *testing.T) {
 	t.Parallel()
-	if BuildStage != "m2-evidence-review" {
+	if BuildStage != "m2-work-dependencies" {
 		t.Fatalf("unexpected build stage %q", BuildStage)
 	}
-	if len(Capabilities) != 27 {
+	if len(Capabilities) != 33 {
 		t.Fatalf("unexpected accepted capability count %d", len(Capabilities))
 	}
 }
@@ -53,6 +53,10 @@ func TestProjectRoleAllowsRequestedAction(t *testing.T) {
 		{name: "existing observer cannot write target", role: "observer", action: "project.target.write", want: false},
 		{name: "canonical viewer cannot revise deliverable", role: "viewer", action: "deliverable.edit", want: false},
 		{name: "contributor cannot promote project", role: "contributor", action: "project.promote", want: false},
+		{name: "contributor can transition work", role: "contributor", action: "work.transition", want: true},
+		{name: "contributor cannot assign work", role: "contributor", action: "work.assign", want: false},
+		{name: "steward can edit dependencies", role: "steward", action: "dependency.edit", want: true},
+		{name: "viewer can read dependency graph", role: "viewer", action: "dependency.read", want: true},
 		{name: "unknown role denies", role: "future-role", action: "project.read", want: false},
 		{name: "unknown action denies", role: "owner", action: "project.future", want: false},
 	}

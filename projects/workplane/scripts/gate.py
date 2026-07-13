@@ -42,6 +42,7 @@ GATES: dict[str, list[tuple[str, str]]] = {
         ("m1-m2-durable-browser-offline", "scripts/test_m1.sh"),
         ("m2b-realtime-authority-resume-faults", "scripts/test_realtime.sh"),
         ("m2c-planning-m2d-evidence-review", "scripts/test_planning.sh"),
+        ("m2e-work-dependencies-atomicity", "scripts/test_work.sh"),
     ],
     "publication": [
         ("repository-publication", f"{PYTHON} ../../scripts/check_publication.py"),
@@ -69,6 +70,10 @@ EXTRA_ARTIFACT_GLOBS = {
     "m2c-planning-m2d-evidence-review": [
         "target/agent-evidence/m2c/*.json",
         "target/agent-evidence/m2c/migration.log",
+    ],
+    "m2e-work-dependencies-atomicity": [
+        "target/agent-evidence/m2e/*.json",
+        "target/agent-evidence/m2e/migration.log",
     ],
 }
 

@@ -44,6 +44,7 @@ test-integration:
 	scripts/test_m1.sh
 	scripts/test_realtime.sh
 	scripts/test_planning.sh
+	scripts/test_work.sh
 
 test-browser:
 	scripts/test_m1.sh

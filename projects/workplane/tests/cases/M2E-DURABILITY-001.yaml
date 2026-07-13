@@ -1,0 +1,8 @@
+id: M2E-DURABILITY-001
+requirement: M2E-DURABILITY-001
+layer: integration
+title: Work lifecycle assignment and graph events replay to the same checksum and canonical realtime envelopes
+given: {ledger: populated, outbox_consumers: [projection-v1, realtime-v1], transports: [websocket, sse]}
+when: {command: scripts/test_work.sh, actions: [replay, restart, resume, integrity_doctor]}
+then: {result: pass, live_rebuilt_checksum_equal: true, known_good_head_advanced: true, realtime_field_parity: true}
+evidence: [target/agent-evidence/m2e/m2e-durability-realtime.json]

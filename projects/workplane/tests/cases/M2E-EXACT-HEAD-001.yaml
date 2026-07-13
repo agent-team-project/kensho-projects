@@ -1,0 +1,8 @@
+id: M2E-EXACT-HEAD-001
+requirement: M2E-EXACT-HEAD-001
+layer: system
+title: Clean exact-head smoke manifest includes every M2E artifact and all accepted prior gates
+given: {source: clean_exact_commit, prior_milestones: [M1, M2A, M2B, M2C, M2D]}
+when: {command: make evidence-smoke}
+then: {result: pass, source_commit: exact_head, dirty: false, prior_gates: preserved, m2e_artifacts: non_empty, artifact_digests: valid}
+evidence: [evidence/runs]

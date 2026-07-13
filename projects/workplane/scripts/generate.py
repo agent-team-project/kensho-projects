@@ -35,6 +35,13 @@ REQUEST_SCHEMA_NAMES = (
     "BounceInput",
     "ReviewNoteInput",
     "WaiverInput",
+    "WorkItemCreateInput",
+    "WorkItemUpdateInput",
+    "WorkItemAssignInput",
+    "WorkItemTransitionInput",
+    "DependencyAddInput",
+    "DependencyRemoveInput",
+    "WorkItemBatchTransitionInput",
 )
 GO_SCHEMA_NAMES = (
     *REQUEST_SCHEMA_NAMES,
@@ -42,6 +49,7 @@ GO_SCHEMA_NAMES = (
     "EvidenceSupportInput",
     "EvidenceRequirementInput",
     "FindingInput",
+    "WorkItemBatchTransitionEntry",
     "Session",
 )
 
@@ -418,6 +426,13 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         "cancelDeliverable": "LifecycleReasonRequest",
         "waiveDeliverable": "WaiverInput",
         "waiveGate": "WaiverInput",
+        "createWorkItem": "WorkItemCreateInput",
+        "updateWorkItem": "WorkItemUpdateInput",
+        "assignWorkItem": "WorkItemAssignInput",
+        "transitionWorkItem": "WorkItemTransitionInput",
+        "addWorkItemDependency": "DependencyAddInput",
+        "removeWorkItemDependency": "DependencyRemoveInput",
+        "batchTransitionWorkItems": "WorkItemBatchTransitionInput",
     }
     response_types = {
         "login": "Session",
@@ -456,6 +471,16 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
         "cancelDeliverable": "Deliverable",
         "waiveDeliverable": "DeliverableWaiverResult",
         "waiveGate": "GateWaiverResult",
+        "listWorkItems": "Array<WorkItem>",
+        "createWorkItem": "WorkItem",
+        "getWorkItem": "WorkItem",
+        "updateWorkItem": "WorkItem",
+        "assignWorkItem": "WorkItem",
+        "transitionWorkItem": "WorkItem",
+        "addWorkItemDependency": "DependencyMutationResult",
+        "removeWorkItemDependency": "DependencyMutationResult",
+        "batchTransitionWorkItems": "WorkItemBatchTransitionResult",
+        "getDependencyGraph": "DependencyGraph",
     }
     methods: list[str] = []
     for op in ops:
@@ -509,10 +534,12 @@ def generate_typescript(openapi: dict[str, Any]) -> str:
     schema_names = [
         *REQUEST_SCHEMA_NAMES,
         "PromotionDecision", "EvidenceSupportInput", "EvidenceRequirementInput", "FindingInput",
+        "WorkItemBatchTransitionEntry",
         "Session", "Project", "Decision", "Deliverable", "EvidenceSupport", "Evidence", "Gate",
         "Verdict", "Finding", "FindingAction", "Submission", "VerdictResult", "FindingActionResult",
         "SubmissionResult", "DeliverableWaiverResult", "GateWaiverResult", "Forecast", "Target",
-        "Deadline", "PromotionResult", "Activity", "Problem",
+        "Deadline", "PromotionResult", "WorkItem", "WorkItemDependency", "DependencyMutationResult",
+        "WorkItemBatchTransitionResult", "DependencyGraph", "Activity", "Problem",
     ]
     generated_types = "\n\n".join(generate_ts_object_type(name, openapi["components"]["schemas"][name]) for name in schema_names)
     owned_request_headers = json.dumps(contract_owned_request_headers(openapi), indent=2)
@@ -591,6 +618,7 @@ type RuntimeSchema = {{
   minItems?: number;
   maxItems?: number;
   maxProperties?: number;
+  minProperties?: number;
   minimum?: number;
   maximum?: number;
   uniqueItems?: boolean;
@@ -658,6 +686,9 @@ export class WorkplaneClient {{
       const record = value as Record<string, unknown>;
       if (schema.maxProperties !== undefined && Object.keys(record).length > schema.maxProperties) {{
         throw new WorkplaneContractError(`${{path}} must contain at most ${{schema.maxProperties}} properties`);
+      }}
+      if (schema.minProperties !== undefined && Object.keys(record).length < schema.minProperties) {{
+        throw new WorkplaneContractError(`${{path}} must contain at least ${{schema.minProperties}} properties`);
       }}
       for (const required of schema.required ?? []) {{
         if (!Object.hasOwn(record, required)) {{

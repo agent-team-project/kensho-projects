@@ -124,6 +124,38 @@ seed_capabilities:
     permission_action: gate.soft_waive
     parity_case_id: M2D-PARITY-001
     status: implemented
+  - capability_id: manage-work-items
+    requirement_id: M2E-CONTRACT-001
+    public_operation_id: createWorkItem|listWorkItems|getWorkItem|updateWorkItem
+    ui_surface: headless-m2e-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#createWorkItem
+    permission_action: work.edit
+    parity_case_id: M2E-AUTHORITY-001
+    status: implemented
+  - capability_id: assign-and-transition-work
+    requirement_id: M2E-LIFECYCLE-001
+    public_operation_id: assignWorkItem|transitionWorkItem|batchTransitionWorkItems
+    ui_surface: headless-m2e-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#transitionWorkItem
+    permission_action: work.transition
+    parity_case_id: M2E-AUTHORITY-001
+    status: implemented
+  - capability_id: edit-work-dependencies
+    requirement_id: M2E-DEPENDENCY-001
+    public_operation_id: addWorkItemDependency|removeWorkItemDependency
+    ui_surface: headless-m2e-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#addWorkItemDependency
+    permission_action: dependency.edit
+    parity_case_id: M2E-AUTHORITY-001
+    status: implemented
+  - capability_id: read-dependency-graph
+    requirement_id: M2E-DEPENDENCY-001
+    public_operation_id: getDependencyGraph
+    ui_surface: headless-m2e-contract-no-track-c-ui
+    agent_example: web/src/api/client.gen.ts#getDependencyGraph
+    permission_action: dependency.read
+    parity_case_id: M2E-AUTHORITY-001
+    status: implemented
 
 ci_failures:
   - ui_mutation_without_operation

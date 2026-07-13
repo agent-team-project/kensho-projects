@@ -32,6 +32,7 @@ REQUIRED_SMOKE_GATES = {
     "m1-m2-durable-browser-offline",
     "m2b-realtime-authority-resume-faults",
     "m2c-planning-m2d-evidence-review",
+    "m2e-work-dependencies-atomicity",
     "repository-publication",
 }
 

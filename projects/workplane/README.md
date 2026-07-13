@@ -4,7 +4,8 @@ An agent-native project and portfolio system for humans and autonomous software
 organizations.
 
 **Status:** M1 walking slice plus the M2A outbox/replay, M2B resumable
-realtime, M2C planning-contract, and M2D evidence-review spines implemented;
+realtime, M2C planning-contract, M2D evidence-review, and M2E fixed
+work/dependency spines implemented;
 broader durable-core and release work remains explicitly unimplemented pending
 exact-commit verification and integration.
 
@@ -48,9 +49,11 @@ automation, calibrated forecasting, and an empirical research protocol.
   deliverable, forecast, target/deadline, parity, and evidence boundary.
 - `docs/evidence-review-m2d.md` - the implemented immutable evidence, review
   gate, verdict/finding, separation-of-duty, waiver, and durability boundary.
+- `docs/work-dependencies-m2e.md` - the implemented fixed work lifecycle,
+  typed dependency DAG, atomic batch, authority, and replay boundary.
 - `Makefile` - stable local smoke, acceptance, release, and evidence commands.
 
-## M1 + M2A + M2B + M2C + M2D local verification
+## M1 + M2A + M2B + M2C + M2D + M2E local verification
 
 Install the pinned development dependencies, then run the same gate used by
 the Workplane verifier:
@@ -66,8 +69,9 @@ PostgreSQL services, executes the equivalent human/agent transaction, captures
 production-browser evidence, exercises outbox crash/retry and deterministic
 shadow replay, validates integrity negatives and outbound-isolated Compose, and
 runs the production WebSocket/SSE authority and recovery cases, exercises the
-planning and evidence-review contracts through both actor kinds on real
-PostgreSQL, and runs repository publication hygiene. `make evidence-smoke` runs the same
+planning, evidence-review, fixed work-lifecycle, typed dependency-DAG, and
+atomic batch contracts through both actor kinds on real PostgreSQL, and runs
+repository publication hygiene. `make evidence-smoke` runs the same
 commands from clean tracked source and emits a complete exact-commit manifest
 under `evidence/runs/`.
 

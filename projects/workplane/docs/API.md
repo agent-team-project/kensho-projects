@@ -307,6 +307,24 @@ GET    /api/v1/projects/{project_id}/dependency-graph
 Batch board movement uses one endpoint with expected versions for every item.
 Partial mutation is forbidden: the batch commits or fails atomically.
 
+M2E implements this surface with a closed work state vocabulary of `open`,
+`in_progress`, `in_review`, `done`, and `cancelled`. The only transition
+commands are `start`, `request_review`, `bounce`, `accept`, and `cancel`.
+`request_review` and `accept` require current project evidence; `bounce`
+requires an open blocking finding on the linked deliverable. Work acceptance
+never substitutes for deliverable acceptance.
+
+Dependencies are immutable typed edges: `blocks`, `relates`, or `caused-by`.
+Only `blocks` participates in derived blocking or DAG cycle detection. Add and
+remove commands carry current versions for both endpoints, and a removed edge
+retains an exact idempotent response. Graph queries include cross-project
+endpoints only when the caller can currently read both projects.
+
+Batch transition entries each carry a work-item id, expected version, command,
+reason, evidence ids, and optional finding id. Duplicate, missing,
+cross-project, cross-organization, unauthorized, stale, or invalid entries
+reject the whole command without item, event, outbox, or idempotency residue.
+
 ## 12. Decisions, comments, inbox, and judgment queue
 
 ```text

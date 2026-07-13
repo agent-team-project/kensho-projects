@@ -1,0 +1,8 @@
+id: M2E-POSTGRES-001
+requirement: M2E-POSTGRES-001
+layer: integration
+title: Real PostgreSQL preserves M2D rows and fails closed on cycle races faults and corrupt work history
+given: {database: real_postgresql, prior_schema_version: 7, accepted_rows: populated}
+when: {command: scripts/test_work.sh, cases: [upgrade, inverse_edge_race, batch_fault, unknown_event, projection_drift, corrupt_dependency]}
+then: {result: pass, prior_rows_unchanged: true, schema_version: 8, known_good_head_on_failure: unchanged}
+evidence: [target/agent-evidence/m2e/migration.log, target/agent-evidence/m2e/m2e-upgrade-integrity.json]

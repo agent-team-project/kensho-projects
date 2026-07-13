@@ -1,0 +1,8 @@
+id: M2E-ATOMICITY-001
+requirement: M2E-ATOMICITY-001
+layer: integration
+title: Assign dependency and multi-item transitions require current versions and leave no partial records
+given: {database: real_postgresql, isolation: serializable, idempotency: target_bound}
+when: {command: scripts/test_work.sh, failures: [stale_version, duplicate_target, missing_item, mixed_organization, permission_denied, injected_post_row_fault]}
+then: {result: pass, partial_rows: 0, partial_events: 0, partial_outbox: 0, partial_idempotency: 0}
+evidence: [target/agent-evidence/m2e/m2e-batch-atomicity.json, target/agent-evidence/m2e/m2e-faults.json]

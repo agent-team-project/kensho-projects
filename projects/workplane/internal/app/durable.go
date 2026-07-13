@@ -72,6 +72,7 @@ type ReplayReport struct {
 	Activity          int    `json:"activity"`
 	Planning          int    `json:"planning"`
 	Review            int    `json:"review"`
+	Work              int    `json:"work"`
 	LiveChecksum      string `json:"live_checksum"`
 	RebuiltChecksum   string `json:"rebuilt_checksum"`
 	ActiveHeadUpdated bool   `json:"active_head_updated"`
@@ -349,23 +350,25 @@ type eventRow struct {
 }
 
 type projectionSnapshot struct {
-	Projects        []Project         `json:"projects"`
-	Decisions       []Decision        `json:"decisions"`
-	Deliverables    []Deliverable     `json:"deliverables"`
-	Forecasts       []Forecast        `json:"forecasts"`
-	ForecastHeads   []ForecastHead    `json:"forecast_heads"`
-	Targets         []Target          `json:"targets"`
-	TargetHeads     []TargetHead      `json:"target_heads"`
-	Deadlines       []Deadline        `json:"deadlines"`
-	DeadlineHeads   []DeadlineHead    `json:"deadline_heads"`
-	Evidence        []Evidence        `json:"evidence"`
-	Gates           []Gate            `json:"gates"`
-	Verdicts        []Verdict         `json:"verdicts"`
-	Findings        []Finding         `json:"findings"`
-	FindingActions  []FindingAction   `json:"finding_actions"`
-	Submissions     []Submission      `json:"submissions"`
-	SubmissionHeads []SubmissionHead  `json:"submission_heads"`
-	Activity        []eventProjection `json:"activity"`
+	Projects        []Project            `json:"projects"`
+	Decisions       []Decision           `json:"decisions"`
+	Deliverables    []Deliverable        `json:"deliverables"`
+	Forecasts       []Forecast           `json:"forecasts"`
+	ForecastHeads   []ForecastHead       `json:"forecast_heads"`
+	Targets         []Target             `json:"targets"`
+	TargetHeads     []TargetHead         `json:"target_heads"`
+	Deadlines       []Deadline           `json:"deadlines"`
+	DeadlineHeads   []DeadlineHead       `json:"deadline_heads"`
+	Evidence        []Evidence           `json:"evidence"`
+	Gates           []Gate               `json:"gates"`
+	Verdicts        []Verdict            `json:"verdicts"`
+	Findings        []Finding            `json:"findings"`
+	FindingActions  []FindingAction      `json:"finding_actions"`
+	Submissions     []Submission         `json:"submissions"`
+	SubmissionHeads []SubmissionHead     `json:"submission_heads"`
+	WorkItems       []WorkItem           `json:"work_items"`
+	Dependencies    []WorkItemDependency `json:"dependencies"`
+	Activity        []eventProjection    `json:"activity"`
 }
 
 func (snapshot projectionSnapshot) planningCount() int {
@@ -376,6 +379,10 @@ func (snapshot projectionSnapshot) planningCount() int {
 func (snapshot projectionSnapshot) reviewCount() int {
 	return len(snapshot.Evidence) + len(snapshot.Gates) + len(snapshot.Verdicts) + len(snapshot.Findings) +
 		len(snapshot.FindingActions) + len(snapshot.Submissions) + len(snapshot.SubmissionHeads)
+}
+
+func (snapshot projectionSnapshot) workCount() int {
+	return len(snapshot.WorkItems) + len(snapshot.Dependencies)
 }
 
 type databaseQueryer interface {
@@ -465,20 +472,25 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
+	if err := writeReplayWork(ctx, tx, runID, rebuilt); err != nil {
+		_ = tx.Rollback()
+		return ReplayReport{}, err
+	}
 	finished := time.Now().UTC()
 	if _, err := tx.ExecContext(ctx, `UPDATE projection_replay_runs SET status='succeeded',finished_at=$2,last_sequence=$3,
-		projects_count=$4,decisions_count=$5,activity_count=$6,planning_count=$7,review_count=$8,live_checksum=$9,rebuilt_checksum=$10 WHERE id=$1`,
-		runID, finished, lastSequence, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), rebuilt.reviewCount(), liveChecksum, rebuiltChecksum); err != nil {
+		projects_count=$4,decisions_count=$5,activity_count=$6,planning_count=$7,review_count=$8,work_count=$9,live_checksum=$10,rebuilt_checksum=$11 WHERE id=$1`,
+		runID, finished, lastSequence, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), rebuilt.reviewCount(), rebuilt.workCount(), liveChecksum, rebuiltChecksum); err != nil {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO projection_heads
-		(name,run_id,last_sequence,checksum,projects_count,decisions_count,activity_count,planning_count,review_count,updated_at)
-		VALUES ('m1-canonical',$1,$2,$3,$4,$5,$6,$7,$8,$9)
+		(name,run_id,last_sequence,checksum,projects_count,decisions_count,activity_count,planning_count,review_count,work_count,updated_at)
+		VALUES ('m1-canonical',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		ON CONFLICT (name) DO UPDATE SET run_id=EXCLUDED.run_id,last_sequence=EXCLUDED.last_sequence,
 		checksum=EXCLUDED.checksum,projects_count=EXCLUDED.projects_count,decisions_count=EXCLUDED.decisions_count,
-		activity_count=EXCLUDED.activity_count,planning_count=EXCLUDED.planning_count,review_count=EXCLUDED.review_count,updated_at=EXCLUDED.updated_at`,
-		runID, lastSequence, rebuiltChecksum, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), rebuilt.reviewCount(), finished); err != nil {
+		activity_count=EXCLUDED.activity_count,planning_count=EXCLUDED.planning_count,review_count=EXCLUDED.review_count,
+		work_count=EXCLUDED.work_count,updated_at=EXCLUDED.updated_at`,
+		runID, lastSequence, rebuiltChecksum, len(rebuilt.Projects), len(rebuilt.Decisions), len(rebuilt.Activity), rebuilt.planningCount(), rebuilt.reviewCount(), rebuilt.workCount(), finished); err != nil {
 		_ = tx.Rollback()
 		return ReplayReport{}, err
 	}
@@ -486,7 +498,7 @@ func (store *DurableStore) Replay(ctx context.Context) (ReplayReport, error) {
 		return ReplayReport{}, fmt.Errorf("commit replay generation: %w", err)
 	}
 	return ReplayReport{RunID: runID, LastSequence: lastSequence, Projects: len(rebuilt.Projects),
-		Decisions: len(rebuilt.Decisions), Activity: len(rebuilt.Activity), Planning: rebuilt.planningCount(), Review: rebuilt.reviewCount(), LiveChecksum: liveChecksum,
+		Decisions: len(rebuilt.Decisions), Activity: len(rebuilt.Activity), Planning: rebuilt.planningCount(), Review: rebuilt.reviewCount(), Work: rebuilt.workCount(), LiveChecksum: liveChecksum,
 		RebuiltChecksum: rebuiltChecksum, ActiveHeadUpdated: true}, nil
 }
 
@@ -583,6 +595,38 @@ func writeReplayReview(ctx context.Context, tx *sql.Tx, runID string, snapshot p
 			(run_id,kind,projection_id,organization_id,project_id,projection) VALUES ($1,$2,$3,$4,$5,$6)`,
 			runID, item.kind, item.id, item.organizationID, item.projectID, canonicalJSON(item.value)); err != nil {
 			return fmt.Errorf("write replay review %s:%s: %w", item.kind, item.id, err)
+		}
+	}
+	return nil
+}
+
+func writeReplayWork(ctx context.Context, tx *sql.Tx, runID string, snapshot projectionSnapshot) error {
+	projects := make(map[string]Project, len(snapshot.Projects))
+	workProjects := make(map[string]string, len(snapshot.WorkItems))
+	for _, project := range snapshot.Projects {
+		projects[project.ID] = project
+	}
+	for _, item := range snapshot.WorkItems {
+		project := projects[item.ProjectID]
+		if project.ID == "" || project.OrganizationID != item.OrganizationID {
+			return fmt.Errorf("work projection %s references unknown project %s", item.ID, item.ProjectID)
+		}
+		workProjects[item.ID] = item.ProjectID
+		if _, err := tx.ExecContext(ctx, `INSERT INTO replay_work_projections
+			(run_id,kind,projection_id,organization_id,project_id,projection) VALUES ($1,'work-item',$2,$3,$4,$5)`,
+			runID, item.ID, item.OrganizationID, item.ProjectID, canonicalJSON(item)); err != nil {
+			return fmt.Errorf("write replay work item %s: %w", item.ID, err)
+		}
+	}
+	for _, dependency := range snapshot.Dependencies {
+		projectID := workProjects[dependency.SourceWorkItemID]
+		if projectID == "" || workProjects[dependency.TargetWorkItemID] == "" {
+			return fmt.Errorf("dependency projection %s references an unknown work item", dependency.ID)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO replay_work_projections
+			(run_id,kind,projection_id,organization_id,project_id,projection) VALUES ($1,'dependency',$2,$3,$4,$5)`,
+			runID, dependency.ID, dependency.OrganizationID, projectID, canonicalJSON(dependency)); err != nil {
+			return fmt.Errorf("write replay dependency %s: %w", dependency.ID, err)
 		}
 	}
 	return nil
@@ -690,6 +734,84 @@ func replayEvidenceTargetExists(support EvidenceSupport, projectID string, deliv
 	}
 }
 
+func sameWorkIdentity(left, right WorkItemRecord) bool {
+	return left.ID == right.ID && left.OrganizationID == right.OrganizationID && left.ProjectID == right.ProjectID &&
+		left.CreatedBy == right.CreatedBy && left.CreatedAt == right.CreatedAt
+}
+
+func replayBlockingPath(dependencies map[string]WorkItemDependency, organizationID, fromID, toID string) bool {
+	seen := map[string]bool{fromID: true}
+	queue := []string{fromID}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, dependency := range dependencies {
+			if dependency.OrganizationID != organizationID || dependency.Kind != "blocks" || dependency.SourceWorkItemID != current {
+				continue
+			}
+			if dependency.TargetWorkItemID == toID {
+				return true
+			}
+			if !seen[dependency.TargetWorkItemID] {
+				seen[dependency.TargetWorkItemID] = true
+				queue = append(queue, dependency.TargetWorkItemID)
+			}
+		}
+	}
+	return false
+}
+
+func replayWorkItemViewWithFinalStates(item WorkItemRecord, records map[string]WorkItemRecord,
+	dependencies map[string]WorkItemDependency, gates map[string]Gate, finalStates map[string]string) WorkItem {
+	reasons := make([]string, 0, 2)
+	for _, dependency := range dependencies {
+		if dependency.Kind != "blocks" || dependency.SourceWorkItemID != item.ID {
+			continue
+		}
+		target, exists := records[dependency.TargetWorkItemID]
+		state := target.State
+		if replacement, ok := finalStates[target.ID]; ok {
+			state = replacement
+		}
+		if !exists || (state != "done" && state != "cancelled") {
+			reasons = append(reasons, "dependency")
+			break
+		}
+	}
+	if item.DeliverableID != nil {
+		for _, gate := range gates {
+			if gate.DeliverableID == *item.DeliverableID && gate.Hard && gate.State != "passed" {
+				reasons = append(reasons, "hard_gate")
+				break
+			}
+		}
+	}
+	return WorkItem{WorkItemRecord: item, Blocked: len(reasons) > 0, BlockingReasons: reasons}
+}
+
+func replayWorkItemView(item WorkItemRecord, records map[string]WorkItemRecord,
+	dependencies map[string]WorkItemDependency, gates map[string]Gate) WorkItem {
+	return replayWorkItemViewWithFinalStates(item, records, dependencies, gates, nil)
+}
+
+func sortWorkSnapshot(snapshot *projectionSnapshot) {
+	sort.Slice(snapshot.WorkItems, func(i, j int) bool {
+		if snapshot.WorkItems[i].ProjectID != snapshot.WorkItems[j].ProjectID {
+			return snapshot.WorkItems[i].ProjectID < snapshot.WorkItems[j].ProjectID
+		}
+		return snapshot.WorkItems[i].ID < snapshot.WorkItems[j].ID
+	})
+	sort.Slice(snapshot.Dependencies, func(i, j int) bool {
+		if snapshot.Dependencies[i].SourceWorkItemID != snapshot.Dependencies[j].SourceWorkItemID {
+			return snapshot.Dependencies[i].SourceWorkItemID < snapshot.Dependencies[j].SourceWorkItemID
+		}
+		if snapshot.Dependencies[i].TargetWorkItemID != snapshot.Dependencies[j].TargetWorkItemID {
+			return snapshot.Dependencies[i].TargetWorkItemID < snapshot.Dependencies[j].TargetWorkItemID
+		}
+		return snapshot.Dependencies[i].ID < snapshot.Dependencies[j].ID
+	})
+}
+
 func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *ReplayFailure) {
 	projects := make(map[string]Project)
 	decisions := make([]Decision, 0)
@@ -710,8 +832,30 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 	findingActions := make(map[string]FindingAction)
 	submissions := make(map[string]Submission)
 	submissionHeads := make(map[string]SubmissionHead)
+	workItems := make(map[string]WorkItemRecord)
+	dependencies := make(map[string]WorkItemDependency)
 	activity := make([]eventProjection, 0, len(events))
 	versions := make(map[string]int64)
+	// A batch is one atomic command even though the immutable ledger retains one
+	// versioned event per work aggregate. Precompute its declared endpoint
+	// states so blocking validation is independent of input/event order. Every
+	// event is still validated sequentially below; a malformed later member
+	// therefore fails the complete replay and cannot advance the active head.
+	batchFinalStates := make(map[string]map[string]string)
+	for _, event := range events {
+		switch event.Projection.EventType {
+		case "work_item.started", "work_item.review_requested", "work_item.bounced", "work_item.accepted", "work_item.cancelled":
+			var workEvent WorkItemEvent
+			if json.Unmarshal(event.Payload, &workEvent) == nil && workEvent.Batch && workEvent.WorkItem.ID != "" {
+				states := batchFinalStates[event.Projection.CommandID]
+				if states == nil {
+					states = make(map[string]string)
+					batchFinalStates[event.Projection.CommandID] = states
+				}
+				states[workEvent.WorkItem.ID] = workEvent.WorkItem.State
+			}
+		}
+	}
 	for _, event := range events {
 		item := event.Projection
 		failure := func(code, detail string) (projectionSnapshot, *ReplayFailure) {
@@ -1168,6 +1312,134 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			gates[result.Gate.ID] = result.Gate
 			project.Version = item.AggregateVersion
 			projects[project.ID] = project
+		case "work_item.created", "work_item.updated", "work_item.assigned", "work_item.started",
+			"work_item.review_requested", "work_item.bounced", "work_item.accepted", "work_item.cancelled":
+			var workEvent WorkItemEvent
+			if err := decodeStrictJSON(event.Payload, &workEvent); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			work := workEvent.WorkItem
+			project, projectExists := projects[work.ProjectID]
+			if item.AggregateType != "work_item" || !projectExists || work.ID != item.AggregateID ||
+				work.OrganizationID != item.OrganizationID || project.OrganizationID != work.OrganizationID ||
+				work.Version != item.AggregateVersion || workEvent.EvidenceIDs == nil {
+				return failure("invalid_event_payload", "work item identity, project, version, or required event members are invalid")
+			}
+			prior, exists := workItems[work.ID]
+			if item.EventType == "work_item.created" {
+				if exists || workEvent.Command != "create" || work.State != "open" || work.Version != 1 ||
+					work.CreatedBy != item.ActorID || !validText(work.Title, 1, 200) || !validText(work.Description, 1, 4000) ||
+					!validWorkPriority(work.Priority) || work.AssigneeID != nil {
+					return failure("invalid_event_payload", "work item creation payload is invalid")
+				}
+				if work.DeliverableID != nil && deliverables[*work.DeliverableID].ProjectID != work.ProjectID {
+					return failure("invalid_event_payload", "work item deliverable is outside its project")
+				}
+				workItems[work.ID] = work
+				break
+			}
+			if !exists || !sameWorkIdentity(prior, work) || work.Version != prior.Version+1 ||
+				work.CreatedAt != prior.CreatedAt || work.UpdatedAt < prior.UpdatedAt {
+				return failure("invalid_event_payload", "work item update rewrites identity or skips a version")
+			}
+			expectedCommand := map[string]string{
+				"work_item.updated": "update", "work_item.assigned": "assign", "work_item.started": "start",
+				"work_item.review_requested": "request_review", "work_item.bounced": "bounce",
+				"work_item.accepted": "accept", "work_item.cancelled": "cancel",
+			}[item.EventType]
+			if workEvent.Command != expectedCommand {
+				return failure("invalid_event_payload", "work item event command does not match its type")
+			}
+			switch item.EventType {
+			case "work_item.updated":
+				if work.State != prior.State || !equalOptionalString(work.AssigneeID, prior.AssigneeID) {
+					return failure("invalid_event_payload", "work item update changed lifecycle or assignment")
+				}
+				if work.DeliverableID != nil && deliverables[*work.DeliverableID].ProjectID != work.ProjectID {
+					return failure("invalid_event_payload", "work item update linked a cross-project deliverable")
+				}
+			case "work_item.assigned":
+				if work.State != prior.State || work.AssigneeID == nil || work.Title != prior.Title || work.Description != prior.Description ||
+					work.Priority != prior.Priority || !equalOptionalString(work.DeliverableID, prior.DeliverableID) {
+					return failure("invalid_event_payload", "assignment changed non-assignment fields")
+				}
+			default:
+				target, _, transitionValid := workTransitionTarget(prior.State, workEvent.Command)
+				if !transitionValid || work.State != target || work.Title != prior.Title || work.Description != prior.Description ||
+					work.Priority != prior.Priority || !equalOptionalString(work.DeliverableID, prior.DeliverableID) ||
+					!equalOptionalString(work.AssigneeID, prior.AssigneeID) || !validText(workEvent.Reason, 1, 4000) {
+					return failure("invalid_event_payload", "work item transition does not match the fixed lifecycle")
+				}
+				if workEvent.Command == "start" && prior.AssigneeID == nil {
+					return failure("invalid_event_payload", "work item started without an assignee")
+				}
+				if workEvent.Command == "request_review" || workEvent.Command == "accept" {
+					if len(workEvent.EvidenceIDs) == 0 {
+						return failure("invalid_event_payload", "review transition lacks evidence")
+					}
+					for _, evidenceID := range workEvent.EvidenceIDs {
+						if evidence[evidenceID].ProjectID != work.ProjectID {
+							return failure("invalid_event_payload", "review transition references unavailable evidence")
+						}
+					}
+				}
+				if workEvent.Command == "bounce" {
+					if workEvent.FindingID == nil || prior.DeliverableID == nil {
+						return failure("invalid_event_payload", "bounce lacks an actionable finding")
+					}
+					finding := findings[*workEvent.FindingID]
+					if finding.ProjectID != work.ProjectID || finding.DeliverableID != *prior.DeliverableID || finding.State != "open" || !finding.Blocking {
+						return failure("invalid_event_payload", "bounce finding is not open and actionable")
+					}
+				}
+				if workEvent.Command == "start" || workEvent.Command == "request_review" || workEvent.Command == "accept" {
+					finalStates := map[string]string(nil)
+					if workEvent.Batch {
+						finalStates = batchFinalStates[item.CommandID]
+					}
+					if replayWorkItemViewWithFinalStates(prior, workItems, dependencies, gates, finalStates).Blocked {
+						return failure("invalid_event_payload", "blocked work item advanced")
+					}
+				}
+			}
+			workItems[work.ID] = work
+		case "dependency.added", "dependency.removed":
+			var dependencyEvent WorkDependencyEvent
+			if err := decodeStrictJSON(event.Payload, &dependencyEvent); err != nil {
+				return failure("invalid_event_payload", err.Error())
+			}
+			dependency, source := dependencyEvent.Dependency, dependencyEvent.Source
+			priorSource, sourceExists := workItems[source.ID]
+			target, targetExists := workItems[dependency.TargetWorkItemID]
+			if item.AggregateType != "work_item" || !sourceExists || !targetExists || source.ID != item.AggregateID ||
+				dependency.SourceWorkItemID != source.ID || source.OrganizationID != item.OrganizationID ||
+				dependency.OrganizationID != item.OrganizationID || target.OrganizationID != item.OrganizationID ||
+				source.Version != item.AggregateVersion || source.Version != priorSource.Version+1 ||
+				!sameWorkIdentity(priorSource, source) || source.State != priorSource.State ||
+				dependency.Version != 1 || (dependency.Kind != "blocks" && dependency.Kind != "relates" && dependency.Kind != "caused-by") {
+				return failure("invalid_event_payload", "dependency event identity, endpoint, kind, or source version is invalid")
+			}
+			if item.EventType == "dependency.added" {
+				if dependencyEvent.Removed || dependency.SourceWorkItemID == dependency.TargetWorkItemID || dependencies[dependency.ID].ID != "" {
+					return failure("invalid_event_payload", "dependency add is duplicate or self-referential")
+				}
+				for _, existing := range dependencies {
+					if existing.SourceWorkItemID == dependency.SourceWorkItemID && existing.TargetWorkItemID == dependency.TargetWorkItemID {
+						return failure("invalid_event_payload", "dependency ordered pair is duplicated")
+					}
+				}
+				if dependency.Kind == "blocks" && replayBlockingPath(dependencies, dependency.OrganizationID, dependency.TargetWorkItemID, dependency.SourceWorkItemID) {
+					return failure("dependency_cycle", "blocking dependency closes a cycle")
+				}
+				dependencies[dependency.ID] = dependency
+			} else {
+				prior, exists := dependencies[dependency.ID]
+				if !dependencyEvent.Removed || !exists || !bytes.Equal(canonicalJSON(prior), canonicalJSON(dependency)) {
+					return failure("invalid_event_payload", "dependency removal does not reference the current immutable edge")
+				}
+				delete(dependencies, dependency.ID)
+			}
+			workItems[source.ID] = source
 		default:
 			return failure("unknown_event_schema", "event type is not registered in replay v1")
 		}
@@ -1235,8 +1507,15 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 	for _, item := range submissionHeads {
 		snapshot.SubmissionHeads = append(snapshot.SubmissionHeads, item)
 	}
+	for _, item := range workItems {
+		snapshot.WorkItems = append(snapshot.WorkItems, replayWorkItemView(item, workItems, dependencies, gates))
+	}
+	for _, item := range dependencies {
+		snapshot.Dependencies = append(snapshot.Dependencies, item)
+	}
 	sortPlanningSnapshot(&snapshot)
 	sortReviewSnapshot(&snapshot)
+	sortWorkSnapshot(&snapshot)
 	return snapshot, nil
 }
 
@@ -1332,6 +1611,9 @@ func loadLiveSnapshot(ctx context.Context, queryer databaseQueryer, events []eve
 		return projectionSnapshot{}, err
 	}
 	if err := loadLiveReview(ctx, queryer, &snapshot); err != nil {
+		return projectionSnapshot{}, err
+	}
+	if err := loadLiveWork(ctx, queryer, &snapshot); err != nil {
 		return projectionSnapshot{}, err
 	}
 	activity := make([]eventProjection, len(events))
@@ -1667,6 +1949,57 @@ func loadLiveReview(ctx context.Context, queryer databaseQueryer, snapshot *proj
 	return nil
 }
 
+func loadLiveWork(ctx context.Context, queryer databaseQueryer, snapshot *projectionSnapshot) error {
+	rows, err := queryer.QueryContext(ctx, selectWorkItem+` ORDER BY project_id,id`)
+	if err != nil {
+		return err
+	}
+	records := make([]WorkItemRecord, 0)
+	for rows.Next() {
+		item, err := scanWorkItem(rows)
+		if err != nil {
+			_ = rows.Close()
+			return err
+		}
+		records = append(records, item)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("scan live work items: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	dependencyRows, err := queryer.QueryContext(ctx, selectWorkDependency+` ORDER BY source_work_item_id,target_work_item_id,id`)
+	if err != nil {
+		return err
+	}
+	for dependencyRows.Next() {
+		item, err := scanWorkDependency(dependencyRows)
+		if err != nil {
+			_ = dependencyRows.Close()
+			return err
+		}
+		snapshot.Dependencies = append(snapshot.Dependencies, item)
+	}
+	if err := dependencyRows.Err(); err != nil {
+		_ = dependencyRows.Close()
+		return fmt.Errorf("scan live work dependencies: %w", err)
+	}
+	if err := dependencyRows.Close(); err != nil {
+		return err
+	}
+	for _, item := range records {
+		view, err := workItemView(ctx, queryer, item, nil)
+		if err != nil {
+			return err
+		}
+		snapshot.WorkItems = append(snapshot.WorkItems, view)
+	}
+	sortWorkSnapshot(snapshot)
+	return nil
+}
+
 func snapshotChecksum(snapshot projectionSnapshot) string {
 	digest := sha256.Sum256(canonicalJSON(snapshot))
 	return hex.EncodeToString(digest[:])
@@ -1674,9 +2007,9 @@ func snapshotChecksum(snapshot projectionSnapshot) string {
 
 func (store *DurableStore) ActiveProjectionHead(ctx context.Context) (ReplayReport, error) {
 	var report ReplayReport
-	err := store.db.QueryRowContext(ctx, `SELECT run_id,last_sequence,projects_count,decisions_count,activity_count,planning_count,review_count,checksum
+	err := store.db.QueryRowContext(ctx, `SELECT run_id,last_sequence,projects_count,decisions_count,activity_count,planning_count,review_count,work_count,checksum
 		FROM projection_heads WHERE name='m1-canonical'`).Scan(&report.RunID, &report.LastSequence,
-		&report.Projects, &report.Decisions, &report.Activity, &report.Planning, &report.Review, &report.RebuiltChecksum)
+		&report.Projects, &report.Decisions, &report.Activity, &report.Planning, &report.Review, &report.Work, &report.RebuiltChecksum)
 	if err != nil {
 		return ReplayReport{}, err
 	}
@@ -1862,6 +2195,70 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 	if err := reviewOrphans.Close(); err != nil {
 		return nil, err
 	}
+	workOrphans, err := queryer.QueryContext(ctx, `
+		SELECT kind,id,aggregate FROM (
+			SELECT 'work-item' kind,work.id::text id,'work_item:' || work.id::text aggregate
+			FROM work_items work LEFT JOIN domain_events event
+			  ON event.aggregate_type='work_item' AND event.aggregate_id=work.id
+			  AND event.event_type IN ('work_item.created','work_item.updated','work_item.assigned','work_item.started',
+			    'work_item.review_requested','work_item.bounced','work_item.accepted','work_item.cancelled')
+			WHERE event.event_id IS NULL
+			UNION ALL
+			SELECT 'dependency',dependency.id::text,'work_item:' || dependency.source_work_item_id::text
+			FROM work_item_dependencies dependency LEFT JOIN domain_events event
+			  ON event.event_type='dependency.added'
+			  AND event.payload->'dependency'->>'id'=dependency.id::text
+			WHERE event.event_id IS NULL
+		) orphan ORDER BY kind,id`)
+	if err != nil {
+		return nil, err
+	}
+	for workOrphans.Next() {
+		var kind, id, aggregate string
+		if err := workOrphans.Scan(&kind, &id, &aggregate); err != nil {
+			_ = workOrphans.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "work_projection_without_event", Aggregate: aggregate,
+			Detail: fmt.Sprintf("%s projection %s lacks its immutable event", kind, id)})
+	}
+	if err := workOrphans.Err(); err != nil {
+		_ = workOrphans.Close()
+		return nil, fmt.Errorf("scan work/event coupling: %w", err)
+	}
+	if err := workOrphans.Close(); err != nil {
+		return nil, err
+	}
+	cycleRows, err := queryer.QueryContext(ctx, `WITH RECURSIVE paths(organization_id,start_id,current_id,path,cycle) AS (
+		SELECT organization_id,source_work_item_id,target_work_item_id,
+		  ARRAY[source_work_item_id,target_work_item_id],source_work_item_id=target_work_item_id
+		FROM work_item_dependencies WHERE kind='blocks'
+		UNION ALL
+		SELECT path.organization_id,path.start_id,dependency.target_work_item_id,
+		  path.path || dependency.target_work_item_id,dependency.target_work_item_id=ANY(path.path)
+		FROM paths path JOIN work_item_dependencies dependency
+		  ON dependency.organization_id=path.organization_id AND dependency.source_work_item_id=path.current_id
+		WHERE dependency.kind='blocks' AND NOT path.cycle
+	) SELECT DISTINCT organization_id,start_id FROM paths WHERE cycle ORDER BY organization_id,start_id`)
+	if err != nil {
+		return nil, err
+	}
+	for cycleRows.Next() {
+		var organizationID, startID string
+		if err := cycleRows.Scan(&organizationID, &startID); err != nil {
+			_ = cycleRows.Close()
+			return nil, err
+		}
+		findings = append(findings, IntegrityFinding{Code: "dependency_cycle", Aggregate: "work_item:" + startID,
+			Detail: fmt.Sprintf("organization %s contains a persisted blocking cycle", organizationID)})
+	}
+	if err := cycleRows.Err(); err != nil {
+		_ = cycleRows.Close()
+		return nil, fmt.Errorf("scan blocking dependency cycles: %w", err)
+	}
+	if err := cycleRows.Close(); err != nil {
+		return nil, err
+	}
 	integrityRows, err := queryer.QueryContext(ctx, `SELECT id,project_id FROM evidence
 		WHERE integrity_digest IS DISTINCT FROM digest(convert_to(integrity_material::text,'UTF8'),'sha256') ORDER BY project_id,id`)
 	if err != nil {
@@ -1996,7 +2393,9 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 			'deliverable.created','deliverable.revised','forecast.created','forecast.superseded','target.changed','deadline.changed',
 			'evidence.created','evidence.superseded','gate.created','gate.verdict_recorded','gate.waived',
 			'finding.created','finding.resolved','finding.withdrawn','deliverable.submitted','deliverable.bounced',
-			'deliverable.resubmitted','deliverable.accepted','deliverable.cancelled','deliverable.waived'
+			'deliverable.resubmitted','deliverable.accepted','deliverable.cancelled','deliverable.waived',
+			'work_item.created','work_item.updated','work_item.assigned','work_item.started','work_item.review_requested',
+			'work_item.bounced','work_item.accepted','work_item.cancelled','dependency.added','dependency.removed'
 		) ORDER BY sequence`)
 	if err != nil {
 		return nil, err

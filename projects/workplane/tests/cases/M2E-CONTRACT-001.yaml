@@ -1,0 +1,8 @@
+id: M2E-CONTRACT-001
+requirement: M2E-CONTRACT-001
+layer: contract
+title: OpenAPI and generated Go and TypeScript expose every work and dependency operation with raw presence checks
+given: {authority: contracts/openapi.yaml, actors: [human, agent], plane: public}
+when: {command: make test-contract, operations: [createWorkItem, listWorkItems, getWorkItem, updateWorkItem, assignWorkItem, transitionWorkItem, addWorkItemDependency, removeWorkItemDependency, batchTransitionWorkItems, getDependencyGraph]}
+then: {result: pass, generated_consumers: zero_diff, required_members: presence_aware, permission_mapping: exact}
+evidence: [internal/api/generated/server.gen.go, web/src/api/client.gen.ts]

@@ -216,3 +216,22 @@ if [ "$review_upgrade" != "7|1|1|2|2|0|0|0|0|0|no-head" ]; then
 fi
 
 printf '%s\n' "M2C-to-M2D PostgreSQL upgrade passed without rewriting accepted ledger rows: shape=$review_upgrade"
+
+docker compose --project-name "$project" exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U workplane -d workplane < migrations/000008_m2_work_dependencies.up.sql
+
+work_upgrade="$(docker compose --project-name "$project" exec -T postgres \
+  psql -At -U workplane -d workplane -c \
+  "SELECT max(version) || '|' || (SELECT count(*) FROM projects) || '|' ||
+    (SELECT count(*) FROM decisions) || '|' || (SELECT count(*) FROM domain_events) || '|' ||
+    (SELECT count(*) FROM outbox_records) || '|' || (SELECT count(*) FROM deliverables) || '|' ||
+    (SELECT count(*) FROM evidence) || '|' || (SELECT count(*) FROM review_gates) || '|' ||
+    (SELECT count(*) FROM work_items) || '|' || (SELECT count(*) FROM work_item_dependencies) || '|' ||
+    COALESCE((SELECT work_count FROM projection_heads WHERE name='m1-canonical')::text,'no-head')
+   FROM schema_migrations;")"
+if [ "$work_upgrade" != "8|1|1|2|2|0|0|0|0|0|no-head" ]; then
+  echo "M2D-to-M2E upgrade changed accepted rows or failed to add work shape: $work_upgrade" >&2
+  exit 1
+fi
+
+printf '%s\n' "M2D-to-M2E PostgreSQL upgrade passed without rewriting accepted ledger rows: shape=$work_upgrade"

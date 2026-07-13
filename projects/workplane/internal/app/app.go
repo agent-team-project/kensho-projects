@@ -2,7 +2,7 @@
 package app
 
 // BuildStage is exposed by the health surface and evidence harness.
-const BuildStage = "m2-evidence-review"
+const BuildStage = "m2-work-dependencies"
 
 // Capabilities preserves the M1 surface and adds only the admitted Track B spine.
 var Capabilities = []string{
@@ -33,4 +33,10 @@ var Capabilities = []string{
 	"effective-principal-separation-of-duty",
 	"human-policy-waivers",
 	"review-replay-integrity",
+	"fixed-work-item-lifecycle",
+	"derived-work-blocking",
+	"typed-cross-project-dependencies",
+	"blocking-dependency-dag",
+	"atomic-work-batch-transitions",
+	"work-replay-integrity",
 }
