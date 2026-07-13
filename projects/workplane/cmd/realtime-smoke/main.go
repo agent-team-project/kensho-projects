@@ -32,6 +32,8 @@ const (
 	agentToken     = "wpa_local_walking_slice_agent_token_00000000000000000001"
 	publicOrigin   = "http://localhost:8080"
 	consumerName   = "realtime-v1"
+	privateCanary  = "00000000-0000-4000-8000-000000000052"
+	publicCanary   = "00000000-0000-4000-8000-000000000054"
 )
 
 type harness struct {
@@ -341,7 +343,7 @@ func (run *harness) authorityCanaries() error {
 	if err != nil {
 		return err
 	}
-	private, err := run.seedCanary(organizationID, "00000000-0000-4000-8000-000000000051", "00000000-0000-4000-8000-000000000052", "private", "PRIVATE_PROJECT_CANARY")
+	private, err := run.seedCanary(organizationID, "00000000-0000-4000-8000-000000000051", privateCanary, "private", "PRIVATE_PROJECT_CANARY")
 	if err != nil {
 		return err
 	}
@@ -393,11 +395,55 @@ func (run *harness) liveRevocation() error {
 	if _, err := run.db.Exec(`UPDATE agent_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
 	}
-	event, err := stream.next(5 * time.Second)
+	postRevokeCanary, err := run.seedDecision(privateCanary, "POST_TOKEN_REVOKE_CANARY")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(postRevokeCanary, 10*time.Second); err != nil {
+		return err
+	}
+	event, elapsed, err := awaitSSEPermissionChange(stream, started, "token revoke")
 	stream.close()
-	elapsed := time.Since(started)
-	if err != nil || event.Kind != "permission_changed" || elapsed >= 5*time.Second {
-		return fmt.Errorf("token revoke outcome=%+v elapsed=%s err=%v", event, elapsed, err)
+	if err != nil {
+		return err
+	}
+	if err := run.restoreAgentAuthority(); err != nil {
+		return err
+	}
+	expiryStream, err := run.openSSE("", "", nil)
+	if err != nil {
+		return err
+	}
+	if ready, err := expiryStream.next(3 * time.Second); err != nil || ready.Kind != "ready" {
+		return fmt.Errorf("expiry stream ready: %+v %v", ready, err)
+	}
+	expiryStarted := time.Now()
+	if _, err := run.db.Exec(`UPDATE agent_tokens SET expires_at=CURRENT_TIMESTAMP-INTERVAL '1 second' WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	expiryEvent, expiryElapsed, err := awaitSSEPermissionChange(expiryStream, expiryStarted, "token expiry")
+	expiryStream.close()
+	if err != nil {
+		return err
+	}
+	if err := run.restoreAgentAuthority(); err != nil {
+		return err
+	}
+	identityStream, err := run.openSSE("", "", nil)
+	if err != nil {
+		return err
+	}
+	if ready, err := identityStream.next(3 * time.Second); err != nil || ready.Kind != "ready" {
+		return fmt.Errorf("service identity stream ready: %+v %v", ready, err)
+	}
+	identityStarted := time.Now()
+	if _, err := run.db.Exec(`UPDATE principals SET status='disabled' WHERE id=$1`, agentID); err != nil {
+		return err
+	}
+	identityEvent, identityElapsed, err := awaitSSEPermissionChange(identityStream, identityStarted, "service identity disable")
+	identityStream.close()
+	if err != nil {
+		return err
 	}
 	if err := run.restoreAgentAuthority(); err != nil {
 		return err
@@ -409,15 +455,118 @@ func (run *harness) liveRevocation() error {
 	if _, err := run.db.Exec(`DELETE FROM organization_memberships WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
 	}
-	frame, err := ws.next(5 * time.Second)
+	membershipCanary, err := run.seedDecision(privateCanary, "POST_MEMBERSHIP_REVOKE_CANARY")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(membershipCanary, 10*time.Second); err != nil {
+		return err
+	}
+	frame, err := awaitWebSocketPermissionChange(ws, "membership revoke")
 	ws.close()
-	if err != nil || frame.Type != "permission_changed" {
-		return fmt.Errorf("membership revoke did not close websocket: %+v %v", frame, err)
+	if err != nil {
+		return err
 	}
 	if err := run.restoreAgentAuthority(); err != nil {
 		return err
 	}
-	return run.writeJSON("m2b-live-revocation.json", map[string]any{"token_close_ms": elapsed.Milliseconds(), "token_outcome": event.Kind, "membership_outcome": frame.Type, "under_five_seconds": true})
+	if _, err := run.db.Exec(`UPDATE projects SET visibility='organization' WHERE id=$1`, privateCanary); err != nil {
+		return err
+	}
+	visibilityStream, err := run.openSSE("", "", nil)
+	if err != nil {
+		return err
+	}
+	if ready, err := visibilityStream.next(3 * time.Second); err != nil || ready.Kind != "ready" {
+		return fmt.Errorf("role/visibility stream ready: %+v %v", ready, err)
+	}
+	tx, err := run.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE organization_memberships SET role='observer' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE projects SET visibility='private' WHERE id=$1`, privateCanary); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	postVisibilityCanary, err := run.seedDecision(privateCanary, "POST_VISIBILITY_REVOKE_CANARY")
+	if err != nil {
+		return err
+	}
+	publicEvent, err := run.seedCanary(organizationID, "00000000-0000-4000-8000-000000000051", publicCanary, "organization", "LIVE_PUBLIC_ALLOWED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(publicEvent, 10*time.Second); err != nil {
+		return err
+	}
+	var delivered sseEvent
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		candidate, err := visibilityStream.next(time.Until(deadline))
+		if err != nil {
+			return err
+		}
+		if candidate.Kind == "domain-event" {
+			delivered = candidate
+			break
+		}
+	}
+	visibilityStream.close()
+	if !equalJSON(delivered.Data, publicEvent) || bytes.Contains(delivered.Data, []byte("POST_VISIBILITY_REVOKE_CANARY")) {
+		return fmt.Errorf("role/visibility change disclosed private event or omitted public event: %s", delivered.Data)
+	}
+	if err := run.restoreAgentAuthority(); err != nil {
+		return err
+	}
+	return run.writeJSON("m2b-live-revocation.json", map[string]any{
+		"token_close_ms": elapsed.Milliseconds(), "token_outcome": event.Kind,
+		"token_post_revoke_event_id": eventIDOf(postRevokeCanary), "token_post_revoke_disclosed": false,
+		"expiry_close_ms": expiryElapsed.Milliseconds(), "expiry_outcome": expiryEvent.Kind,
+		"identity_close_ms": identityElapsed.Milliseconds(), "identity_outcome": identityEvent.Kind,
+		"membership_outcome": frame.Type, "membership_post_revoke_event_id": eventIDOf(membershipCanary), "membership_post_revoke_disclosed": false,
+		"role_visibility_private_event_id": eventIDOf(postVisibilityCanary), "role_visibility_private_disclosed": false,
+		"role_visibility_public_event_id": eventIDOf(publicEvent), "under_five_seconds": true,
+	})
+}
+
+func awaitSSEPermissionChange(stream *sseClient, started time.Time, label string) (sseEvent, time.Duration, error) {
+	deadline := started.Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		event, err := stream.next(time.Until(deadline))
+		if err != nil {
+			return event, time.Since(started), fmt.Errorf("%s: %w", label, err)
+		}
+		switch event.Kind {
+		case "permission_changed":
+			return event, time.Since(started), nil
+		case "domain-event":
+			return event, time.Since(started), fmt.Errorf("%s disclosed a domain event after authority loss: %s", label, event.Data)
+		}
+	}
+	return sseEvent{}, time.Since(started), fmt.Errorf("%s did not close within five seconds", label)
+}
+
+func awaitWebSocketPermissionChange(ws *wsClient, label string) (wireFrame, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		frame, err := ws.next(time.Until(deadline))
+		if err != nil {
+			return frame, fmt.Errorf("%s: %w", label, err)
+		}
+		switch frame.Type {
+		case "permission_changed":
+			return frame, nil
+		case "event":
+			return frame, fmt.Errorf("%s disclosed a domain event after authority loss: %s", label, frame.Event)
+		}
+	}
+	return wireFrame{}, fmt.Errorf("%s did not close within five seconds", label)
 }
 
 func (run *harness) commitBeforePublish() error {
