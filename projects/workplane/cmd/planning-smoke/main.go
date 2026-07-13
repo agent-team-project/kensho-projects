@@ -105,6 +105,10 @@ type deadline struct {
 	Passed        bool   `json:"passed"`
 	AttentionOnly bool   `json:"attention_only"`
 }
+type readDenyCase struct {
+	Label string
+	Path  string
+}
 type counts struct{ Projects, Deliverables, Forecasts, Targets, Deadlines, Events, Outbox, Idempotency int }
 
 type sseEvent struct {
@@ -303,7 +307,7 @@ func (run *runner) execute(ctx context.Context) error {
 		return fmt.Errorf("cross-actor revision attribution diverged: actor=%s creator=%s deliverable=%+v", revisionActor, stableCreator, revised)
 	}
 	run.checks = append(run.checks, "cross-actor-deliverable-revision-attribution-and-replay")
-	version, optionalDeliverable, err = run.publicDeliverableProjectionMatrix(ctx, projectID, agentProject.ID, revised, optionalDeliverable, version)
+	version, optionalDeliverable, err = run.publicDeliverableProjectionMatrix(ctx, projectID, revised, optionalDeliverable, version)
 	if err != nil {
 		return err
 	}
@@ -344,7 +348,7 @@ func (run *runner) execute(ctx context.Context) error {
 	run.write("m2c-deliverables.json", map[string]any{
 		"stable_id": deliverableID, "cross_actor_revision": "creator-stable-event-reviser-attributed",
 		"terminal_states": []string{"accepted", "waived", "cancelled"}, "protected_operations": []string{"update", "delete"},
-		"public_get_list": "two-revised-deliverables-exact-fields", "restricted_read": "forbidden-no-residue",
+		"public_get_list": "two-revised-deliverables-exact-fields", "private_nonmember_read": "not-found-no-residue",
 	})
 	run.checks = append(run.checks, "deliverable-stable-revision-and-terminal-update-delete-protection")
 
@@ -385,7 +389,7 @@ func (run *runner) execute(ctx context.Context) error {
 		return fmt.Errorf("forecast history update did not fail closed: %v", err)
 	}
 	run.checks = append(run.checks, "deliverable-forecast-scope-current-and-immutable-history")
-	projectHistoryID, err := run.publicProjectForecastProjectionMatrix(ctx, agentProject.ID)
+	projectHistoryID, err := run.publicProjectForecastProjectionMatrix(ctx)
 	if err != nil {
 		return err
 	}
@@ -450,7 +454,7 @@ func (run *runner) execute(ctx context.Context) error {
 	}
 	run.write("m2c-forecasts.json", map[string]any{
 		"deliverable_history_count": len(forecasts), "project_history_count": 2, "project_history_project_id": projectHistoryID,
-		"current_per_scope": 1, "history_update": "denied", "project_history_read": "exact-fields-and-restricted-deny",
+		"current_per_scope": 1, "history_update": "denied", "project_history_read": "exact-fields-and-private-nonmember-deny",
 		"target_id": targetProjection.ID, "target_at": targetProjection.TargetAt, "target_missed": targetProjection.Missed,
 		"deadline_id": deadlineProjection.ID, "deadline_at": deadlineProjection.DeadlineAt, "deadline_source": deadlineProjection.Source,
 		"attention_only": targetProjection.AttentionOnly && deadlineProjection.AttentionOnly, "state": current.State,
@@ -739,7 +743,7 @@ func (run *runner) concurrentDeliverableRevision(deliverableID string, version i
 
 func (run *runner) publicDeliverableProjectionMatrix(
 	ctx context.Context,
-	projectID, restrictedToProjectID string,
+	projectID string,
 	first, second deliverable,
 	version int64,
 ) (int64, deliverable, error) {
@@ -815,18 +819,10 @@ func (run *runner) publicDeliverableProjectionMatrix(
 		}
 	}
 
-	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[$1::uuid] WHERE token_prefix=$2`, restrictedToProjectID, agentToken[:16]); err != nil {
-		return 0, deliverable{}, err
-	}
-	deniedGet := run.call(run.agent, http.MethodGet, "/api/v1/deliverables/"+firstExpected.ID, nil, run.agentHeaders())
-	if err := expect(deniedGet, http.StatusForbidden, "forbidden"); err != nil {
-		return 0, deliverable{}, fmt.Errorf("restricted public get deliverable expected deny: %w", err)
-	}
-	deniedList := run.call(run.agent, http.MethodGet, "/api/v1/projects/"+projectID+"/deliverables", nil, run.agentHeaders())
-	if err := expect(deniedList, http.StatusForbidden, "forbidden"); err != nil {
-		return 0, deliverable{}, fmt.Errorf("restricted public list deliverables expected deny: %w", err)
-	}
-	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+	if err := run.privateProjectReadExpectedDenies(ctx, projectID, []readDenyCase{
+		{Label: "public get deliverable private nonmember", Path: "/api/v1/deliverables/" + firstExpected.ID},
+		{Label: "public list deliverables private nonmember", Path: "/api/v1/projects/" + projectID + "/deliverables"},
+	}); err != nil {
 		return 0, deliverable{}, err
 	}
 	if afterReads := run.counts(ctx); afterReads != beforeReads {
@@ -991,7 +987,7 @@ func (run *runner) concurrentForecastConflict(projectID string, version int64) e
 	return nil
 }
 
-func (run *runner) publicProjectForecastProjectionMatrix(ctx context.Context, restrictedToProjectID string) (string, error) {
+func (run *runner) publicProjectForecastProjectionMatrix(ctx context.Context) (string, error) {
 	createdProjectResponse := run.call(run.human, http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects",
 		projectInput("Public project forecast history fixture"), merge(run.humanHeaders(), map[string]string{
 			"Idempotency-Key": "m2c-public-project-history-create-01",
@@ -1101,14 +1097,9 @@ func (run *runner) publicProjectForecastProjectionMatrix(ctx context.Context, re
 		return "", fmt.Errorf("public project forecast history was not immutable: %v", err)
 	}
 
-	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[$1::uuid] WHERE token_prefix=$2`, restrictedToProjectID, agentToken[:16]); err != nil {
-		return "", err
-	}
-	denied := run.call(run.agent, http.MethodGet, "/api/v1/projects/"+historyProject.ID+"/forecasts", nil, run.agentHeaders())
-	if err := expect(denied, http.StatusForbidden, "forbidden"); err != nil {
-		return "", fmt.Errorf("restricted public project forecast history expected deny: %w", err)
-	}
-	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+	if err := run.privateProjectReadExpectedDenies(ctx, historyProject.ID, []readDenyCase{
+		{Label: "public project forecast history private nonmember", Path: "/api/v1/projects/" + historyProject.ID + "/forecasts"},
+	}); err != nil {
 		return "", err
 	}
 	if afterReads := run.counts(ctx); afterReads != beforeReads {
@@ -1116,6 +1107,105 @@ func (run *runner) publicProjectForecastProjectionMatrix(ctx context.Context, re
 	}
 	run.checks = append(run.checks, "public-project-forecast-history-exact-projection-and-authority")
 	return historyProject.ID, nil
+}
+
+func (run *runner) privateProjectReadExpectedDenies(ctx context.Context, projectID string, cases []readDenyCase) (err error) {
+	if len(cases) == 0 {
+		return errors.New("private project read expected-deny fixture has no routes")
+	}
+	var originalCreator, originalVisibility, originalOrganizationRole string
+	var originalProjectRole sql.NullString
+	if err := run.db.QueryRowContext(ctx, `SELECT project.created_by::text,project.visibility::text,
+		(SELECT role::text FROM organization_memberships WHERE organization_id=project.organization_id AND principal_id=$2),
+		(SELECT role FROM project_memberships WHERE project_id=project.id AND principal_id=$2)
+		FROM projects project WHERE project.id=$1`, projectID, humanID).
+		Scan(&originalCreator, &originalVisibility, &originalOrganizationRole, &originalProjectRole); err != nil {
+		return err
+	}
+	if originalCreator != humanID || originalOrganizationRole != "owner" || !originalProjectRole.Valid || originalProjectRole.String != "owner" {
+		return fmt.Errorf("private read deny fixture has unexpected authority: project=%s creator=%s visibility=%s organization_role=%s project_role=%+v",
+			projectID, originalCreator, originalVisibility, originalOrganizationRole, originalProjectRole)
+	}
+
+	restore := func() error {
+		tx, err := run.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if _, err := tx.ExecContext(ctx, `UPDATE projects SET created_by=$2,visibility=$3::project_visibility WHERE id=$1`,
+			projectID, originalCreator, originalVisibility); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+			VALUES ($1,$2,$3,CURRENT_TIMESTAMP)
+			ON CONFLICT (project_id,principal_id) DO UPDATE SET role=EXCLUDED.role`,
+			projectID, humanID, originalProjectRole.String); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE organization_memberships SET role=$3::organization_role
+			WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID, originalOrganizationRole); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	restorePending := true
+	defer func() {
+		if restorePending {
+			if restoreErr := restore(); err == nil && restoreErr != nil {
+				err = restoreErr
+			}
+		}
+	}()
+
+	tx, err := run.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE organization_memberships SET role='member'
+		WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, projectID, humanID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE projects SET created_by=$2,visibility='private' WHERE id=$1`, projectID, agentID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	before := run.counts(ctx)
+	for _, test := range cases {
+		response := run.call(run.human, http.MethodGet, test.Path, nil, nil)
+		if err := expect(response, http.StatusNotFound, "not_found"); err != nil {
+			return fmt.Errorf("%s expected project authorization deny after successful session authentication: %w", test.Label, err)
+		}
+	}
+	if after := run.counts(ctx); after != before {
+		return fmt.Errorf("private project read expected denies left residue: before=%+v after=%+v", before, after)
+	}
+	if err := restore(); err != nil {
+		return err
+	}
+	restorePending = false
+
+	var restoredCreator, restoredVisibility, restoredOrganizationRole, restoredProjectRole string
+	if err := run.db.QueryRowContext(ctx, `SELECT project.created_by::text,project.visibility::text,
+		(SELECT role::text FROM organization_memberships WHERE organization_id=project.organization_id AND principal_id=$2),
+		(SELECT role FROM project_memberships WHERE project_id=project.id AND principal_id=$2)
+		FROM projects project WHERE project.id=$1`, projectID, humanID).
+		Scan(&restoredCreator, &restoredVisibility, &restoredOrganizationRole, &restoredProjectRole); err != nil {
+		return err
+	}
+	if restoredCreator != originalCreator || restoredVisibility != originalVisibility ||
+		restoredOrganizationRole != originalOrganizationRole || restoredProjectRole != originalProjectRole.String {
+		return fmt.Errorf("private project read fixture did not restore authority: project=%s creator=%s visibility=%s organization_role=%s project_role=%s",
+			projectID, restoredCreator, restoredVisibility, restoredOrganizationRole, restoredProjectRole)
+	}
+	return nil
 }
 
 func assertForecastProjection(label string, actual, expected forecast) error {
