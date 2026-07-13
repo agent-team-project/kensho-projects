@@ -29,7 +29,10 @@ let chromeLog = "";
 processHandle.stderr.on("data", (chunk) => { chromeLog += String(chunk); });
 
 try {
-  const version = await pollJSON(`http://127.0.0.1:${String(port)}/json/version`);
+  // Hosted runners can take longer than five seconds to initialize Chrome
+  // under load. Keep the gate fail-closed, but give the DevTools endpoint a
+  // bounded 30-second startup window before judging the browser unavailable.
+  const version = await pollJSON(`http://127.0.0.1:${String(port)}/json/version`, 600);
   if (!version.webSocketDebuggerUrl) throw new Error("Chrome did not expose DevTools");
   await fetch(`http://127.0.0.1:${String(port)}/json/new?${encodeURIComponent(base)}`, { method: "PUT" });
   const pages = await pollJSON(`http://127.0.0.1:${String(port)}/json/list`);
@@ -98,6 +101,9 @@ try {
   await writeFile(join(output, "browser-summary.json"), `${JSON.stringify({ result: "pass", viewport: { width: 1440, height: 1000 }, screenshot_sha256: digest, generated_client_in_source_map: true, console_failures: 0, network_failures: 0 }, null, 2)}\n`);
   cdp.close();
   console.log(`browser walking slice passed: screenshot_sha256=${digest}`);
+} catch (error) {
+  if (chromeLog) console.error(chromeLog);
+  throw error;
 } finally {
   processHandle.kill("SIGTERM");
   if (processHandle.exitCode === null) {
@@ -124,8 +130,8 @@ async function sourceMapContainsGeneratedClient() {
   return map.sources.some((entry) => entry.endsWith("/src/api/client.gen.ts"));
 }
 
-async function pollJSON(url) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+async function pollJSON(url, attempts = 100) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try { const response = await fetch(url); if (response.ok) return response.json(); } catch { /* retry */ }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
