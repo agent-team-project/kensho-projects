@@ -52,6 +52,8 @@ for artifact in \
   m2b-inverted-commit-order.json \
   m2b-websocket-backpressure.json \
   m2b-sse-backpressure.json \
+  m2e-realtime-work-resource-authorization.json \
+  m2e-realtime-dependency-resource-authorization.json \
   m2b-load-bearing-outcomes.json; do
   test -s "$artifact_root/$artifact"
 done

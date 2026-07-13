@@ -50,6 +50,39 @@ type project struct {
 	Version int64  `json:"version"`
 }
 
+type realtimeWorkRecord struct {
+	ID             string  `json:"id"`
+	OrganizationID string  `json:"organization_id"`
+	ProjectID      string  `json:"project_id"`
+	DeliverableID  *string `json:"deliverable_id"`
+	Title          string  `json:"title"`
+	Description    string  `json:"description"`
+	State          string  `json:"state"`
+	Priority       string  `json:"priority"`
+	AssigneeID     *string `json:"assignee_id"`
+	Version        int64   `json:"version"`
+	CreatedBy      string  `json:"created_by"`
+	CreatedAt      string  `json:"created_at"`
+	UpdatedAt      string  `json:"updated_at"`
+}
+
+type realtimeDependencyRecord struct {
+	ID               string `json:"id"`
+	OrganizationID   string `json:"organization_id"`
+	SourceWorkItemID string `json:"source_work_item_id"`
+	TargetWorkItemID string `json:"target_work_item_id"`
+	Kind             string `json:"kind"`
+	Version          int64  `json:"version"`
+	CreatedBy        string `json:"created_by"`
+	CreatedAt        string `json:"created_at"`
+}
+
+type realtimeDependencyPayload struct {
+	Dependency realtimeDependencyRecord `json:"dependency"`
+	Source     realtimeWorkRecord       `json:"source"`
+	Removed    bool                     `json:"removed"`
+}
+
 type envelope struct {
 	Sequence       int64           `json:"sequence"`
 	EventID        string          `json:"event_id"`
@@ -86,6 +119,27 @@ type sseEvent struct {
 type sseClient struct {
 	response *http.Response
 	reader   *bufio.Reader
+}
+
+type resourceCursors struct {
+	HumanWebSocket string
+	AgentWebSocket string
+	AgentSSE       string
+}
+
+type resourceStreams struct {
+	humanWebSocket *wsClient
+	agentWebSocket *wsClient
+	agentSSE       *sseClient
+}
+
+func (streams *resourceStreams) close() {
+	if streams == nil {
+		return
+	}
+	streams.humanWebSocket.close()
+	streams.agentWebSocket.close()
+	streams.agentSSE.close()
 }
 
 func main() {
@@ -149,7 +203,7 @@ func (run *harness) restoreAgentAuthority() error {
 		return err
 	}
 	_, err = run.db.Exec(`UPDATE agent_tokens SET revoked_at=NULL,expires_at=CURRENT_TIMESTAMP+INTERVAL '24 hours',
-		scopes=ARRAY['project.create','project.read','decision.record','realtime.subscribe','event.subscribe'],project_ids=NULL
+		scopes=ARRAY['project.create','project.read','decision.record','work.read','dependency.read','realtime.subscribe','event.subscribe'],project_ids=NULL
 		WHERE token_prefix=$1`, agentToken[:16])
 	return err
 }
@@ -254,6 +308,14 @@ func (run *harness) full() error {
 		return err
 	}
 	results["authority_canaries"] = true
+	if err := run.workResourceAuthorityCanaries(); err != nil {
+		return err
+	}
+	results["work_resource_authority"] = true
+	if err := run.dependencyResourceAuthorityCanaries(); err != nil {
+		return err
+	}
+	results["dependency_resource_authority"] = true
 	if err := run.liveRevocation(); err != nil {
 		return err
 	}
@@ -421,6 +483,462 @@ func (run *harness) authorityCanaries() error {
 		"session_cross_org_disclosed": false, "session_private_disclosed": false,
 		"bearer_cross_org_disclosed": false, "bearer_private_disclosed": false, "bearer_restricted_disclosed": false,
 		"sse_cross_org_disclosed": false, "sse_private_disclosed": false, "sse_restricted_disclosed": false,
+	})
+}
+
+func (run *harness) openResourceStreams(cursors resourceCursors, eventType string) (*resourceStreams, resourceCursors, error) {
+	human, humanReady, err := run.openWebSocket(cursors.HumanWebSocket, eventType)
+	if err != nil {
+		return nil, resourceCursors{}, fmt.Errorf("resource human websocket: %w", err)
+	}
+	agent, agentReady, err := run.openAgentWebSocket(cursors.AgentWebSocket, eventType)
+	if err != nil {
+		human.close()
+		return nil, resourceCursors{}, fmt.Errorf("resource agent websocket: %w", err)
+	}
+	stream, err := run.openFilteredSSE(cursors.AgentSSE, "", eventType, nil)
+	if err != nil {
+		human.close()
+		agent.close()
+		return nil, resourceCursors{}, fmt.Errorf("resource agent SSE: %w", err)
+	}
+	ready, err := stream.next(3 * time.Second)
+	if err != nil || ready.Kind != "ready" || ready.ID == "" {
+		human.close()
+		agent.close()
+		stream.close()
+		return nil, resourceCursors{}, fmt.Errorf("resource agent SSE ready: %+v %v", ready, err)
+	}
+	return &resourceStreams{humanWebSocket: human, agentWebSocket: agent, agentSSE: stream}, resourceCursors{
+		HumanWebSocket: humanReady.Cursor, AgentWebSocket: agentReady.Cursor, AgentSSE: ready.ID,
+	}, nil
+}
+
+func nextWebSocketHeartbeatWithoutEvent(client *wsClient, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		frame, err := client.next(time.Until(deadline))
+		if err != nil {
+			return "", err
+		}
+		if frame.Type == "event" {
+			return "", fmt.Errorf("denied websocket disclosed resource envelope: %s", frame.Event)
+		}
+		if frame.Type == "heartbeat" && frame.Cursor != "" {
+			return frame.Cursor, nil
+		}
+	}
+	return "", errors.New("denied websocket did not advance with a heartbeat")
+}
+
+func nextSSEHeartbeatWithoutEvent(client *sseClient, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		event, err := client.next(time.Until(deadline))
+		if err != nil {
+			return "", err
+		}
+		if event.Kind == "domain-event" {
+			return "", fmt.Errorf("denied SSE disclosed resource envelope: %s", event.Data)
+		}
+		if event.Kind == "heartbeat" && event.ID != "" {
+			return event.ID, nil
+		}
+	}
+	return "", errors.New("denied SSE did not advance with a heartbeat")
+}
+
+func deniedResourceCursors(streams *resourceStreams) (resourceCursors, error) {
+	human, err := nextWebSocketHeartbeatWithoutEvent(streams.humanWebSocket, 3*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	agent, err := nextWebSocketHeartbeatWithoutEvent(streams.agentWebSocket, 3*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	sse, err := nextSSEHeartbeatWithoutEvent(streams.agentSSE, 3*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	return resourceCursors{HumanWebSocket: human, AgentWebSocket: agent, AgentSSE: sse}, nil
+}
+
+func authorizedResourceCursors(streams *resourceStreams, expected json.RawMessage) (resourceCursors, error) {
+	human, err := collectWebSocketEvents(streams.humanWebSocket, 1, 5*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	agent, err := collectWebSocketEvents(streams.agentWebSocket, 1, 5*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	sse, err := collectSSEEvents(streams.agentSSE, 1, 5*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	if !equalJSON(human[0].Event, expected) || !equalJSON(agent[0].Event, expected) || !equalJSON(sse[0].Data, expected) ||
+		!equalJSON(human[0].Event, agent[0].Event) || !equalJSON(agent[0].Event, sse[0].Data) {
+		return resourceCursors{}, fmt.Errorf("authorized resource envelope diverged across human websocket, agent websocket, and SSE")
+	}
+	return resourceCursors{HumanWebSocket: human[0].Cursor, AgentWebSocket: agent[0].Cursor, AgentSSE: sse[0].ID}, nil
+}
+
+func mixedResourceCursors(streams *resourceStreams, expectedHuman json.RawMessage) (resourceCursors, error) {
+	human, err := collectWebSocketEvents(streams.humanWebSocket, 1, 5*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	if !equalJSON(human[0].Event, expectedHuman) {
+		return resourceCursors{}, fmt.Errorf("human control envelope diverged: %s", human[0].Event)
+	}
+	agent, err := nextWebSocketHeartbeatWithoutEvent(streams.agentWebSocket, 3*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	sse, err := nextSSEHeartbeatWithoutEvent(streams.agentSSE, 3*time.Second)
+	if err != nil {
+		return resourceCursors{}, err
+	}
+	return resourceCursors{HumanWebSocket: human[0].Cursor, AgentWebSocket: agent, AgentSSE: sse}, nil
+}
+
+func (run *harness) resetAgentLastUsed(at time.Time) (time.Time, error) {
+	var stored time.Time
+	err := run.db.QueryRow(`UPDATE agent_tokens SET last_used_at=$2 WHERE token_prefix=$1 RETURNING last_used_at`,
+		agentToken[:16], at.UTC()).Scan(&stored)
+	return stored, err
+}
+
+func (run *harness) agentLastUsed() (time.Time, error) {
+	var value time.Time
+	err := run.db.QueryRow(`SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&value)
+	return value, err
+}
+
+func (run *harness) waitAgentLastUsedAfter(after time.Time, timeout time.Duration) (time.Time, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		value, err := run.agentLastUsed()
+		if err != nil {
+			return time.Time{}, err
+		}
+		if value.After(after) {
+			return value, nil
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	value, err := run.agentLastUsed()
+	return value, fmt.Errorf("agent token usage did not advance after authorized envelope: value=%s err=%v", value, err)
+}
+
+func (run *harness) workResourceAuthorityCanaries() error {
+	if err := run.restoreAgentAuthority(); err != nil {
+		return err
+	}
+	projectID, creatorID := uuid(), uuid()
+	projectEnvelope, err := run.seedCanary(organizationID, creatorID, projectID, "private", "M2E_WORK_RESOURCE_PROJECT")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(projectEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, projectID, humanID); err != nil {
+		return err
+	}
+	// Give the agent an independent direct role so removing the delegated
+	// human's role proves that realtime authorization applies the intersection,
+	// rather than allowing the agent's direct role to widen its authority.
+	if _, err := run.db.Exec(`INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, projectID, agentID); err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+
+	initialStreams, initial, err := run.openResourceStreams(resourceCursors{}, "work_item.created")
+	if err != nil {
+		return err
+	}
+	initialStreams.close()
+	deniedEnvelope, err := run.seedWorkEvent(projectID, "M2E_PRIVATE_WORK_DENIED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(deniedEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, projectID, humanID); err != nil {
+		return err
+	}
+	baseline, err := run.resetAgentLastUsed(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		return err
+	}
+	deniedStreams, _, err := run.openResourceStreams(initial, "work_item.created")
+	if err != nil {
+		return err
+	}
+	deniedAdvanced, err := deniedResourceCursors(deniedStreams)
+	deniedStreams.close()
+	if err != nil {
+		return fmt.Errorf("private work resource denial: %w", err)
+	}
+	afterDenied, err := run.agentLastUsed()
+	if err != nil || !afterDenied.Equal(baseline) {
+		return fmt.Errorf("private work denial advanced agent token usage: before=%s after=%s err=%v", baseline, afterDenied, err)
+	}
+
+	if _, err := run.db.Exec(`INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, projectID, humanID); err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`UPDATE agent_tokens SET scopes=array_remove(scopes,'work.read') WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	scopeDeniedEnvelope, err := run.seedWorkEvent(projectID, "M2E_WORK_SCOPE_DENIED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(scopeDeniedEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	scopeStreams, _, err := run.openResourceStreams(deniedAdvanced, "work_item.created")
+	if err != nil {
+		return err
+	}
+	scopeAdvanced, err := mixedResourceCursors(scopeStreams, scopeDeniedEnvelope)
+	scopeStreams.close()
+	if err != nil {
+		return fmt.Errorf("work read-scope denial: %w", err)
+	}
+	afterScopeDenied, err := run.agentLastUsed()
+	if err != nil || !afterScopeDenied.Equal(baseline) {
+		return fmt.Errorf("work read-scope denial advanced agent token usage: before=%s after=%s err=%v", baseline, afterScopeDenied, err)
+	}
+
+	if _, err := run.db.Exec(`UPDATE agent_tokens SET scopes=array_append(scopes,'work.read') WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	allowedEnvelope, err := run.seedWorkEvent(projectID, "M2E_WORK_RESOURCE_ALLOWED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(allowedEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	allowedStreams, _, err := run.openResourceStreams(scopeAdvanced, "work_item.created")
+	if err != nil {
+		return err
+	}
+	allowedAdvanced, err := authorizedResourceCursors(allowedStreams, allowedEnvelope)
+	allowedStreams.close()
+	if err != nil {
+		return fmt.Errorf("authorized work resource control: %w", err)
+	}
+	afterAllowed, err := run.waitAgentLastUsedAfter(baseline, 3*time.Second)
+	if err != nil || !afterAllowed.After(baseline) {
+		return fmt.Errorf("authorized work delivery did not advance agent token usage: before=%s after=%s err=%v", baseline, afterAllowed, err)
+	}
+
+	restrictionBaseline, err := run.resetAgentLastUsed(time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`UPDATE agent_tokens SET project_ids=ARRAY[$2::uuid] WHERE token_prefix=$1`, agentToken[:16], uuid()); err != nil {
+		return err
+	}
+	restrictedEnvelope, err := run.seedWorkEvent(projectID, "M2E_WORK_PROJECT_RESTRICTED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(restrictedEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	restrictedStreams, _, err := run.openResourceStreams(allowedAdvanced, "work_item.created")
+	if err != nil {
+		return err
+	}
+	restrictedAdvanced, err := mixedResourceCursors(restrictedStreams, restrictedEnvelope)
+	restrictedStreams.close()
+	if err != nil {
+		return fmt.Errorf("work project-restriction denial: %w", err)
+	}
+	afterRestricted, err := run.agentLastUsed()
+	if err != nil || !afterRestricted.Equal(restrictionBaseline) {
+		return fmt.Errorf("work project-restriction denial advanced agent token usage: before=%s after=%s err=%v", restrictionBaseline, afterRestricted, err)
+	}
+	if _, err := run.db.Exec(`UPDATE agent_tokens SET project_ids=NULL WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	restoredEnvelope, err := run.seedWorkEvent(projectID, "M2E_WORK_RESTRICTION_RESTORED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(restoredEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	restoredStreams, _, err := run.openResourceStreams(restrictedAdvanced, "work_item.created")
+	if err != nil {
+		return err
+	}
+	_, err = authorizedResourceCursors(restoredStreams, restoredEnvelope)
+	restoredStreams.close()
+	if err != nil {
+		return fmt.Errorf("restored work project authorization: %w", err)
+	}
+	if err := run.restoreAgentAuthority(); err != nil {
+		return err
+	}
+	return run.writeJSON("m2e-realtime-work-resource-authorization.json", map[string]any{
+		"private_project_id": projectID, "private_denied_event_id": eventIDOf(deniedEnvelope),
+		"scope_denied_event_id": eventIDOf(scopeDeniedEnvelope), "project_restricted_event_id": eventIDOf(restrictedEnvelope),
+		"authorized_event_ids": []string{eventIDOf(allowedEnvelope), eventIDOf(restoredEnvelope)},
+		"human_websocket":      "authorized-and-current-role-denied", "delegated_agent_websocket": "authorized-scope-role-restriction-denied",
+		"delegated_agent_sse": "authorized-scope-role-restriction-denied", "resume_reconnect": true,
+		"direct_agent_role_cannot_widen_delegate": true, "canonical_envelope_parity": true, "denied_last_used_unchanged": true,
+	})
+}
+
+func (run *harness) dependencyResourceAuthorityCanaries() error {
+	if err := run.restoreAgentAuthority(); err != nil {
+		return err
+	}
+	sourceProject, targetProject := uuid(), uuid()
+	sourceProjectEnvelope, err := run.seedCanary(organizationID, uuid(), sourceProject, "private", "M2E_DEPENDENCY_SOURCE_PROJECT")
+	if err != nil {
+		return err
+	}
+	targetProjectEnvelope, err := run.seedCanary(organizationID, uuid(), targetProject, "private", "M2E_DEPENDENCY_TARGET_PROJECT")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(targetProjectEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	if sequenceOf(sourceProjectEnvelope) >= sequenceOf(targetProjectEnvelope) {
+		return errors.New("cross-project dependency fixture sequence is not monotonic")
+	}
+	for _, projectID := range []string{sourceProject, targetProject} {
+		if _, err := run.db.Exec(`INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+			VALUES ($1,$2,'owner',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, projectID, humanID); err != nil {
+			return err
+		}
+	}
+	if _, err := run.db.Exec(`UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+
+	initialStreams, initial, err := run.openResourceStreams(resourceCursors{}, "dependency.added")
+	if err != nil {
+		return err
+	}
+	initialStreams.close()
+	controlEnvelope, err := run.seedDependencyEvent(sourceProject, targetProject, "M2E_DEPENDENCY_CONTROL")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(controlEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	controlStreams, _, err := run.openResourceStreams(initial, "dependency.added")
+	if err != nil {
+		return err
+	}
+	controlAdvanced, err := authorizedResourceCursors(controlStreams, controlEnvelope)
+	controlStreams.close()
+	if err != nil {
+		return fmt.Errorf("authorized cross-project dependency control: %w", err)
+	}
+	removalInitialStreams, removalInitial, err := run.openResourceStreams(resourceCursors{}, "dependency.removed")
+	if err != nil {
+		return err
+	}
+	removalInitialStreams.close()
+	removalEnvelope, err := run.seedDependencyRemovalEvent(controlEnvelope)
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(removalEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	removalStreams, _, err := run.openResourceStreams(removalInitial, "dependency.removed")
+	if err != nil {
+		return err
+	}
+	_, err = authorizedResourceCursors(removalStreams, removalEnvelope)
+	removalStreams.close()
+	if err != nil {
+		return fmt.Errorf("authorized cross-project dependency removal control: %w", err)
+	}
+
+	deniedEnvelope, err := run.seedDependencyEvent(sourceProject, targetProject, "M2E_DEPENDENCY_TARGET_DENIED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(deniedEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, targetProject, humanID); err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`UPDATE agent_tokens SET project_ids=ARRAY[$2::uuid] WHERE token_prefix=$1`, agentToken[:16], sourceProject); err != nil {
+		return err
+	}
+	baseline, err := run.resetAgentLastUsed(time.Date(2000, 1, 3, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		return err
+	}
+	deniedStreams, _, err := run.openResourceStreams(controlAdvanced, "dependency.added")
+	if err != nil {
+		return err
+	}
+	deniedAdvanced, err := deniedResourceCursors(deniedStreams)
+	deniedStreams.close()
+	if err != nil {
+		return fmt.Errorf("cross-project dependency target denial: %w", err)
+	}
+	afterDenied, err := run.agentLastUsed()
+	if err != nil || !afterDenied.Equal(baseline) {
+		return fmt.Errorf("cross-project dependency denial advanced agent token usage: before=%s after=%s err=%v", baseline, afterDenied, err)
+	}
+
+	if _, err := run.db.Exec(`INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, targetProject, humanID); err != nil {
+		return err
+	}
+	if _, err := run.db.Exec(`UPDATE agent_tokens SET project_ids=NULL WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	restoredEnvelope, err := run.seedDependencyEvent(sourceProject, targetProject, "M2E_DEPENDENCY_TARGET_RESTORED")
+	if err != nil {
+		return err
+	}
+	if err := run.waitCheckpoint(restoredEnvelope, 10*time.Second); err != nil {
+		return err
+	}
+	restoredStreams, _, err := run.openResourceStreams(deniedAdvanced, "dependency.added")
+	if err != nil {
+		return err
+	}
+	_, err = authorizedResourceCursors(restoredStreams, restoredEnvelope)
+	restoredStreams.close()
+	if err != nil {
+		return fmt.Errorf("restored cross-project dependency authorization: %w", err)
+	}
+	if err := run.restoreAgentAuthority(); err != nil {
+		return err
+	}
+	return run.writeJSON("m2e-realtime-dependency-resource-authorization.json", map[string]any{
+		"source_project_id": sourceProject, "target_project_id": targetProject,
+		"authorized_event_ids":   []string{eventIDOf(controlEnvelope), eventIDOf(removalEnvelope), eventIDOf(restoredEnvelope)},
+		"target_denied_event_id": eventIDOf(deniedEnvelope), "every_endpoint_project_authorized": true,
+		"human_websocket_target_denied": true, "delegated_agent_websocket_target_and_restriction_denied": true,
+		"delegated_agent_sse_target_and_restriction_denied": true, "resume_reconnect": true,
+		"canonical_envelope_parity": true, "denied_last_used_unchanged": true,
 	})
 }
 
@@ -1051,9 +1569,20 @@ func writeClientFrame(connection net.Conn, payload []byte) error {
 }
 
 func (run *harness) openSSE(cursor, lastEventID string, extra map[string]string) (*sseClient, error) {
+	return run.openFilteredSSE(cursor, lastEventID, "", extra)
+}
+
+func (run *harness) openFilteredSSE(cursor, lastEventID, eventTypes string, extra map[string]string) (*sseClient, error) {
 	path := "/api/v1/events"
+	query := url.Values{}
 	if cursor != "" {
-		path += "?cursor=" + url.QueryEscape(cursor)
+		query.Set("cursor", cursor)
+	}
+	if eventTypes != "" {
+		query.Set("types", eventTypes)
+	}
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
 	}
 	request, err := http.NewRequest(http.MethodGet, run.base+path, nil)
 	if err != nil {
@@ -1332,6 +1861,151 @@ func (run *harness) seedCanary(orgID, creatorID, projectID, visibility, title st
 	_, err = tx.Exec(`INSERT INTO domain_events (event_id,organization_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,actor_kind,actor_id,principal_id,command_id,request_id,occurred_at,payload)
 		VALUES ($1,$2,'project',$3,1,'project.created',1,'human',$4,NULL,$5,$6,CURRENT_TIMESTAMP,$7)`, eventID, orgID, projectID, creatorID, commandID, "m2b-canary-"+title, encoded)
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return run.outboxEnvelope(eventID)
+}
+
+func (run *harness) seedWorkRecord(projectID, marker string) (realtimeWorkRecord, json.RawMessage, error) {
+	workID, eventID, commandID := uuid(), uuid(), uuid()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	item := realtimeWorkRecord{
+		ID: workID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: marker, Description: "Realtime authorization resource canary", State: "open", Priority: "normal",
+		Version: 1, CreatedBy: humanID, CreatedAt: now.Format("2006-01-02T15:04:05.000000Z"), UpdatedAt: now.Format("2006-01-02T15:04:05.000000Z"),
+	}
+	payload := map[string]any{"work_item": item, "command": "create", "reason": "", "evidence_ids": []string{}, "finding_id": nil}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return realtimeWorkRecord{}, nil, err
+	}
+	tx, err := run.db.Begin()
+	if err != nil {
+		return realtimeWorkRecord{}, nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT INTO work_items
+		(id,organization_id,project_id,deliverable_id,title,description,state,priority,assignee_id,version,created_by,created_at,updated_at)
+		VALUES ($1,$2,$3,NULL,$4,$5,'open','normal',NULL,1,$6,$7,$7)`,
+		item.ID, item.OrganizationID, item.ProjectID, item.Title, item.Description, item.CreatedBy, now); err != nil {
+		return realtimeWorkRecord{}, nil, err
+	}
+	if _, err := tx.Exec(`INSERT INTO domain_events
+		(event_id,organization_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,actor_kind,actor_id,principal_id,command_id,request_id,occurred_at,payload)
+		VALUES ($1,$2,'work_item',$3,1,'work_item.created',1,'human',$4,NULL,$5,$6,$7,$8)`,
+		eventID, organizationID, item.ID, humanID, commandID, "m2e-realtime-work-"+item.ID, now, encoded); err != nil {
+		return realtimeWorkRecord{}, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return realtimeWorkRecord{}, nil, err
+	}
+	envelope, err := run.outboxEnvelope(eventID)
+	return item, envelope, err
+}
+
+func (run *harness) seedWorkEvent(projectID, marker string) (json.RawMessage, error) {
+	_, envelope, err := run.seedWorkRecord(projectID, marker)
+	return envelope, err
+}
+
+func (run *harness) seedDependencyEvent(sourceProject, targetProject, marker string) (json.RawMessage, error) {
+	source, _, err := run.seedWorkRecord(sourceProject, marker+"_SOURCE")
+	if err != nil {
+		return nil, err
+	}
+	target, _, err := run.seedWorkRecord(targetProject, marker+"_TARGET")
+	if err != nil {
+		return nil, err
+	}
+	dependencyID, eventID, commandID := uuid(), uuid(), uuid()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	source.Version++
+	source.UpdatedAt = now.Format("2006-01-02T15:04:05.000000Z")
+	dependency := realtimeDependencyRecord{
+		ID: dependencyID, OrganizationID: organizationID, SourceWorkItemID: source.ID,
+		TargetWorkItemID: target.ID, Kind: "relates", Version: 1, CreatedBy: humanID,
+		CreatedAt: now.Format("2006-01-02T15:04:05.000000Z"),
+	}
+	payload := realtimeDependencyPayload{Dependency: dependency, Source: source, Removed: false}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := run.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`UPDATE work_items SET version=version+1,updated_at=$2 WHERE id=$1 AND version=1`, source.ID, now)
+	if err != nil {
+		return nil, err
+	}
+	if count, err := result.RowsAffected(); err != nil || count != 1 {
+		return nil, fmt.Errorf("advance dependency source version: rows=%d err=%v", count, err)
+	}
+	if _, err := tx.Exec(`INSERT INTO work_item_dependencies
+		(id,organization_id,source_work_item_id,target_work_item_id,kind,version,created_by,created_at)
+		VALUES ($1,$2,$3,$4,'relates',1,$5,$6)`, dependencyID, organizationID, source.ID, target.ID, humanID, now); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(`INSERT INTO domain_events
+		(event_id,organization_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,actor_kind,actor_id,principal_id,command_id,request_id,occurred_at,payload)
+		VALUES ($1,$2,'work_item',$3,2,'dependency.added',1,'human',$4,NULL,$5,$6,$7,$8)`,
+		eventID, organizationID, source.ID, humanID, commandID, "m2e-realtime-dependency-"+dependencyID, now, encoded); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return run.outboxEnvelope(eventID)
+}
+
+func (run *harness) seedDependencyRemovalEvent(addedEnvelope json.RawMessage) (json.RawMessage, error) {
+	var added envelope
+	if err := json.Unmarshal(addedEnvelope, &added); err != nil {
+		return nil, err
+	}
+	var payload realtimeDependencyPayload
+	if err := json.Unmarshal(added.Payload, &payload); err != nil || payload.Removed {
+		return nil, fmt.Errorf("decode dependency add envelope for removal: %+v err=%v", payload, err)
+	}
+	eventID, commandID := uuid(), uuid()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	payload.Removed = true
+	payload.Source.Version++
+	payload.Source.UpdatedAt = now.Format("2006-01-02T15:04:05.000000Z")
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := run.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`DELETE FROM work_item_dependencies WHERE id=$1 AND version=1`, payload.Dependency.ID)
+	if err != nil {
+		return nil, err
+	}
+	if count, err := result.RowsAffected(); err != nil || count != 1 {
+		return nil, fmt.Errorf("remove realtime dependency fixture: rows=%d err=%v", count, err)
+	}
+	result, err = tx.Exec(`UPDATE work_items SET version=version+1,updated_at=$2 WHERE id=$1 AND version=$3`,
+		payload.Source.ID, now, payload.Source.Version-1)
+	if err != nil {
+		return nil, err
+	}
+	if count, err := result.RowsAffected(); err != nil || count != 1 {
+		return nil, fmt.Errorf("advance removed dependency source version: rows=%d err=%v", count, err)
+	}
+	if _, err := tx.Exec(`INSERT INTO domain_events
+		(event_id,organization_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,actor_kind,actor_id,principal_id,command_id,request_id,occurred_at,payload)
+		VALUES ($1,$2,'work_item',$3,$4,'dependency.removed',1,'human',$5,NULL,$6,$7,$8,$9)`,
+		eventID, organizationID, payload.Source.ID, payload.Source.Version, humanID, commandID,
+		"m2e-realtime-dependency-remove-"+payload.Dependency.ID, now, encoded); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

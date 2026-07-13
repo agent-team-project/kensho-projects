@@ -264,41 +264,121 @@ func (service *Service) realtimeBatch(ctx context.Context, after int64) ([]strea
 
 func privilegedProjectRole(role string) bool { return role == "owner" || role == "admin" }
 
-// Transport loops reject a mismatched organization before this project and
+type realtimeResourceBinding struct {
+	Action     string
+	ProjectIDs []string
+}
+
+func appendProjectOnce(projectIDs []string, projectID string) []string {
+	for _, existing := range projectIDs {
+		if existing == projectID {
+			return projectIDs
+		}
+	}
+	return append(projectIDs, projectID)
+}
+
+func (service *Service) resolveRealtimeWorkProject(ctx context.Context, organizationID, workItemID string) (string, bool) {
+	if service == nil || service.db == nil || !uuidPattern.MatchString(organizationID) || !uuidPattern.MatchString(workItemID) {
+		return "", false
+	}
+	var projectID string
+	if err := service.db.QueryRowContext(ctx, `SELECT project_id FROM work_items
+		WHERE id=$1 AND organization_id=$2`, workItemID, organizationID).Scan(&projectID); err != nil {
+		return "", false
+	}
+	return projectID, uuidPattern.MatchString(projectID)
+}
+
+// resolveRealtimeResources binds the immutable envelope to current relational
+// resources before policy evaluation. Historical dependency removals cannot
+// rely on a live edge row, so their canonical payload identifies the immutable
+// endpoints and both endpoint rows independently resolve their current projects.
+func (service *Service) resolveRealtimeResources(ctx context.Context, envelope OutboxEnvelope) (realtimeResourceBinding, bool) {
+	if service == nil || service.db == nil || !uuidPattern.MatchString(envelope.OrganizationID) ||
+		!uuidPattern.MatchString(envelope.AggregateID) || envelope.AggregateVersion < 1 {
+		return realtimeResourceBinding{}, false
+	}
+	if envelope.AggregateType == "project" {
+		return realtimeResourceBinding{Action: "project.read", ProjectIDs: []string{envelope.AggregateID}}, true
+	}
+	if envelope.AggregateType != "work_item" {
+		return realtimeResourceBinding{}, false
+	}
+
+	switch envelope.EventType {
+	case "work_item.created", "work_item.updated", "work_item.assigned", "work_item.started",
+		"work_item.review_requested", "work_item.bounced", "work_item.accepted", "work_item.cancelled":
+		var event WorkItemEvent
+		if decodeStrictJSON(envelope.Payload, &event) != nil || event.WorkItem.ID != envelope.AggregateID ||
+			event.WorkItem.OrganizationID != envelope.OrganizationID || event.WorkItem.Version != envelope.AggregateVersion {
+			return realtimeResourceBinding{}, false
+		}
+		projectID, ok := service.resolveRealtimeWorkProject(ctx, envelope.OrganizationID, envelope.AggregateID)
+		if !ok || event.WorkItem.ProjectID != projectID {
+			return realtimeResourceBinding{}, false
+		}
+		return realtimeResourceBinding{Action: "work.read", ProjectIDs: []string{projectID}}, true
+	case "dependency.added", "dependency.removed":
+		var event WorkDependencyEvent
+		if decodeStrictJSON(envelope.Payload, &event) != nil || event.Source.ID != envelope.AggregateID ||
+			event.Source.OrganizationID != envelope.OrganizationID || event.Source.Version != envelope.AggregateVersion ||
+			event.Dependency.OrganizationID != envelope.OrganizationID ||
+			event.Dependency.SourceWorkItemID != envelope.AggregateID ||
+			!uuidPattern.MatchString(event.Dependency.ID) || !uuidPattern.MatchString(event.Dependency.TargetWorkItemID) ||
+			event.Dependency.TargetWorkItemID == envelope.AggregateID || event.Dependency.Version != 1 ||
+			(event.Dependency.Kind != "blocks" && event.Dependency.Kind != "relates" && event.Dependency.Kind != "caused-by") ||
+			(event.Removed != (envelope.EventType == "dependency.removed")) {
+			return realtimeResourceBinding{}, false
+		}
+		sourceProject, ok := service.resolveRealtimeWorkProject(ctx, envelope.OrganizationID, envelope.AggregateID)
+		if !ok || event.Source.ProjectID != sourceProject {
+			return realtimeResourceBinding{}, false
+		}
+		targetProject, ok := service.resolveRealtimeWorkProject(ctx, envelope.OrganizationID, event.Dependency.TargetWorkItemID)
+		if !ok {
+			return realtimeResourceBinding{}, false
+		}
+		projectIDs := appendProjectOnce(nil, sourceProject)
+		projectIDs = appendProjectOnce(projectIDs, targetProject)
+		return realtimeResourceBinding{Action: "dependency.read", ProjectIDs: projectIDs}, true
+	default:
+		return realtimeResourceBinding{}, false
+	}
+}
+
+// Transport loops reject a mismatched organization before this resource and
 // principal check. Keeping those boundaries separate makes each guard explicit.
 func (service *Service) actorCanReadEnvelope(ctx context.Context, actor Actor, envelope OutboxEnvelope) bool {
-	if !organizationRoleAllows(actor.Role, "project.read") ||
-		(actor.Kind == "agent" && !organizationRoleAllows(actor.DelegatedRole, "project.read")) {
+	binding, ok := service.resolveRealtimeResources(ctx, envelope)
+	if !ok {
 		return false
 	}
-	if envelope.AggregateType != "project" {
-		return actor.Kind != "agent" || len(actor.ProjectIDs) == 0
-	}
-	if actor.Kind == "agent" && !agentProjectRestrictionAllows(actor.ProjectIDs, envelope.AggregateID) {
+	if actor.Kind == "agent" && !actor.Scopes[binding.Action] {
 		return false
 	}
-	var visibility, createdBy string
-	var participant bool
-	principalID := ""
-	if actor.PrincipalID != nil {
-		principalID = *actor.PrincipalID
+	for _, projectID := range binding.ProjectIDs {
+		if actor.Kind == "agent" && !agentProjectRestrictionAllows(actor.ProjectIDs, projectID) {
+			return false
+		}
+		if _, allowed := service.authorizeProject(ctx, actor, projectID, envelope.OrganizationID, binding.Action, "realtime-envelope"); !allowed {
+			return false
+		}
+		// The ordinary project policy accepts the delegated principal's project
+		// membership when an agent has no direct membership. Realtime also checks
+		// that principal independently so a direct agent role can only narrow,
+		// never replace or widen, the human's current project authority.
+		if actor.Kind == "agent" {
+			if actor.PrincipalID == nil || *actor.PrincipalID == actor.ID {
+				return false
+			}
+			delegated := Actor{ID: *actor.PrincipalID, Kind: "human", OrganizationID: actor.OrganizationID, Role: actor.DelegatedRole}
+			if _, allowed := service.authorizeProject(ctx, delegated, projectID, envelope.OrganizationID, binding.Action, "realtime-delegation"); !allowed {
+				return false
+			}
+		}
 	}
-	err := service.db.QueryRowContext(ctx, `SELECT project.visibility::text,project.created_by,
-		EXISTS (SELECT 1 FROM project_memberships membership
-			WHERE membership.project_id=project.id
-			  AND (membership.principal_id=$3 OR membership.principal_id=NULLIF($4,'')::uuid))
-		FROM projects project WHERE project.id=$1 AND project.organization_id=$2`,
-		envelope.AggregateID, envelope.OrganizationID, actor.ID, principalID).Scan(&visibility, &createdBy, &participant)
-	if err != nil {
-		return false
-	}
-	if visibility == "organization" {
-		return true
-	}
-	if createdBy == actor.ID || (principalID != "" && createdBy == principalID) || participant {
-		return true
-	}
-	return privilegedProjectRole(actor.Role) && (actor.Kind != "agent" || privilegedProjectRole(actor.DelegatedRole))
+	return len(binding.ProjectIDs) > 0
 }
 
 func writeRealtimeProblem(writer http.ResponseWriter, response generated.Response) {
@@ -372,7 +452,6 @@ func (service *Service) serveWebSocket(writer http.ResponseWriter, request *http
 	if err := buffered.Flush(); err != nil {
 		return
 	}
-	service.recordAcceptedAgentRequest(request.Context(), request)
 	service.runWebSocket(request.Context(), connection, buffered.Reader, request, actor, binding, filter, start)
 }
 
@@ -413,6 +492,7 @@ func (service *Service) runWebSocket(ctx context.Context, connection net.Conn, r
 	readErrors := make(chan error, 1)
 	go service.readWebSocket(reader, binding, acknowledgements, readErrors)
 	pending := make([]int64, 0, maxUnacked)
+	recordedAgentUse := false
 	lastHeartbeat := service.now()
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
@@ -465,6 +545,10 @@ func (service *Service) runWebSocket(ctx context.Context, connection net.Conn, r
 			cursor, _ := service.encodeRealtimeCursor(binding, record.Envelope.Sequence, record.Envelope.EventID)
 			if err := writeWebSocketJSON(connection, writeTimeout, realtimeFrame{Type: "event", Cursor: cursor, Event: record.Encoded}); err != nil {
 				return
+			}
+			if !recordedAgentUse && actor.Kind == "agent" {
+				service.recordAcceptedAgentRequest(ctx, request)
+				recordedAgentUse = true
 			}
 			current = record.Envelope.Sequence
 			lastDeliveredCursor = cursor
@@ -637,7 +721,6 @@ func (service *Service) serveSSE(writer http.ResponseWriter, request *http.Reque
 	writer.Header().Set("Connection", "keep-alive")
 	writer.Header().Set("X-Accel-Buffering", "no")
 	writer.Header().Set("X-Request-ID", rid)
-	service.recordAcceptedAgentRequest(request.Context(), request)
 	writer.WriteHeader(http.StatusOK)
 	readyCursor, _ := service.encodeRealtimeCursor(binding, start, "")
 	ready, _ := json.Marshal(realtimeFrame{Type: "ready", Cursor: readyCursor})
@@ -654,6 +737,7 @@ func (service *Service) serveSSE(writer http.ResponseWriter, request *http.Reque
 	terminal := make(chan streamMessage, 1)
 	go service.produceSSE(ctx, request, actor, binding, filter, start, messages, terminal)
 	slowFault := service.config.FaultInjection && request.Header.Get("X-Workplane-Fault") == "slow-realtime-writer"
+	recordedAgentUse := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -667,6 +751,10 @@ func (service *Service) serveSSE(writer http.ResponseWriter, request *http.Reque
 			}
 			if err := writeSSE(writer, flusher, service.writeTimeout(), message); err != nil {
 				return
+			}
+			if !recordedAgentUse && message.Kind == "domain-event" {
+				service.recordAcceptedAgentRequest(request.Context(), request)
+				recordedAgentUse = true
 			}
 		}
 	}

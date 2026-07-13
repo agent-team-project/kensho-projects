@@ -54,6 +54,15 @@ reads suppress an edge and its remote endpoint unless both projects are
 currently readable. Cross-organization ids receive `not_found` and cannot
 influence a local batch.
 
+Realtime delivery applies the same resource boundary before either transport
+emits or resumes an envelope. Every `work_item.*` envelope resolves its live
+work item and project and requires `work.read`; every `dependency.*` envelope
+validates its immutable endpoint identities, resolves both live work items and
+projects, and requires `dependency.read` on every involved project. Agent
+delivery additionally intersects current delegation, action scope, and every
+project restriction. Unknown, malformed, missing, or partially authorized
+resources fail closed, and a resource-denied scan does not update token usage.
+
 ## Durable evidence
 
 Migration `000008_m2_work_dependencies.up.sql` is additive and captures exact
@@ -70,3 +79,7 @@ atomic batch negatives and fault injection, current-authority denial, signed
 SSE resume, process restart, replay corruption without head advancement, and
 doctor detection of graph cycles and projection drift. Evidence is written to
 `target/agent-evidence/m2e/` and is snapshotted by the exact-head smoke gate.
+The shared realtime gate adds private work-item and cross-project dependency
+controls and denials through human and delegated-agent WebSocket plus agent SSE,
+including scoped/restricted reconnects, current-role changes, exact-envelope
+parity, and unchanged token usage on denied delivery.
