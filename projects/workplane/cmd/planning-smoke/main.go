@@ -49,24 +49,61 @@ type project struct {
 	Version int64  `json:"version"`
 }
 type deliverable struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
-	Required  bool   `json:"required"`
-	State     string `json:"state"`
-	Version   int64  `json:"version"`
+	ID                 string   `json:"id"`
+	OrganizationID     string   `json:"organization_id"`
+	ProjectID          string   `json:"project_id"`
+	Title              string   `json:"title"`
+	Description        string   `json:"description"`
+	Required           bool     `json:"required"`
+	Weight             int64    `json:"weight"`
+	State              string   `json:"state"`
+	AcceptanceCriteria []string `json:"acceptance_criteria"`
+	Version            int64    `json:"version"`
+	CreatedBy          string   `json:"created_by"`
 }
 type promotion struct {
 	Project      project       `json:"project"`
 	Deliverables []deliverable `json:"deliverables"`
 }
 type forecast struct {
-	ID            string  `json:"id"`
-	DeliverableID *string `json:"deliverable_id"`
-	Scope         string  `json:"scope"`
-	SupersedesID  *string `json:"supersedes_id"`
-	Current       bool    `json:"current"`
-	Stale         bool    `json:"stale"`
-	AttentionOnly bool    `json:"attention_only"`
+	ID             string   `json:"id"`
+	OrganizationID string   `json:"organization_id"`
+	ProjectID      string   `json:"project_id"`
+	DeliverableID  *string  `json:"deliverable_id"`
+	Scope          string   `json:"scope"`
+	P50At          string   `json:"p50_at"`
+	P90At          string   `json:"p90_at"`
+	ReviewAfter    string   `json:"review_after"`
+	Basis          string   `json:"basis"`
+	Assumptions    []string `json:"assumptions"`
+	ReasonCodes    []string `json:"reason_codes"`
+	Impact         string   `json:"impact"`
+	SupersedesID   *string  `json:"supersedes_id"`
+	CreatedBy      string   `json:"created_by"`
+	Current        bool     `json:"current"`
+	Stale          bool     `json:"stale"`
+	AttentionOnly  bool     `json:"attention_only"`
+}
+type target struct {
+	ID            string `json:"id"`
+	ProjectID     string `json:"project_id"`
+	TargetAt      string `json:"target_at"`
+	Reason        string `json:"reason"`
+	CreatedBy     string `json:"created_by"`
+	Current       bool   `json:"current"`
+	Missed        bool   `json:"missed"`
+	AttentionOnly bool   `json:"attention_only"`
+}
+type deadline struct {
+	ID            string `json:"id"`
+	ProjectID     string `json:"project_id"`
+	DeadlineAt    string `json:"deadline_at"`
+	Source        string `json:"source"`
+	Description   string `json:"description"`
+	CreatedBy     string `json:"created_by"`
+	Current       bool   `json:"current"`
+	Passed        bool   `json:"passed"`
+	AttentionOnly bool   `json:"attention_only"`
 }
 type counts struct{ Projects, Deliverables, Forecasts, Targets, Deadlines, Events, Outbox, Idempotency int }
 
@@ -266,6 +303,10 @@ func (run *runner) execute(ctx context.Context) error {
 		return fmt.Errorf("cross-actor revision attribution diverged: actor=%s creator=%s deliverable=%+v", revisionActor, stableCreator, revised)
 	}
 	run.checks = append(run.checks, "cross-actor-deliverable-revision-attribution-and-replay")
+	version, optionalDeliverable, err = run.publicDeliverableProjectionMatrix(ctx, projectID, agentProject.ID, revised, optionalDeliverable, version)
+	if err != nil {
+		return err
+	}
 	for index, boundary := range []string{"after-deliverable", "after-deliverable-event"} {
 		if err := run.faultNoResidue(ctx, run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/deliverables",
 			deliverableInput("Optional fault canary"), run.versionedHuman(fmt.Sprintf("m2c-create-del-fault-%02d", index), version), boundary); err != nil {
@@ -303,6 +344,7 @@ func (run *runner) execute(ctx context.Context) error {
 	run.write("m2c-deliverables.json", map[string]any{
 		"stable_id": deliverableID, "cross_actor_revision": "creator-stable-event-reviser-attributed",
 		"terminal_states": []string{"accepted", "waived", "cancelled"}, "protected_operations": []string{"update", "delete"},
+		"public_get_list": "two-revised-deliverables-exact-fields", "restricted_read": "forbidden-no-residue",
 	})
 	run.checks = append(run.checks, "deliverable-stable-revision-and-terminal-update-delete-protection")
 
@@ -343,6 +385,10 @@ func (run *runner) execute(ctx context.Context) error {
 		return fmt.Errorf("forecast history update did not fail closed: %v", err)
 	}
 	run.checks = append(run.checks, "deliverable-forecast-scope-current-and-immutable-history")
+	projectHistoryID, err := run.publicProjectForecastProjectionMatrix(ctx, agentProject.ID)
+	if err != nil {
+		return err
+	}
 
 	stateBeforeDates := "active"
 	for index, boundary := range []string{"after-target", "after-target-event"} {
@@ -352,13 +398,22 @@ func (run *runner) execute(ctx context.Context) error {
 			return err
 		}
 	}
-	target := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/target", map[string]any{
-		"target_at": time.Now().UTC().Add(-time.Hour).Format(time.RFC3339), "reason": "Intent remains visible after miss",
+	targetAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	const targetReason = "Intent remains visible after miss"
+	targetResponse := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/target", map[string]any{
+		"target_at": targetAt.Format(time.RFC3339), "reason": targetReason,
 	}, run.versionedHuman("m2c-target-past-0001", version))
-	if err := expect(target, http.StatusCreated, ""); err != nil {
+	if err := expect(targetResponse, http.StatusCreated, ""); err != nil {
 		return err
 	}
-	version = etagVersion(target)
+	var targetProjection target
+	if err := json.Unmarshal(targetResponse.Body, &targetProjection); err != nil {
+		return fmt.Errorf("decode public target projection: %w", err)
+	}
+	if err := run.assertTargetProjection(ctx, projectID, targetAt, targetReason, targetProjection); err != nil {
+		return err
+	}
+	version = etagVersion(targetResponse)
 	for index, boundary := range []string{"after-deadline", "after-deadline-event"} {
 		if err := run.faultNoResidue(ctx, run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/deadline", map[string]any{
 			"deadline_at": time.Now().UTC().Add(-30 * time.Minute).Format(time.RFC3339), "source": "contract", "description": "Fault rollback canary",
@@ -366,20 +421,40 @@ func (run *runner) execute(ctx context.Context) error {
 			return err
 		}
 	}
-	deadline := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/deadline", map[string]any{
-		"deadline_at": time.Now().UTC().Add(-30 * time.Minute).Format(time.RFC3339), "source": "contract", "description": "External constraint only",
+	deadlineAt := time.Now().UTC().Add(-30 * time.Minute).Truncate(time.Second)
+	const deadlineDescription = "External constraint only"
+	deadlineResponse := run.call(run.human, http.MethodPost, "/api/v1/projects/"+projectID+"/deadline", map[string]any{
+		"deadline_at": deadlineAt.Format(time.RFC3339), "source": "contract", "description": deadlineDescription,
 	}, run.versionedHuman("m2c-deadline-past-01", version))
-	if err := expect(deadline, http.StatusCreated, ""); err != nil {
+	if err := expect(deadlineResponse, http.StatusCreated, ""); err != nil {
 		return err
 	}
-	version = etagVersion(deadline)
+	var deadlineProjection deadline
+	if err := json.Unmarshal(deadlineResponse.Body, &deadlineProjection); err != nil {
+		return fmt.Errorf("decode public deadline projection: %w", err)
+	}
+	if err := run.assertDeadlineProjection(ctx, projectID, deadlineAt, deadlineDescription, deadlineProjection); err != nil {
+		return err
+	}
+	version = etagVersion(deadlineResponse)
 	read := run.call(run.human, http.MethodGet, "/api/v1/projects/"+projectID, nil, nil)
+	if err := expect(read, http.StatusOK, ""); err != nil {
+		return err
+	}
 	var current project
-	_ = json.Unmarshal(read.Body, &current)
+	if err := json.Unmarshal(read.Body, &current); err != nil {
+		return err
+	}
 	if current.State != stateBeforeDates || version != current.Version {
 		return fmt.Errorf("date command transitioned state or lost version: %+v version=%d", current, version)
 	}
-	run.write("m2c-forecasts.json", map[string]any{"history_count": len(forecasts), "current_per_scope": 1, "history_update": "denied", "target": "attention-only", "deadline_source": "contract", "state": current.State})
+	run.write("m2c-forecasts.json", map[string]any{
+		"deliverable_history_count": len(forecasts), "project_history_count": 2, "project_history_project_id": projectHistoryID,
+		"current_per_scope": 1, "history_update": "denied", "project_history_read": "exact-fields-and-restricted-deny",
+		"target_id": targetProjection.ID, "target_at": targetProjection.TargetAt, "target_missed": targetProjection.Missed,
+		"deadline_id": deadlineProjection.ID, "deadline_at": deadlineProjection.DeadlineAt, "deadline_source": deadlineProjection.Source,
+		"attention_only": targetProjection.AttentionOnly && deadlineProjection.AttentionOnly, "state": current.State,
+	})
 	run.checks = append(run.checks, "target-deadline-distinction-and-attention-only")
 
 	if err := run.concurrentForecastConflict(projectID, version); err != nil {
@@ -662,6 +737,115 @@ func (run *runner) concurrentDeliverableRevision(deliverableID string, version i
 	return concurrentWinner(results, http.StatusOK)
 }
 
+func (run *runner) publicDeliverableProjectionMatrix(
+	ctx context.Context,
+	projectID, restrictedToProjectID string,
+	first, second deliverable,
+	version int64,
+) (int64, deliverable, error) {
+	firstExpected := deliverable{
+		ID: first.ID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: "Cross-actor M2C revision", Description: "Observable planning-contract outcome",
+		Required: true, Weight: 1000, State: "ready",
+		AcceptanceCriteria: []string{"Exact-head smoke evidence passes"}, Version: 4, CreatedBy: humanID,
+	}
+	if err := assertDeliverableProjection("cross-actor revised write", first, firstExpected); err != nil {
+		return 0, deliverable{}, err
+	}
+
+	secondInput := deliverableInput("Revised optional public projection")
+	secondInput["required"] = false
+	secondInput["acceptance_criteria"] = []string{"Public get and list preserve the revision"}
+	revisedSecondResponse := run.call(run.human, http.MethodPatch, "/api/v1/deliverables/"+second.ID, secondInput,
+		run.versionedHuman("m2c-public-deliverable-revise-01", version))
+	if err := expect(revisedSecondResponse, http.StatusOK, ""); err != nil {
+		return 0, deliverable{}, fmt.Errorf("revise second public deliverable fixture: %w", err)
+	}
+	var revisedSecond deliverable
+	if err := json.Unmarshal(revisedSecondResponse.Body, &revisedSecond); err != nil {
+		return 0, deliverable{}, err
+	}
+	version = etagVersion(revisedSecondResponse)
+	secondExpected := deliverable{
+		ID: second.ID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: "Revised optional public projection", Description: "Observable planning-contract outcome",
+		Required: false, Weight: 1000, State: "ready",
+		AcceptanceCriteria: []string{"Public get and list preserve the revision"}, Version: 2, CreatedBy: humanID,
+	}
+	if err := assertDeliverableProjection("optional revised write", revisedSecond, secondExpected); err != nil {
+		return 0, deliverable{}, err
+	}
+
+	beforeReads := run.counts(ctx)
+	for _, expected := range []deliverable{firstExpected, secondExpected} {
+		response := run.call(run.human, http.MethodGet, "/api/v1/deliverables/"+expected.ID, nil, nil)
+		if err := expect(response, http.StatusOK, ""); err != nil {
+			return 0, deliverable{}, fmt.Errorf("public get deliverable %s: %w", expected.ID, err)
+		}
+		var actual deliverable
+		if err := json.Unmarshal(response.Body, &actual); err != nil {
+			return 0, deliverable{}, err
+		}
+		if err := assertDeliverableProjection("public get deliverable", actual, expected); err != nil {
+			return 0, deliverable{}, err
+		}
+	}
+	listedResponse := run.call(run.human, http.MethodGet, "/api/v1/projects/"+projectID+"/deliverables", nil, nil)
+	if err := expect(listedResponse, http.StatusOK, ""); err != nil {
+		return 0, deliverable{}, fmt.Errorf("public list deliverables: %w", err)
+	}
+	var listed []deliverable
+	if err := json.Unmarshal(listedResponse.Body, &listed); err != nil {
+		return 0, deliverable{}, err
+	}
+	if len(listed) != 2 {
+		return 0, deliverable{}, fmt.Errorf("public deliverable list length=%d want=2: %+v", len(listed), listed)
+	}
+	byID := make(map[string]deliverable, len(listed))
+	for _, item := range listed {
+		byID[item.ID] = item
+	}
+	for _, expected := range []deliverable{firstExpected, secondExpected} {
+		actual, ok := byID[expected.ID]
+		if !ok {
+			return 0, deliverable{}, fmt.Errorf("public deliverable list omitted stable id %s", expected.ID)
+		}
+		if err := assertDeliverableProjection("public list deliverable", actual, expected); err != nil {
+			return 0, deliverable{}, err
+		}
+	}
+
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[$1::uuid] WHERE token_prefix=$2`, restrictedToProjectID, agentToken[:16]); err != nil {
+		return 0, deliverable{}, err
+	}
+	deniedGet := run.call(run.agent, http.MethodGet, "/api/v1/deliverables/"+firstExpected.ID, nil, run.agentHeaders())
+	if err := expect(deniedGet, http.StatusForbidden, "forbidden"); err != nil {
+		return 0, deliverable{}, fmt.Errorf("restricted public get deliverable expected deny: %w", err)
+	}
+	deniedList := run.call(run.agent, http.MethodGet, "/api/v1/projects/"+projectID+"/deliverables", nil, run.agentHeaders())
+	if err := expect(deniedList, http.StatusForbidden, "forbidden"); err != nil {
+		return 0, deliverable{}, fmt.Errorf("restricted public list deliverables expected deny: %w", err)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return 0, deliverable{}, err
+	}
+	if afterReads := run.counts(ctx); afterReads != beforeReads {
+		return 0, deliverable{}, fmt.Errorf("public deliverable reads/denies left residue: before=%+v after=%+v", beforeReads, afterReads)
+	}
+	run.checks = append(run.checks, "public-deliverable-get-list-exact-projection-and-authority")
+	return version, secondExpected, nil
+}
+
+func assertDeliverableProjection(label string, actual, expected deliverable) error {
+	if actual.ID != expected.ID || actual.OrganizationID != expected.OrganizationID || actual.ProjectID != expected.ProjectID ||
+		actual.Title != expected.Title || actual.Description != expected.Description || actual.Required != expected.Required ||
+		actual.Weight != expected.Weight || actual.State != expected.State || !reflect.DeepEqual(actual.AcceptanceCriteria, expected.AcceptanceCriteria) ||
+		actual.Version != expected.Version || actual.CreatedBy != expected.CreatedBy {
+		return fmt.Errorf("%s mismatch: got=%+v want=%+v", label, actual, expected)
+	}
+	return nil
+}
+
 func (run *runner) crossDeliverableRevisionIdempotency(ctx context.Context, firstID, secondID string, version int64) (int64, error) {
 	const key = "m2c-cross-deliverable-revise-target-01"
 	input := deliverableInput("Leaf-target-bound M2C revision")
@@ -803,6 +987,187 @@ func (run *runner) concurrentForecastConflict(projectID string, version int64) e
 	sort.Ints(statuses)
 	if !reflect.DeepEqual(statuses, []int{http.StatusCreated, http.StatusConflict}) {
 		return fmt.Errorf("concurrent forecast statuses=%v", statuses)
+	}
+	return nil
+}
+
+func (run *runner) publicProjectForecastProjectionMatrix(ctx context.Context, restrictedToProjectID string) (string, error) {
+	createdProjectResponse := run.call(run.human, http.MethodPost, "/api/v1/orgs/"+organizationID+"/projects",
+		projectInput("Public project forecast history fixture"), merge(run.humanHeaders(), map[string]string{
+			"Idempotency-Key": "m2c-public-project-history-create-01",
+		}))
+	if err := expect(createdProjectResponse, http.StatusCreated, ""); err != nil {
+		return "", fmt.Errorf("create public project forecast fixture: %w", err)
+	}
+	var historyProject project
+	if err := json.Unmarshal(createdProjectResponse.Body, &historyProject); err != nil {
+		return "", err
+	}
+	if historyProject.ID == "" || historyProject.Version != 1 {
+		return "", fmt.Errorf("invalid public project forecast fixture: %+v", historyProject)
+	}
+
+	base := time.Now().UTC().Truncate(time.Second)
+	firstInput := map[string]any{
+		"p50_at": base.Add(24 * time.Hour).Format(time.RFC3339), "p90_at": base.Add(48 * time.Hour).Format(time.RFC3339),
+		"review_after": base.Add(2 * time.Hour).Format(time.RFC3339), "basis": "Initial public project forecast",
+		"assumptions": []string{"The projection remains project-scoped"}, "reason_codes": []string{"new-evidence"},
+		"impact": "Establish immutable history",
+	}
+	firstResponse := run.call(run.human, http.MethodPost, "/api/v1/projects/"+historyProject.ID+"/forecasts", firstInput,
+		run.versionedHuman("m2c-public-project-history-first-01", historyProject.Version))
+	if err := expect(firstResponse, http.StatusCreated, ""); err != nil {
+		return "", fmt.Errorf("create initial public project forecast: %w", err)
+	}
+	var first forecast
+	if err := json.Unmarshal(firstResponse.Body, &first); err != nil {
+		return "", err
+	}
+	firstExpected := forecast{
+		ID: first.ID, OrganizationID: organizationID, ProjectID: historyProject.ID, Scope: "project",
+		P50At: projectionTime(base.Add(24 * time.Hour)), P90At: projectionTime(base.Add(48 * time.Hour)), ReviewAfter: projectionTime(base.Add(2 * time.Hour)),
+		Basis: firstInput["basis"].(string), Assumptions: firstInput["assumptions"].([]string),
+		ReasonCodes: firstInput["reason_codes"].([]string), Impact: firstInput["impact"].(string),
+		CreatedBy: humanID, Current: true, Stale: false, AttentionOnly: true,
+	}
+	if first.ID == "" {
+		return "", errors.New("initial public project forecast omitted stable id")
+	}
+	if err := assertForecastProjection("initial project forecast write", first, firstExpected); err != nil {
+		return "", err
+	}
+
+	secondInput := map[string]any{
+		"p50_at": base.Add(36 * time.Hour).Format(time.RFC3339), "p90_at": base.Add(72 * time.Hour).Format(time.RFC3339),
+		"review_after": base.Add(-time.Hour).Format(time.RFC3339), "basis": "Superseding public project forecast",
+		"assumptions": []string{"The new evidence remains bounded"}, "reason_codes": []string{"estimate-correction"},
+		"impact": "Make stale attention explicit",
+	}
+	secondResponse := run.call(run.human, http.MethodPost, "/api/v1/projects/"+historyProject.ID+"/forecasts", secondInput,
+		run.versionedHuman("m2c-public-project-history-second-01", etagVersion(firstResponse)))
+	if err := expect(secondResponse, http.StatusCreated, ""); err != nil {
+		return "", fmt.Errorf("create superseding public project forecast: %w", err)
+	}
+	var second forecast
+	if err := json.Unmarshal(secondResponse.Body, &second); err != nil {
+		return "", err
+	}
+	secondExpected := forecast{
+		ID: second.ID, OrganizationID: organizationID, ProjectID: historyProject.ID, Scope: "project",
+		P50At: projectionTime(base.Add(36 * time.Hour)), P90At: projectionTime(base.Add(72 * time.Hour)), ReviewAfter: projectionTime(base.Add(-time.Hour)),
+		Basis: secondInput["basis"].(string), Assumptions: secondInput["assumptions"].([]string),
+		ReasonCodes: secondInput["reason_codes"].([]string), Impact: secondInput["impact"].(string), SupersedesID: &first.ID,
+		CreatedBy: humanID, Current: true, Stale: true, AttentionOnly: true,
+	}
+	if second.ID == "" || second.ID == first.ID {
+		return "", fmt.Errorf("superseding project forecast identity is not stable/distinct: first=%s second=%s", first.ID, second.ID)
+	}
+	if err := assertForecastProjection("superseding project forecast write", second, secondExpected); err != nil {
+		return "", err
+	}
+
+	beforeReads := run.counts(ctx)
+	historyResponse := run.call(run.human, http.MethodGet, "/api/v1/projects/"+historyProject.ID+"/forecasts", nil, nil)
+	if err := expect(historyResponse, http.StatusOK, ""); err != nil {
+		return "", fmt.Errorf("public project forecast history: %w", err)
+	}
+	var history []forecast
+	if err := json.Unmarshal(historyResponse.Body, &history); err != nil {
+		return "", err
+	}
+	if len(history) != 2 {
+		return "", fmt.Errorf("public project forecast history length=%d want=2: %+v", len(history), history)
+	}
+	byID := make(map[string]forecast, len(history))
+	current := 0
+	for _, item := range history {
+		byID[item.ID] = item
+		if item.Current {
+			current++
+		}
+	}
+	firstExpected.Current = false
+	firstExpected.Stale = false
+	if err := assertForecastProjection("initial immutable project forecast history", byID[first.ID], firstExpected); err != nil {
+		return "", err
+	}
+	if err := assertForecastProjection("superseding current project forecast history", byID[second.ID], secondExpected); err != nil {
+		return "", err
+	}
+	if current != 1 {
+		return "", fmt.Errorf("public project forecast history current rows=%d want=1", current)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE forecasts SET impact='tampered project history' WHERE id=$1`, first.ID); err == nil || !strings.Contains(err.Error(), "append-only") {
+		return "", fmt.Errorf("public project forecast history was not immutable: %v", err)
+	}
+
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[$1::uuid] WHERE token_prefix=$2`, restrictedToProjectID, agentToken[:16]); err != nil {
+		return "", err
+	}
+	denied := run.call(run.agent, http.MethodGet, "/api/v1/projects/"+historyProject.ID+"/forecasts", nil, run.agentHeaders())
+	if err := expect(denied, http.StatusForbidden, "forbidden"); err != nil {
+		return "", fmt.Errorf("restricted public project forecast history expected deny: %w", err)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return "", err
+	}
+	if afterReads := run.counts(ctx); afterReads != beforeReads {
+		return "", fmt.Errorf("public project forecast reads/denies left residue: before=%+v after=%+v", beforeReads, afterReads)
+	}
+	run.checks = append(run.checks, "public-project-forecast-history-exact-projection-and-authority")
+	return historyProject.ID, nil
+}
+
+func assertForecastProjection(label string, actual, expected forecast) error {
+	if actual.ID != expected.ID || actual.OrganizationID != expected.OrganizationID || actual.ProjectID != expected.ProjectID ||
+		!equalOptionalString(actual.DeliverableID, expected.DeliverableID) || actual.Scope != expected.Scope ||
+		actual.P50At != expected.P50At || actual.P90At != expected.P90At || actual.ReviewAfter != expected.ReviewAfter ||
+		actual.Basis != expected.Basis || !reflect.DeepEqual(actual.Assumptions, expected.Assumptions) ||
+		!reflect.DeepEqual(actual.ReasonCodes, expected.ReasonCodes) || actual.Impact != expected.Impact ||
+		!equalOptionalString(actual.SupersedesID, expected.SupersedesID) || actual.CreatedBy != expected.CreatedBy ||
+		actual.Current != expected.Current || actual.Stale != expected.Stale || actual.AttentionOnly != expected.AttentionOnly {
+		return fmt.Errorf("%s mismatch: got=%+v want=%+v", label, actual, expected)
+	}
+	return nil
+}
+
+func equalOptionalString(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+
+func (run *runner) assertTargetProjection(ctx context.Context, projectID string, targetAt time.Time, reason string, actual target) error {
+	var storedID string
+	var storedAt time.Time
+	if err := run.db.QueryRowContext(ctx, `SELECT head.target_id::text,item.target_at
+		FROM project_target_heads head JOIN project_targets item ON item.id=head.target_id WHERE head.project_id=$1`, projectID).
+		Scan(&storedID, &storedAt); err != nil {
+		return err
+	}
+	if actual.ID == "" || actual.ID != storedID || actual.ProjectID != projectID || actual.TargetAt != projectionTime(targetAt) ||
+		!storedAt.UTC().Equal(targetAt) || actual.Reason != reason || actual.CreatedBy != humanID ||
+		!actual.Current || !actual.Missed || !actual.AttentionOnly {
+		return fmt.Errorf("target-deadline-distinction-and-attention-only target mismatch: got=%+v stored_id=%s stored_at=%s want_at=%s",
+			actual, storedID, storedAt.UTC().Format(time.RFC3339Nano), targetAt.Format(time.RFC3339Nano))
+	}
+	return nil
+}
+
+func (run *runner) assertDeadlineProjection(ctx context.Context, projectID string, deadlineAt time.Time, description string, actual deadline) error {
+	var storedID string
+	var storedAt time.Time
+	if err := run.db.QueryRowContext(ctx, `SELECT head.deadline_id::text,item.deadline_at
+		FROM project_deadline_heads head JOIN project_deadlines item ON item.id=head.deadline_id WHERE head.project_id=$1`, projectID).
+		Scan(&storedID, &storedAt); err != nil {
+		return err
+	}
+	if actual.ID == "" || actual.ID != storedID || actual.ProjectID != projectID || actual.DeadlineAt != projectionTime(deadlineAt) ||
+		!storedAt.UTC().Equal(deadlineAt) || actual.Source != "contract" || actual.Description != description || actual.CreatedBy != humanID ||
+		!actual.Current || !actual.Passed || !actual.AttentionOnly {
+		return fmt.Errorf("target-deadline-distinction-and-attention-only deadline mismatch: got=%+v stored_id=%s stored_at=%s want_at=%s",
+			actual, storedID, storedAt.UTC().Format(time.RFC3339Nano), deadlineAt.Format(time.RFC3339Nano))
 	}
 	return nil
 }
@@ -1213,6 +1578,9 @@ func deliverableInput(title string) map[string]any {
 func forecastInput(p50Hours, p90Hours, reviewHours int) map[string]any {
 	now := time.Now().UTC().Truncate(time.Second)
 	return map[string]any{"p50_at": now.Add(time.Duration(p50Hours) * time.Hour).Format(time.RFC3339), "p90_at": now.Add(time.Duration(p90Hours) * time.Hour).Format(time.RFC3339), "review_after": now.Add(time.Duration(reviewHours) * time.Hour).Format(time.RFC3339), "basis": "Measured M2B throughput", "assumptions": []string{"No scope expansion"}, "reason_codes": []string{"new-evidence"}, "impact": "Quality and security gates remain unchanged"}
+}
+func projectionTime(value time.Time) string {
+	return value.UTC().Format("2006-01-02T15:04:05.000000Z")
 }
 func promotionInput() map[string]any {
 	return map[string]any{"decision": map[string]any{"question": "Promote to exploitation?", "choice": "Promote", "alternatives": []string{"Continue exploration"}, "rationale": "Decision criteria are met", "evidence": []string{"M2C contract"}, "consequences": []string{"Deliver the admitted outcome"}}, "residual_uncertainty": "Integration uncertainty remains visible", "priority_rationale": "This is the sole admitted product unit", "deliverables": []any{deliverableInput("M2C planning contract")}}
