@@ -912,6 +912,10 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 		}
 		snapshot.Deliverables = append(snapshot.Deliverables, item)
 	}
+	if err := deliverableRows.Err(); err != nil {
+		_ = deliverableRows.Close()
+		return fmt.Errorf("scan live deliverables: %w", err)
+	}
 	if err := deliverableRows.Close(); err != nil {
 		return err
 	}
@@ -927,6 +931,10 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 			return err
 		}
 		snapshot.Forecasts = append(snapshot.Forecasts, item)
+	}
+	if err := forecastRows.Err(); err != nil {
+		_ = forecastRows.Close()
+		return fmt.Errorf("scan live forecasts: %w", err)
 	}
 	if err := forecastRows.Close(); err != nil {
 		return err
@@ -947,6 +955,10 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 			item.DeliverableID = &deliverableID.String
 		}
 		snapshot.ForecastHeads = append(snapshot.ForecastHeads, item)
+	}
+	if err := headRows.Err(); err != nil {
+		_ = headRows.Close()
+		return fmt.Errorf("scan live forecast heads: %w", err)
 	}
 	if err := headRows.Close(); err != nil {
 		return err
@@ -970,6 +982,10 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 		item.TargetAt, item.CreatedAt = targetAt.UTC().Format(timeFormat), created.UTC().Format(timeFormat)
 		snapshot.Targets = append(snapshot.Targets, item)
 	}
+	if err := targetRows.Err(); err != nil {
+		_ = targetRows.Close()
+		return fmt.Errorf("scan live targets: %w", err)
+	}
 	if err := targetRows.Close(); err != nil {
 		return err
 	}
@@ -985,6 +1001,10 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 			return err
 		}
 		snapshot.TargetHeads = append(snapshot.TargetHeads, item)
+	}
+	if err := targetHeadRows.Err(); err != nil {
+		_ = targetHeadRows.Close()
+		return fmt.Errorf("scan live target heads: %w", err)
 	}
 	if err := targetHeadRows.Close(); err != nil {
 		return err
@@ -1008,6 +1028,10 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 		item.DeadlineAt, item.CreatedAt = deadlineAt.UTC().Format(timeFormat), created.UTC().Format(timeFormat)
 		snapshot.Deadlines = append(snapshot.Deadlines, item)
 	}
+	if err := deadlineRows.Err(); err != nil {
+		_ = deadlineRows.Close()
+		return fmt.Errorf("scan live deadlines: %w", err)
+	}
 	if err := deadlineRows.Close(); err != nil {
 		return err
 	}
@@ -1023,6 +1047,10 @@ func loadLivePlanning(ctx context.Context, queryer databaseQueryer, snapshot *pr
 			return err
 		}
 		snapshot.DeadlineHeads = append(snapshot.DeadlineHeads, item)
+	}
+	if err := deadlineHeadRows.Err(); err != nil {
+		_ = deadlineHeadRows.Close()
+		return fmt.Errorf("scan live deadline heads: %w", err)
 	}
 	if err := deadlineHeadRows.Close(); err != nil {
 		return err
@@ -1178,6 +1206,10 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 		findings = append(findings, IntegrityFinding{Code: "planning_projection_without_event", Aggregate: "project:" + projectID,
 			Detail: fmt.Sprintf("%s projection %s lacks its immutable event", kind, id)})
 	}
+	if err := planningOrphans.Err(); err != nil {
+		_ = planningOrphans.Close()
+		return nil, fmt.Errorf("scan planning/event coupling: %w", err)
+	}
 	if err := planningOrphans.Close(); err != nil {
 		return nil, err
 	}
@@ -1205,6 +1237,10 @@ func doctor(ctx context.Context, queryer databaseQueryer) ([]IntegrityFinding, e
 		}
 		findings = append(findings, IntegrityFinding{Code: "planning_head_mismatch", Aggregate: "project:" + projectID,
 			Detail: fmt.Sprintf("%s current head %s belongs to another scope", kind, id)})
+	}
+	if err := headMismatches.Err(); err != nil {
+		_ = headMismatches.Close()
+		return nil, fmt.Errorf("scan planning head integrity: %w", err)
 	}
 	if err := headMismatches.Close(); err != nil {
 		return nil, err
