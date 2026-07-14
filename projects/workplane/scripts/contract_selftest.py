@@ -60,6 +60,9 @@ def mutate_dirty_source(sandbox: Path) -> None:
     subprocess.run(["git", "init", "--quiet"], cwd=sandbox, check=True)
     subprocess.run(["git", "config", "user.name", "Workplane Mutation Runner"], cwd=sandbox, check=True)
     subprocess.run(["git", "config", "user.email", "mutation@workplane.invalid"], cwd=sandbox, check=True)
+    # A detached maintenance process can race TemporaryDirectory cleanup on CI.
+    subprocess.run(["git", "config", "gc.auto", "0"], cwd=sandbox, check=True)
+    subprocess.run(["git", "config", "maintenance.auto", "false"], cwd=sandbox, check=True)
     subprocess.run(["git", "add", "--all"], cwd=sandbox, check=True)
     subprocess.run(["git", "commit", "--quiet", "-m", "mutation baseline"], cwd=sandbox, check=True)
     path = sandbox / "README.md"

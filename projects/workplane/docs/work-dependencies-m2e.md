@@ -1,0 +1,103 @@
+# M2E fixed work and dependency spine
+
+M2E makes one bounded work plane observable through the public API. It does not
+add project termination, portfolio breadth, experiments, inboxes, comments,
+search, briefs, collaboration, or automation.
+
+## Public contract
+
+Humans and delegated agents use the same ten OpenAPI operations to create,
+read, update, assign, and transition work; add and remove typed dependencies;
+atomically transition a batch; and read a visible dependency graph. Required
+create members and presence-aware update members are checked before a durable
+write. Every mutation uses a target-bound idempotency key and every versioned
+mutation uses current optimistic concurrency state.
+
+The persisted lifecycle is closed:
+
+```text
+open --start--> in_progress --request_review--> in_review
+in_review --bounce--> in_progress
+in_review --accept--> done
+open|in_progress|in_review --cancel--> cancelled
+```
+
+Starting requires an active organization assignee. Review and acceptance
+require current project evidence. Bounce requires an open blocking finding on
+the linked deliverable. `done` and `cancelled` are terminal for work, but work
+acceptance does not accept its deliverable or terminate its project.
+
+`blocked` is a derived response field, never a persisted lifecycle state. An
+unfinished target of a `blocks` edge contributes `dependency`; an incomplete
+hard gate on the linked deliverable contributes `hard_gate`. `relates` and
+`caused-by` are descriptive and never participate in the blocking DAG.
+
+## Atomicity and graph safety
+
+Dependency edges are immutable, same-organization ordered pairs with one of
+three fixed kinds. The command layer takes an organization-scoped graph lock,
+checks direct and transitive cycles, and the PostgreSQL insert trigger takes
+the same lock and independently rejects a closing blocking edge. Concurrent
+inverse inserts therefore serialize to one committed edge and one stable
+`dependency_cycle` response.
+
+Batch transitions sort and lock every requested work item, validate the whole
+final-state set, and only then write rows, events, outbox records, and one
+idempotency result. Duplicate, missing, mixed-project, mixed-organization,
+stale, unauthorized, invalid, or injected-fault commands leave no partial
+state. A batch shares one command id while retaining one ordered domain event
+per affected work aggregate.
+
+Authorization is re-evaluated before stored idempotent success. Cross-project
+dependency mutations require current edit authority on both endpoints. Graph
+reads suppress an edge and its remote endpoint unless both projects are
+currently readable. Cross-organization ids receive `not_found` and cannot
+influence a local batch. A delegated request independently resolves the
+human principal's complete current policy. Direct agent project membership is
+optional; when present, its role is an additional narrowing cap and never an
+authority source. Opaque work-item routes authenticate token, organization,
+and action scope before organization-bound resource resolution, then collapse
+missing ids, project restriction, and current resource-policy denial to the
+same `not_found` shape before stored-result disclosure, mutation, or
+accepted-request token accounting.
+
+Realtime delivery applies the same resource boundary before either transport
+emits or resumes an envelope. Every `work_item.*` envelope resolves its live
+work item and project and requires `work.read`; every `dependency.*` envelope
+validates its immutable endpoint identities, resolves both live work items and
+projects, and requires `dependency.read` on every involved project. Agent
+delivery additionally applies the human's current policy, any explicit direct
+agent cap, action scope, and every project restriction. Unknown, malformed,
+missing, or partially authorized resources fail closed, and a resource-denied
+scan does not update token usage.
+
+## Durable evidence
+
+Migration `000008_m2_work_dependencies.up.sql` is additive and captures exact
+pre-upgrade counts and digests for accepted M2D aggregates, ledger rows,
+outbox rows, and consumer checkpoints before applying M2E DDL. Work and
+dependency events rebuild into shadow projections; the active replay head
+advances only when the rebuilt checksum matches live state. Replay requires
+the exact version-one member set for every work and dependency event, validates
+each member's canonical value and cross-member semantics, and rejects omitted,
+extra, inconsistent, or impossible payloads as `invalid_event_payload` without
+changing the active projection head. Before projection, replay indexes every
+work and dependency event by command id. A command containing any batch-marked
+lifecycle transition must contain only batch-marked lifecycle transitions with
+one shared organization, project, actor, principal, request, and timestamp and
+exactly one event per aggregate; replay rejects the whole group at its first
+event otherwise.
+
+`scripts/test_work.sh` runs the public contract against real PostgreSQL and the
+production API/outbox processes. It covers both actor kinds, fixed lifecycle
+and deliverable separation, hard-gate and dependency blocking, graph
+non-disclosure, direct/transitive/concurrent cycles, exact add/remove retries,
+atomic batch negatives and fault injection, current-authority denial, signed
+SSE resume, process restart, a seven-class canonical payload mutation matrix
+without head advancement, and doctor detection of graph cycles and projection
+drift. Evidence is written to
+`target/agent-evidence/m2e/` and is snapshotted by the exact-head smoke gate.
+The shared realtime gate adds private work-item and cross-project dependency
+controls and denials through human and delegated-agent WebSocket plus agent SSE,
+including scoped/restricted reconnects, current-role changes, exact-envelope
+parity, and unchanged token usage on denied delivery.

@@ -75,6 +75,11 @@ claim_families:
     behavior: immutable_evidence_gated_review_findings_effective_principal_independence_and_human_policy_waivers
     suites: [domain, property, permission, api_parity, persistence_replay_idempotency, realtime, recovery, security, evidence_manifest]
     begins_at: durable-core
+  - id: TRACE-WORK-DEPENDENCIES
+    authority: [DOMAIN:3.6, DOMAIN:8, DOMAIN:11, API:11, SECURITY:4-6, ISSUE:17]
+    behavior: fixed_work_lifecycle_derived_blocking_typed_dag_atomic_batches_current_authority_and_durable_replay
+    suites: [domain, property, permission, api_parity, persistence_replay_idempotency, realtime, recovery, security, evidence_manifest]
+    begins_at: durable-core
   - id: TRACE-OPERATIONS
     authority: [SPEC:5.8, ARCHITECTURE:deployment]
     behavior: offline_self_host_backup_restore_and_observable_recovery

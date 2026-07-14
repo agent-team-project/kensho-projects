@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -13,6 +14,42 @@ import (
 	"testing"
 	"time"
 )
+
+func TestReviewerWorkItemRealtimeFailsClosedWithoutProjectAuthorization(t *testing.T) {
+	t.Parallel()
+	service := &Service{}
+	actor := Actor{
+		ID:             "00000000-0000-4000-8000-000000000001",
+		Kind:           "human",
+		OrganizationID: "00000000-0000-4000-8000-000000000002",
+		Role:           "observer",
+	}
+	envelope := OutboxEnvelope{
+		OrganizationID:   actor.OrganizationID,
+		AggregateType:    "work_item",
+		AggregateID:      "00000000-0000-4000-8000-000000000003",
+		AggregateVersion: 1,
+		EventType:        "work_item.created",
+		Payload:          json.RawMessage(`{"work_item":{"id":"00000000-0000-4000-8000-000000000003","organization_id":"00000000-0000-4000-8000-000000000002","project_id":"00000000-0000-4000-8000-000000000004","version":1}}`),
+	}
+	if service.actorCanReadEnvelope(context.Background(), actor, envelope) {
+		t.Fatal("work-item event was authorized without resolving the item's concrete project visibility or role")
+	}
+}
+
+func TestRealtimeResourceResolverRejectsUnknownWorkEventFamilies(t *testing.T) {
+	t.Parallel()
+	service := &Service{}
+	actor := Actor{Kind: "human", OrganizationID: "00000000-0000-4000-8000-000000000002", Role: "owner"}
+	for _, envelope := range []OutboxEnvelope{
+		{OrganizationID: actor.OrganizationID, AggregateType: "work_item", AggregateID: "00000000-0000-4000-8000-000000000003", AggregateVersion: 1, EventType: "future.event"},
+		{OrganizationID: actor.OrganizationID, AggregateType: "future", AggregateID: "00000000-0000-4000-8000-000000000003", AggregateVersion: 1, EventType: "future.event"},
+	} {
+		if service.actorCanReadEnvelope(context.Background(), actor, envelope) {
+			t.Fatalf("unknown realtime resource was authorized: %+v", envelope)
+		}
+	}
+}
 
 func TestRealtimeCursorIsBoundAndExpires(t *testing.T) {
 	t.Parallel()

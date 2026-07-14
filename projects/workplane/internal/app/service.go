@@ -180,7 +180,8 @@ func (service *Service) bootstrap(ctx context.Context, seed BootstrapConfig) err
 			'project.reforecast','project.target.write','project.deadline.write','decision.record',
 			'deliverable.read','deliverable.edit','deliverable.submit','deliverable.cancel','deliverable.reforecast',
 			'evidence.read','evidence.create','evidence.supersede','review.request','review.verdict',
-			'finding.resolve','finding.withdraw','realtime.subscribe','event.subscribe'
+			'finding.resolve','finding.withdraw','work.read','work.edit','work.transition','work.assign',
+			'dependency.read','dependency.edit','realtime.subscribe','event.subscribe'
 		],NULL,$6,$7,$8)
 		ON CONFLICT (id) DO UPDATE SET token_prefix=EXCLUDED.token_prefix,token_hash=EXCLUDED.token_hash,
 			scopes=EXCLUDED.scopes,expires_at=EXCLUDED.expires_at,revoked_at=NULL`,
@@ -295,6 +296,14 @@ func (service *Service) authenticateSubscription(ctx context.Context, request ge
 	return service.authenticateActor(ctx, request, action, "", true)
 }
 
+// authenticateOpaqueResource validates the caller and action scope without an
+// existence-derived project restriction. Opaque resource handlers resolve the
+// organization-bound resource first, then apply the token's project allowlist
+// and current resource authority through one non-disclosing denial.
+func (service *Service) authenticateOpaqueResource(ctx context.Context, request generated.Request, action string) (Actor, generated.Response, bool) {
+	return service.authenticateActor(ctx, request, action, "", true)
+}
+
 func (service *Service) authenticateActor(ctx context.Context, request generated.Request, action, projectID string, subscription bool) (Actor, generated.Response, bool) {
 	rid := requestID()
 	hasSession := request.Security.SessionCookie != ""
@@ -392,16 +401,18 @@ func agentProjectRestrictionAllows(projectIDs map[string]bool, projectID string)
 func organizationRoleAllows(role, action string) bool {
 	return role == "owner" || role == "admin" || role == "member" ||
 		(role == "observer" && (action == "project.read" || action == "deliverable.read" ||
+			action == "work.read" || action == "dependency.read" ||
 			action == "realtime.subscribe" || action == "event.subscribe"))
 }
 
 func organizationVisibilityAllows(action string) bool {
-	return action == "project.read" || action == "deliverable.read" || action == "evidence.read"
+	return action == "project.read" || action == "deliverable.read" || action == "evidence.read" ||
+		action == "work.read" || action == "dependency.read"
 }
 
 func projectRoleAllows(role, action string) bool {
 	switch action {
-	case "project.read", "deliverable.read", "evidence.read":
+	case "project.read", "deliverable.read", "evidence.read", "work.read", "dependency.read":
 		return role == "owner" || role == "steward" || role == "contributor" ||
 			role == "reviewer" || role == "viewer" || role == "observer"
 	case "project.activate", "project.hold", "project.resume", "project.promote",
@@ -414,6 +425,10 @@ func projectRoleAllows(role, action string) bool {
 		return role == "owner" || role == "steward" || role == "contributor"
 	case "review.verdict", "finding.withdraw":
 		return role == "owner" || role == "steward" || role == "reviewer"
+	case "work.edit", "work.transition":
+		return role == "owner" || role == "steward" || role == "contributor"
+	case "work.assign", "dependency.edit":
+		return role == "owner" || role == "steward"
 	default:
 		return false
 	}

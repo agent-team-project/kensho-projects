@@ -1,0 +1,8 @@
+id: M2E-AUTHORITY-001
+requirement: M2E-AUTHORITY-001
+layer: system
+title: Human and scoped agent work responses effects and realtime envelopes match under human authority with an optional direct agent cap
+given: {actors: [human, delegated_agent], authority_dimensions: [organization, direct_agent_project_role, delegated_human_project_role, token_scope, project_restriction, expiry, revocation]}
+when: {command: scripts/test_work.sh|scripts/test_realtime.sh, retry_after_each_role_change: true, realtime_resume: [websocket, sse], denied_attempts: true}
+then: {result: pass, parity: field_for_field, stored_retry_reauthorized: true, direct_agent_membership_optional_narrowing_cap: true, opaque_existing_missing_denials_uniform: true, work_resource_resolved: true, dependency_endpoint_projects_resolved: true, denied_mutation_residue: 0, denied_last_used_updates: 0, private_disclosures: 0}
+evidence: [target/agent-evidence/m2e/m2e-parity-authority.json, target/agent-evidence/m2e/m2e-current-authority.json, target/agent-evidence/m2b/m2e-realtime-work-resource-authorization.json, target/agent-evidence/m2b/m2e-realtime-dependency-resource-authorization.json]

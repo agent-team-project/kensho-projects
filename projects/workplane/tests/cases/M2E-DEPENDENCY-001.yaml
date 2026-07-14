@@ -1,0 +1,8 @@
+id: M2E-DEPENDENCY-001
+requirement: M2E-DEPENDENCY-001
+layer: integration
+title: Typed same-organization cross-project graph rejects direct transitive and concurrent blocking cycles only
+given: {database: real_postgresql, kinds: [blocks, relates, caused-by], projects: [public, private]}
+when: {command: scripts/test_work.sh, cases: [cross_project, self_cycle, direct_cycle, transitive_cycle, inverse_concurrency, removal_unblocks]}
+then: {result: pass, blocking_graph: acyclic, nonblocking_false_positives: 0, private_disclosures: 0}
+evidence: [target/agent-evidence/m2e/m2e-dependencies.json, target/agent-evidence/m2e/m2e-concurrency.json]

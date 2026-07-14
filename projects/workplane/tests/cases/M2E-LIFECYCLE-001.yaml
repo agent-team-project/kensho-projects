@@ -1,0 +1,8 @@
+id: M2E-LIFECYCLE-001
+requirement: M2E-LIFECYCLE-001
+layer: system
+title: Fixed work lifecycle supports review bounce and cancellation while blocking remains derived
+given: {runtime: production_http, database: real_postgresql, persisted_states: [open, in_progress, in_review, done, cancelled]}
+when: {command: scripts/test_work.sh, transitions: [start, request_review, bounce, accept, cancel]}
+then: {result: pass, undeclared_edges: rejected, blocked_persisted: false, done_accepts_deliverable: false}
+evidence: [target/agent-evidence/m2e/m2e-lifecycle.json]
