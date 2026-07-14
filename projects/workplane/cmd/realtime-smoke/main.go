@@ -648,11 +648,12 @@ func (run *harness) workResourceAuthorityCanaries() error {
 		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, projectID, humanID); err != nil {
 		return err
 	}
-	// Give the agent an independent direct role so removing the delegated
-	// human's role proves that realtime authorization applies the intersection,
-	// rather than allowing the agent's direct role to widen its authority.
+	// Give the agent an explicit direct cap so removing the human's role proves
+	// that the cap cannot widen delegated authority. Observer is deliberately a
+	// valid work.read role, so the authorized controls also prove the cap is
+	// action-specific rather than a blanket membership requirement.
 	if _, err := run.db.Exec(`INSERT INTO project_memberships (project_id,principal_id,role,created_at)
-		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='owner'`, projectID, agentID); err != nil {
+		VALUES ($1,$2,'observer',CURRENT_TIMESTAMP) ON CONFLICT (project_id,principal_id) DO UPDATE SET role='observer'`, projectID, agentID); err != nil {
 		return err
 	}
 	if _, err := run.db.Exec(`UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
@@ -799,7 +800,9 @@ func (run *harness) workResourceAuthorityCanaries() error {
 		"authorized_event_ids": []string{eventIDOf(allowedEnvelope), eventIDOf(restoredEnvelope)},
 		"human_websocket":      "authorized-and-current-role-denied", "delegated_agent_websocket": "authorized-scope-role-restriction-denied",
 		"delegated_agent_sse": "authorized-scope-role-restriction-denied", "resume_reconnect": true,
-		"direct_agent_role_cannot_widen_delegate": true, "canonical_envelope_parity": true, "denied_last_used_unchanged": true,
+		"direct_agent_role_cannot_widen_delegate": true, "present_direct_agent_role_cannot_widen_human": true,
+		"present_direct_agent_observer_admits_work_read": true, "human_authority_denial_across_transports": true,
+		"canonical_envelope_parity": true, "denied_last_used_unchanged": true,
 	})
 }
 
@@ -830,6 +833,14 @@ func (run *harness) dependencyResourceAuthorityCanaries() error {
 	}
 	if _, err := run.db.Exec(`UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
+	}
+	var directMemberships int
+	if err := run.db.QueryRow(`SELECT count(*) FROM project_memberships
+		WHERE principal_id=$1 AND project_id IN ($2,$3)`, agentID, sourceProject, targetProject).Scan(&directMemberships); err != nil {
+		return err
+	}
+	if directMemberships != 0 {
+		return fmt.Errorf("cross-project dependency control requires absent direct agent memberships, found %d", directMemberships)
 	}
 
 	initialStreams, initial, err := run.openResourceStreams(resourceCursors{}, "dependency.added")
@@ -938,7 +949,7 @@ func (run *harness) dependencyResourceAuthorityCanaries() error {
 		"target_denied_event_id": eventIDOf(deniedEnvelope), "every_endpoint_project_authorized": true,
 		"human_websocket_target_denied": true, "delegated_agent_websocket_target_and_restriction_denied": true,
 		"delegated_agent_sse_target_and_restriction_denied": true, "resume_reconnect": true,
-		"canonical_envelope_parity": true, "denied_last_used_unchanged": true,
+		"absent_direct_agent_memberships_neutral": true, "canonical_envelope_parity": true, "denied_last_used_unchanged": true,
 	})
 }
 

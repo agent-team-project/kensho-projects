@@ -81,7 +81,12 @@ documented in release risk.
 - Tokens cannot create tokens or widen their own scope.
 - Revocation invalidates API requests, SSE, WebSocket, and future document
   grants immediately.
-- Scope and role are intersected; either may reduce authority.
+- For work-item and dependency operations, the delegated human's current
+  organization and project policy is authoritative. A direct agent project
+  membership is optional; when present, its role is an additional narrowing
+  cap and can never widen human authority.
+- Token action scopes and project restrictions are additional bounds; either
+  may reduce authority.
 - Project restrictions are a fail-closed allowlist. Zero project ids is
   organization-scoped; one or more ids permits only operations targeting a
   listed existing project and therefore denies organization-level project

@@ -53,18 +53,23 @@ dependency mutations require current edit authority on both endpoints. Graph
 reads suppress an edge and its remote endpoint unless both projects are
 currently readable. Cross-organization ids receive `not_found` and cannot
 influence a local batch. A delegated request independently resolves the
-agent's current direct project role and the human principal's current project
-role; both must authorize the operation before stored-result disclosure,
-mutation, or accepted-request token accounting.
+human principal's complete current policy. Direct agent project membership is
+optional; when present, its role is an additional narrowing cap and never an
+authority source. Opaque work-item routes authenticate token, organization,
+and action scope before organization-bound resource resolution, then collapse
+missing ids, project restriction, and current resource-policy denial to the
+same `not_found` shape before stored-result disclosure, mutation, or
+accepted-request token accounting.
 
 Realtime delivery applies the same resource boundary before either transport
 emits or resumes an envelope. Every `work_item.*` envelope resolves its live
 work item and project and requires `work.read`; every `dependency.*` envelope
 validates its immutable endpoint identities, resolves both live work items and
 projects, and requires `dependency.read` on every involved project. Agent
-delivery additionally intersects current delegation, action scope, and every
-project restriction. Unknown, malformed, missing, or partially authorized
-resources fail closed, and a resource-denied scan does not update token usage.
+delivery additionally applies the human's current policy, any explicit direct
+agent cap, action scope, and every project restriction. Unknown, malformed,
+missing, or partially authorized resources fail closed, and a resource-denied
+scan does not update token usage.
 
 ## Durable evidence
 

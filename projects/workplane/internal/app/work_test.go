@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"encoding/json"
 	"testing"
 
@@ -84,18 +85,36 @@ func TestWorkTransitionMetadataIsCommandSpecific(t *testing.T) {
 	}
 }
 
-func TestDelegatedWorkPolicyBuildsIndependentPrincipalActors(t *testing.T) {
+func TestDelegatedWorkPolicyUsesHumanAuthorityAndOptionalDirectCap(t *testing.T) {
 	principalID := "00000000-0000-4000-8000-000000000001"
 	actor := Actor{ID: "00000000-0000-4000-8000-000000000002", Kind: "agent", PrincipalID: &principalID,
 		OrganizationID: "00000000-0000-4000-8000-000000000010", Role: "member", DelegatedRole: "owner"}
-	direct, delegated, ok := independentWorkProjectActors(actor)
-	if !ok || direct.ID != actor.ID || direct.Kind != "human" || direct.Role != actor.Role || direct.PrincipalID != nil ||
-		delegated.ID != principalID || delegated.Kind != "human" || delegated.Role != actor.DelegatedRole || delegated.PrincipalID != nil ||
-		direct.OrganizationID != actor.OrganizationID || delegated.OrganizationID != actor.OrganizationID {
-		t.Fatalf("delegated policy actors are not independent: direct=%+v delegated=%+v ok=%v", direct, delegated, ok)
+	delegated, ok := delegatedWorkProjectActor(actor)
+	if !ok || delegated.ID != principalID || delegated.Kind != "human" || delegated.Role != actor.DelegatedRole ||
+		delegated.PrincipalID != nil || delegated.OrganizationID != actor.OrganizationID {
+		t.Fatalf("delegated policy actor is invalid: delegated=%+v ok=%v", delegated, ok)
 	}
-	if _, _, ok := independentWorkProjectActors(Actor{ID: actor.ID, Kind: "agent"}); ok {
+	if _, ok := delegatedWorkProjectActor(Actor{ID: actor.ID, Kind: "agent"}); ok {
 		t.Fatal("agent without a distinct delegated principal was accepted")
+	}
+
+	tests := []struct {
+		name   string
+		role   sql.NullString
+		action string
+		want   bool
+	}{
+		{"absent direct membership is neutral", sql.NullString{}, "work.edit", true},
+		{"present owner admits mutation", sql.NullString{String: "owner", Valid: true}, "work.edit", true},
+		{"present observer narrows mutation", sql.NullString{String: "observer", Valid: true}, "work.edit", false},
+		{"present observer admits read", sql.NullString{String: "observer", Valid: true}, "work.read", true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := explicitDirectWorkRoleAllows(test.role, test.action); got != test.want {
+				t.Fatalf("explicitDirectWorkRoleAllows(%+v, %q) = %t, want %t", test.role, test.action, got, test.want)
+			}
+		})
 	}
 }
 

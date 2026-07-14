@@ -296,6 +296,14 @@ func (service *Service) authenticateSubscription(ctx context.Context, request ge
 	return service.authenticateActor(ctx, request, action, "", true)
 }
 
+// authenticateOpaqueResource validates the caller and action scope without an
+// existence-derived project restriction. Opaque resource handlers resolve the
+// organization-bound resource first, then apply the token's project allowlist
+// and current resource authority through one non-disclosing denial.
+func (service *Service) authenticateOpaqueResource(ctx context.Context, request generated.Request, action string) (Actor, generated.Response, bool) {
+	return service.authenticateActor(ctx, request, action, "", true)
+}
+
 func (service *Service) authenticateActor(ctx context.Context, request generated.Request, action, projectID string, subscription bool) (Actor, generated.Response, bool) {
 	rid := requestID()
 	hasSession := request.Security.SessionCookie != ""

@@ -1077,6 +1077,31 @@ func (run *runner) assertAuthorityDenial(
 	return nil
 }
 
+func assertUniformOpaqueDenials(responses map[string]snapshot, secrets ...string) error {
+	var canonical map[string]any
+	for label, response := range responses {
+		if err := expect(response, http.StatusNotFound, "not_found"); err != nil {
+			return fmt.Errorf("%s opaque denial: %w", label, err)
+		}
+		var shape map[string]any
+		if err := json.Unmarshal(response.Body, &shape); err != nil {
+			return fmt.Errorf("%s opaque denial body: %w", label, err)
+		}
+		delete(shape, "request_id")
+		if canonical == nil {
+			canonical = shape
+		} else if !reflect.DeepEqual(shape, canonical) {
+			return fmt.Errorf("%s opaque denial shape differs: got=%+v want=%+v", label, shape, canonical)
+		}
+		for _, secret := range secrets {
+			if secret != "" && bytes.Contains(response.Body, []byte(secret)) {
+				return fmt.Errorf("%s opaque denial disclosed %q: %s", label, secret, response.Body)
+			}
+		}
+	}
+	return nil
+}
+
 func (run *runner) assertAuthorityControl(
 	ctx context.Context,
 	store *app.DurableStore,
@@ -1118,6 +1143,30 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	replay, err := store.Replay(ctx)
 	if err != nil || replay.LiveChecksum != replay.RebuiltChecksum {
 		return fmt.Errorf("establish authority projection head: report=%+v err=%v", replay, err)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE projects SET visibility='private' WHERE id=$1`, projectItem.ID); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, agentID); err != nil {
+		return err
+	}
+	beforeAbsentDirect, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	absentDirectRetry := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
+	if err := run.assertAuthorityControl(ctx, store, beforeAbsentDirect, absentDirectRetry, http.StatusCreated, stored, "absent direct agent membership"); err != nil {
+		return err
+	}
+	absentDirectRead := run.call(run.agent, http.MethodGet, "/api/v1/work-items/"+created.ID, nil, run.agentHeaders())
+	if responseErr := expect(absentDirectRead, http.StatusOK, ""); responseErr != nil || !bytes.Contains(absentDirectRead.Body, []byte(created.ID)) {
+		return fmt.Errorf("absent direct agent membership private read control failed: response_err=%v body=%s", responseErr, absentDirectRead.Body)
+	}
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP)
+		ON CONFLICT (project_id,principal_id) DO UPDATE SET role=EXCLUDED.role`, projectItem.ID, agentID); err != nil {
+		return err
 	}
 
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET scopes=array_remove(scopes,'work.edit') WHERE token_prefix=$1`, agentToken[:16]); err != nil {
@@ -1178,12 +1227,14 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 		return err
 	}
 
-	// Delegated humans and direct agents each receive the complete current project
-	// policy. The request succeeds only when both independently authorize it.
+	// The delegated human receives the complete current project policy. A present
+	// direct agent membership can only narrow that authority.
 	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
 		return err
 	}
-	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='observer' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, humanID); err != nil {
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'observer',CURRENT_TIMESTAMP)
+		ON CONFLICT (project_id,principal_id) DO UPDATE SET role=EXCLUDED.role`, projectItem.ID, humanID); err != nil {
 		return err
 	}
 	beforeHumanObserver, err := run.captureAuthorityState(ctx, store)
@@ -1222,6 +1273,14 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	if err != nil {
 		return err
 	}
+	policyUpdateKey := "m2e-opaque-policy-update"
+	policyUpdateBody := map[string]any{"description": "Opaque stored mutation control"}
+	policyUpdateVersion := policyWork.Version
+	policyUpdateStored := run.call(run.agent, http.MethodPatch, "/api/v1/work-items/"+policyWork.ID, policyUpdateBody,
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": policyUpdateKey, "If-Match": fmt.Sprintf(`"%d"`, policyUpdateVersion)}))
+	if err := expect(policyUpdateStored, http.StatusOK, ""); err != nil {
+		return fmt.Errorf("establish opaque stored mutation: %w", err)
+	}
 	if _, err := run.db.ExecContext(ctx, `DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, policyProject.ID, humanID); err != nil {
 		return err
 	}
@@ -1251,7 +1310,68 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	if err := run.assertAuthorityDenial(ctx, store, beforePrivateDenied, privateDenied, http.StatusNotFound, "not_found", policyWork.ID, "delegated human no-membership private project"); err != nil {
 		return err
 	}
+	missingWorkID := "00000000-0000-4000-8000-000000000088"
+	opaqueUpdateHeaders := func() map[string]string {
+		return merge(run.agentHeaders(), map[string]string{
+			"Idempotency-Key": policyUpdateKey,
+			"If-Match":        fmt.Sprintf(`"%d"`, policyUpdateVersion),
+		})
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[$1::uuid] WHERE token_prefix=$2`, projectItem.ID, agentToken[:16]); err != nil {
+		return err
+	}
+	beforeOpaque, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	var beforeOpaqueVersion int64
+	var beforeOpaqueDescription string
+	if err := run.db.QueryRowContext(ctx, `SELECT version,description FROM work_items WHERE id=$1`, policyWork.ID).
+		Scan(&beforeOpaqueVersion, &beforeOpaqueDescription); err != nil {
+		return err
+	}
+	opaqueDenials := map[string]snapshot{
+		"restricted existing GET":  run.call(run.agent, http.MethodGet, "/api/v1/work-items/"+policyWork.ID, nil, run.agentHeaders()),
+		"restricted missing GET":   run.call(run.agent, http.MethodGet, "/api/v1/work-items/"+missingWorkID, nil, run.agentHeaders()),
+		"restricted stored retry":  run.call(run.agent, http.MethodPatch, "/api/v1/work-items/"+policyWork.ID, policyUpdateBody, opaqueUpdateHeaders()),
+		"restricted missing retry": run.call(run.agent, http.MethodPatch, "/api/v1/work-items/"+missingWorkID, policyUpdateBody, opaqueUpdateHeaders()),
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[$1::uuid] WHERE token_prefix=$2`, policyProject.ID, agentToken[:16]); err != nil {
+		return err
+	}
+	opaqueDenials["human-denied existing GET"] = run.call(run.agent, http.MethodGet, "/api/v1/work-items/"+policyWork.ID, nil, run.agentHeaders())
+	opaqueDenials["human-denied missing GET"] = run.call(run.agent, http.MethodGet, "/api/v1/work-items/"+missingWorkID, nil, run.agentHeaders())
+	opaqueDenials["human-denied stored retry"] = run.call(run.agent, http.MethodPatch, "/api/v1/work-items/"+policyWork.ID, policyUpdateBody, opaqueUpdateHeaders())
+	opaqueDenials["human-denied missing retry"] = run.call(run.agent, http.MethodPatch, "/api/v1/work-items/"+missingWorkID, policyUpdateBody, opaqueUpdateHeaders())
+	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	afterOpaque, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	var afterOpaqueVersion int64
+	var afterOpaqueDescription string
+	if err := run.db.QueryRowContext(ctx, `SELECT version,description FROM work_items WHERE id=$1`, policyWork.ID).
+		Scan(&afterOpaqueVersion, &afterOpaqueDescription); err != nil {
+		return err
+	}
+	if err := assertUniformOpaqueDenials(opaqueDenials, policyWork.ID, missingWorkID); err != nil ||
+		afterOpaque.Counts != beforeOpaque.Counts || !afterOpaque.LastUsed.Equal(beforeOpaque.LastUsed) ||
+		!reflect.DeepEqual(afterOpaque.Head, beforeOpaque.Head) || afterOpaqueVersion != beforeOpaqueVersion || afterOpaqueDescription != beforeOpaqueDescription {
+		return fmt.Errorf("opaque GET/mutation denials diverged or left residue: denial_err=%v counts=%+v/%+v last_used=%s/%s head=%+v/%+v work=(%d,%q)/(%d,%q)",
+			err, beforeOpaque.Counts, afterOpaque.Counts, beforeOpaque.LastUsed, afterOpaque.LastUsed, beforeOpaque.Head, afterOpaque.Head,
+			beforeOpaqueVersion, beforeOpaqueDescription, afterOpaqueVersion, afterOpaqueDescription)
+	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	beforeOpaqueRestored, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	opaqueRestored := run.call(run.agent, http.MethodPatch, "/api/v1/work-items/"+policyWork.ID, policyUpdateBody, opaqueUpdateHeaders())
+	if err := run.assertAuthorityControl(ctx, store, beforeOpaqueRestored, opaqueRestored, http.StatusOK, policyUpdateStored, "restored opaque stored retry"); err != nil {
 		return err
 	}
 	beforeOrganizationOwner, err := run.captureAuthorityState(ctx, store)
@@ -1296,7 +1416,7 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	}
 	restored := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
 		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	if err := run.assertAuthorityControl(ctx, store, beforeRestored, restored, http.StatusCreated, stored, "intersected authority restoration"); err != nil {
+	if err := run.assertAuthorityControl(ctx, store, beforeRestored, restored, http.StatusCreated, stored, "optional direct cap restoration"); err != nil {
 		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE token_prefix=$1`, agentToken[:16]); err != nil {
@@ -1311,15 +1431,23 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	}
 	run.write("m2e-current-authority.json", map[string]any{"scope_revoked_retry": "forbidden", "last_used_unchanged_on_deny": true,
 		"authority_restored_exact_retry": true, "expired_retry": "unauthenticated", "project_restricted_retry": "forbidden",
+		"absent_direct_agent_membership_private_read":          "authorized-control",
+		"absent_direct_agent_membership_exact_retry":           true,
 		"delegated_human_observer_direct_agent_owner":          "forbidden-before-disclosure-accounting",
 		"delegated_human_creator_without_membership":           "exact-stored-control",
 		"delegated_human_org_visible_read_without_membership":  "authorized-control",
 		"delegated_human_no_membership_private":                "not-found-before-disclosure-accounting",
 		"delegated_human_org_owner_without_membership_private": "exact-stored-control",
 		"direct_agent_observer_delegated_human_creator":        "forbidden-before-disclosure-accounting",
+		"opaque_existing_missing_get_and_stored_retry":         "uniform-not-found",
+		"opaque_project_restriction_and_human_authority":       "uniform-not-found",
+		"opaque_denials_counts_head_last_used_unchanged":       true,
+		"opaque_denials_live_work_state_unchanged":             true,
+		"opaque_authority_restored_exact_stored_retry":         true,
 		"denied_retries_counts_head_and_last_used_unchanged":   true,
-		"intersected_policy_restored_exact_retry":              true, "revoked_token": "unauthenticated"})
-	run.checks = append(run.checks, "current-scope-project-and-independent-direct-agent-delegated-human-policy-before-idempotency")
+		"intersected_policy_restored_exact_retry":              true,
+		"optional_direct_cap_restored_exact_retry":             true, "revoked_token": "unauthenticated"})
+	run.checks = append(run.checks, "current-scope-project-optional-direct-cap-human-policy-and-opaque-id-denial-before-idempotency")
 	return nil
 }
 
