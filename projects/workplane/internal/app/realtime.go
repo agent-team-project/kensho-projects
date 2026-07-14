@@ -361,21 +361,8 @@ func (service *Service) actorCanReadEnvelope(ctx context.Context, actor Actor, e
 		if actor.Kind == "agent" && !agentProjectRestrictionAllows(actor.ProjectIDs, projectID) {
 			return false
 		}
-		if _, allowed := service.authorizeProject(ctx, actor, projectID, envelope.OrganizationID, binding.Action, "realtime-envelope"); !allowed {
+		if _, allowed := service.authorizeWorkProject(ctx, actor, projectID, envelope.OrganizationID, binding.Action, "realtime-envelope"); !allowed {
 			return false
-		}
-		// The ordinary project policy accepts the delegated principal's project
-		// membership when an agent has no direct membership. Realtime also checks
-		// that principal independently so a direct agent role can only narrow,
-		// never replace or widen, the human's current project authority.
-		if actor.Kind == "agent" {
-			if actor.PrincipalID == nil || *actor.PrincipalID == actor.ID {
-				return false
-			}
-			delegated := Actor{ID: *actor.PrincipalID, Kind: "human", OrganizationID: actor.OrganizationID, Role: actor.DelegatedRole}
-			if _, allowed := service.authorizeProject(ctx, delegated, projectID, envelope.OrganizationID, binding.Action, "realtime-delegation"); !allowed {
-				return false
-			}
 		}
 	}
 	return len(binding.ProjectIDs) > 0

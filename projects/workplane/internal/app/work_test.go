@@ -1,7 +1,6 @@
 package app
 
 import (
-	"database/sql"
 	"encoding/json"
 	"testing"
 
@@ -85,28 +84,18 @@ func TestWorkTransitionMetadataIsCommandSpecific(t *testing.T) {
 	}
 }
 
-func TestExplicitWorkProjectRolesAreAnIntersection(t *testing.T) {
-	role := func(value string) sql.NullString { return sql.NullString{String: value, Valid: true} }
-	tests := []struct {
-		name              string
-		action            string
-		direct, delegated sql.NullString
-		allowed           bool
-	}{
-		{"both owners mutate", "work.edit", role("owner"), role("owner"), true},
-		{"delegated observer caps direct owner", "work.edit", role("owner"), role("observer"), false},
-		{"direct observer caps delegated owner", "work.edit", role("observer"), role("owner"), false},
-		{"absent direct role inherits delegated owner", "work.edit", sql.NullString{}, role("owner"), true},
-		{"delegated observer caps absent direct role", "work.edit", sql.NullString{}, role("observer"), false},
-		{"both observers read", "work.read", role("observer"), role("observer"), true},
-		{"no explicit roles defer to shared policy", "work.edit", sql.NullString{}, sql.NullString{}, true},
+func TestDelegatedWorkPolicyBuildsIndependentPrincipalActors(t *testing.T) {
+	principalID := "00000000-0000-4000-8000-000000000001"
+	actor := Actor{ID: "00000000-0000-4000-8000-000000000002", Kind: "agent", PrincipalID: &principalID,
+		OrganizationID: "00000000-0000-4000-8000-000000000010", Role: "member", DelegatedRole: "owner"}
+	direct, delegated, ok := independentWorkProjectActors(actor)
+	if !ok || direct.ID != actor.ID || direct.Kind != "human" || direct.Role != actor.Role || direct.PrincipalID != nil ||
+		delegated.ID != principalID || delegated.Kind != "human" || delegated.Role != actor.DelegatedRole || delegated.PrincipalID != nil ||
+		direct.OrganizationID != actor.OrganizationID || delegated.OrganizationID != actor.OrganizationID {
+		t.Fatalf("delegated policy actors are not independent: direct=%+v delegated=%+v ok=%v", direct, delegated, ok)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := explicitWorkProjectRolesAllow(test.action, test.direct, test.delegated); got != test.allowed {
-				t.Fatalf("explicit role intersection = %v, want %v", got, test.allowed)
-			}
-		})
+	if _, _, ok := independentWorkProjectActors(Actor{ID: actor.ID, Kind: "agent"}); ok {
+		t.Fatal("agent without a distinct delegated principal was accepted")
 	}
 }
 

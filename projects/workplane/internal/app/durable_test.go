@@ -110,6 +110,10 @@ func TestCanonicalWorkEventPayloadRejectsEveryTamperClass(t *testing.T) {
 		mutate          func(map[string]any)
 	}{
 		{"nonprojected-reason", "work_item.created", created, func(value map[string]any) { value["reason"] = "tampered" }},
+		{"null-required-reason", "work_item.created", created, func(value map[string]any) { value["reason"] = nil }},
+		{"wrong-type-reason", "work_item.created", created, func(value map[string]any) { value["reason"] = false }},
+		{"null-required-batch", "work_item.created", created, func(value map[string]any) { value["batch"] = nil }},
+		{"wrong-type-batch", "work_item.created", created, func(value map[string]any) { value["batch"] = "false" }},
 		{"omitted-member", "work_item.created", created, func(value map[string]any) { delete(value, "reason") }},
 		{"extra-member", "work_item.created", created, func(value map[string]any) { value["unexpected"] = true }},
 		{"impossible-transition-metadata", "work_item.started", transition, func(value map[string]any) { value["finding_id"] = actorID }},
@@ -166,6 +170,21 @@ func TestCanonicalDependencyEventPayloadRejectsInconsistentRemoval(t *testing.T)
 		}
 		if _, err := decodeCanonicalDependencyEvent(tampered, eventType); err == nil {
 			t.Fatalf("inconsistent %s removal marker was accepted", eventType)
+		}
+	}
+	added := canonicalJSON(WorkDependencyEvent{Dependency: dependency, Source: source, Removed: false})
+	for name, replacement := range map[string]any{"null": nil, "string": "false"} {
+		var value map[string]any
+		if err := json.Unmarshal(added, &value); err != nil {
+			t.Fatal(err)
+		}
+		value["removed"] = replacement
+		tampered, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := decodeCanonicalDependencyEvent(tampered, "dependency.added"); err == nil {
+			t.Fatalf("dependency add accepted %s removed marker", name)
 		}
 	}
 }

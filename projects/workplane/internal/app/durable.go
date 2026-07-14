@@ -767,6 +767,51 @@ func requireJSONMembers(value []byte, expected ...string) (map[string]json.RawMe
 	return members, nil
 }
 
+func rawJSONKind(value json.RawMessage) string {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 {
+		return "invalid"
+	}
+	switch trimmed[0] {
+	case '"':
+		return "string"
+	case '{':
+		return "object"
+	case '[':
+		return "array"
+	case 't', 'f':
+		return "boolean"
+	case 'n':
+		return "null"
+	default:
+		return "number"
+	}
+}
+
+func requireJSONKind(members map[string]json.RawMessage, name string, expected ...string) error {
+	kind := rawJSONKind(members[name])
+	for _, candidate := range expected {
+		if kind == candidate {
+			return nil
+		}
+	}
+	return fmt.Errorf("payload member %q has type %s, expected %s", name, kind, strings.Join(expected, " or "))
+}
+
+func requireWorkItemRecordKinds(members map[string]json.RawMessage) error {
+	for _, name := range []string{"id", "organization_id", "project_id", "title", "description", "state", "priority", "created_by", "created_at", "updated_at"} {
+		if err := requireJSONKind(members, name, "string"); err != nil {
+			return err
+		}
+	}
+	for _, name := range []string{"deliverable_id", "assignee_id"} {
+		if err := requireJSONKind(members, name, "string", "null"); err != nil {
+			return err
+		}
+	}
+	return requireJSONKind(members, "version", "number")
+}
+
 func canonicalTimestamp(value string) bool {
 	parsed, err := time.Parse(timeFormat, value)
 	return err == nil && parsed.UTC().Format(timeFormat) == value
@@ -816,7 +861,22 @@ func decodeCanonicalWorkEvent(value []byte, eventType string) (WorkItemEvent, er
 	if err != nil {
 		return WorkItemEvent{}, err
 	}
-	if _, err := requireJSONMembers(members["work_item"], workItemRecordMembers...); err != nil {
+	for _, requirement := range []struct {
+		name     string
+		expected []string
+	}{
+		{"work_item", []string{"object"}}, {"command", []string{"string"}}, {"reason", []string{"string"}},
+		{"evidence_ids", []string{"array"}}, {"finding_id", []string{"string", "null"}}, {"batch", []string{"boolean"}},
+	} {
+		if err := requireJSONKind(members, requirement.name, requirement.expected...); err != nil {
+			return WorkItemEvent{}, err
+		}
+	}
+	workMembers, err := requireJSONMembers(members["work_item"], workItemRecordMembers...)
+	if err != nil {
+		return WorkItemEvent{}, fmt.Errorf("work_item: %w", err)
+	}
+	if err := requireWorkItemRecordKinds(workMembers); err != nil {
 		return WorkItemEvent{}, fmt.Errorf("work_item: %w", err)
 	}
 	var event WorkItemEvent
@@ -868,11 +928,34 @@ func decodeCanonicalDependencyEvent(value []byte, eventType string) (WorkDepende
 	if err != nil {
 		return WorkDependencyEvent{}, err
 	}
-	if _, err := requireJSONMembers(members["dependency"], "id", "organization_id", "source_work_item_id",
-		"target_work_item_id", "kind", "version", "created_by", "created_at"); err != nil {
+	for _, requirement := range []struct {
+		name     string
+		expected []string
+	}{
+		{"dependency", []string{"object"}}, {"source", []string{"object"}}, {"removed", []string{"boolean"}},
+	} {
+		if err := requireJSONKind(members, requirement.name, requirement.expected...); err != nil {
+			return WorkDependencyEvent{}, err
+		}
+	}
+	dependencyMembers, err := requireJSONMembers(members["dependency"], "id", "organization_id", "source_work_item_id",
+		"target_work_item_id", "kind", "version", "created_by", "created_at")
+	if err != nil {
 		return WorkDependencyEvent{}, fmt.Errorf("dependency: %w", err)
 	}
-	if _, err := requireJSONMembers(members["source"], workItemRecordMembers...); err != nil {
+	for _, name := range []string{"id", "organization_id", "source_work_item_id", "target_work_item_id", "kind", "created_by", "created_at"} {
+		if err := requireJSONKind(dependencyMembers, name, "string"); err != nil {
+			return WorkDependencyEvent{}, fmt.Errorf("dependency: %w", err)
+		}
+	}
+	if err := requireJSONKind(dependencyMembers, "version", "number"); err != nil {
+		return WorkDependencyEvent{}, fmt.Errorf("dependency: %w", err)
+	}
+	sourceMembers, err := requireJSONMembers(members["source"], workItemRecordMembers...)
+	if err != nil {
+		return WorkDependencyEvent{}, fmt.Errorf("source: %w", err)
+	}
+	if err := requireWorkItemRecordKinds(sourceMembers); err != nil {
 		return WorkDependencyEvent{}, fmt.Errorf("source: %w", err)
 	}
 	var event WorkDependencyEvent

@@ -110,6 +110,11 @@ type graph struct {
 	Dependencies []dependency `json:"dependencies"`
 }
 type counts struct{ Work, Dependencies, Events, Outbox, Idempotency int }
+type authorityState struct {
+	Counts   counts
+	LastUsed time.Time
+	Head     app.ReplayReport
+}
 type persistedState struct {
 	ProjectID, WorkItemID, DependencyProjectID, DependencySourceID string
 }
@@ -1035,6 +1040,65 @@ func (run *runner) batchAtomicity(ctx context.Context, projectItem project) erro
 	return nil
 }
 
+func (run *runner) captureAuthorityState(ctx context.Context, store *app.DurableStore) (authorityState, error) {
+	var state authorityState
+	state.Counts = run.counts(ctx)
+	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&state.LastUsed); err != nil {
+		return authorityState{}, err
+	}
+	head, err := store.ActiveProjectionHead(ctx)
+	if err != nil {
+		return authorityState{}, err
+	}
+	state.Head = head
+	return state, nil
+}
+
+func (run *runner) assertAuthorityDenial(
+	ctx context.Context,
+	store *app.DurableStore,
+	before authorityState,
+	response snapshot,
+	status int,
+	code string,
+	secret string,
+	label string,
+) error {
+	after, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	responseErr := expect(response, status, code)
+	if responseErr != nil || after.Counts != before.Counts || !after.LastUsed.Equal(before.LastUsed) ||
+		!reflect.DeepEqual(after.Head, before.Head) || bytes.Contains(response.Body, []byte(secret)) {
+		return fmt.Errorf("%s denial disclosed or mutated durable state: response_err=%v counts=%+v/%+v last_used=%s/%s head=%+v/%+v body=%s",
+			label, responseErr, before.Counts, after.Counts, before.LastUsed, after.LastUsed, before.Head, after.Head, response.Body)
+	}
+	return nil
+}
+
+func (run *runner) assertAuthorityControl(
+	ctx context.Context,
+	store *app.DurableStore,
+	before authorityState,
+	response snapshot,
+	status int,
+	stored snapshot,
+	label string,
+) error {
+	after, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	responseErr := expect(response, status, "")
+	if responseErr != nil || !bytes.Equal(response.Body, stored.Body) || after.Counts != before.Counts ||
+		!reflect.DeepEqual(after.Head, before.Head) {
+		return fmt.Errorf("%s control was not an exact mutation-free retry: response_err=%v counts=%+v/%+v head=%+v/%+v body=%s stored=%s",
+			label, responseErr, before.Counts, after.Counts, before.Head, after.Head, response.Body, stored.Body)
+	}
+	return nil
+}
+
 func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem project) error {
 	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
 		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP)
@@ -1046,45 +1110,54 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	if err != nil {
 		return err
 	}
-	var lastUsed time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&lastUsed); err != nil {
+	store, err := app.NewDurableStore(envOr("WORKPLANE_DATABASE_URL", "postgres://workplane:workplane-local-only@postgres:5432/workplane?sslmode=disable"))
+	if err != nil {
 		return err
 	}
+	defer store.Close()
+	replay, err := store.Replay(ctx)
+	if err != nil || replay.LiveChecksum != replay.RebuiltChecksum {
+		return fmt.Errorf("establish authority projection head: report=%+v err=%v", replay, err)
+	}
+
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET scopes=array_remove(scopes,'work.edit') WHERE token_prefix=$1`, agentToken[:16]); err != nil {
+		return err
+	}
+	beforeScope, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
 		return err
 	}
 	denied := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
 		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	var afterDenied time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterDenied); err != nil {
+	if err := run.assertAuthorityDenial(ctx, store, beforeScope, denied, http.StatusForbidden, "forbidden", created.ID, "scope"); err != nil {
 		return err
-	}
-	if err := expect(denied, http.StatusForbidden, "forbidden"); err != nil || !afterDenied.Equal(lastUsed) {
-		return fmt.Errorf("stored retry bypassed current scope or advanced usage: err=%v before=%s after=%s", err, lastUsed, afterDenied)
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET scopes=array_append(scopes,'work.edit') WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
 	}
+	beforeScopeControl, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
 	replayed := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
 		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	if err := expect(replayed, http.StatusCreated, ""); err != nil || !bytes.Equal(replayed.Body, stored.Body) || created.ID == "" {
-		return fmt.Errorf("restored authority did not return exact stored response: err=%v", err)
+	if created.ID == "" {
+		return errors.New("current-authority fixture did not create a work item")
 	}
-	var beforeExpired time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&beforeExpired); err != nil {
+	if err := run.assertAuthorityControl(ctx, store, beforeScopeControl, replayed, http.StatusCreated, stored, "restored scope"); err != nil {
 		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET expires_at=CURRENT_TIMESTAMP-interval '1 second' WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
 	}
-	expired := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
-		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	var afterExpired time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterExpired); err != nil {
+	beforeExpired, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
 		return err
 	}
-	if err := expect(expired, http.StatusUnauthorized, "unauthenticated"); err != nil || !afterExpired.Equal(beforeExpired) {
-		return fmt.Errorf("expired exact retry returned stored success or advanced usage: err=%v before=%s after=%s", err, beforeExpired, afterExpired)
+	expired := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
+	if err := run.assertAuthorityDenial(ctx, store, beforeExpired, expired, http.StatusUnauthorized, "unauthenticated", created.ID, "expired token"); err != nil {
+		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET expires_at=CURRENT_TIMESTAMP+interval '1 hour' WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
@@ -1092,59 +1165,139 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY['00000000-0000-4000-8000-000000000089'::uuid] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
 	}
-	restricted := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
-		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	var afterRestricted time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterRestricted); err != nil {
+	beforeRestricted, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
 		return err
 	}
+	restricted := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET project_ids=ARRAY[]::uuid[] WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
 	}
-	if err := expect(restricted, http.StatusForbidden, "forbidden"); err != nil || !afterRestricted.Equal(afterExpired) {
-		return fmt.Errorf("project-restricted exact retry returned stored success or advanced usage: err=%v before=%s after=%s", err, afterExpired, afterRestricted)
+	if err := run.assertAuthorityDenial(ctx, store, beforeRestricted, restricted, http.StatusForbidden, "forbidden", created.ID, "project restriction"); err != nil {
+		return err
 	}
-	humanRoleCounts := run.counts(ctx)
+
+	// Delegated humans and direct agents each receive the complete current project
+	// policy. The request succeeds only when both independently authorize it.
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='observer' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, humanID); err != nil {
+		return err
+	}
+	beforeHumanObserver, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
 		return err
 	}
 	humanRoleDenied := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
 		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	var afterHumanRoleDenied time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterHumanRoleDenied); err != nil {
+	if err := run.assertAuthorityDenial(ctx, store, beforeHumanObserver, humanRoleDenied, http.StatusForbidden, "forbidden", created.ID, "delegated human observer"); err != nil {
 		return err
 	}
-	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='owner' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, humanID); err != nil {
+	if _, err := run.db.ExecContext(ctx, `DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, humanID); err != nil {
 		return err
 	}
-	if err := expect(humanRoleDenied, http.StatusForbidden, "forbidden"); err != nil || !afterHumanRoleDenied.Equal(afterRestricted) ||
-		run.counts(ctx) != humanRoleCounts || bytes.Contains(humanRoleDenied.Body, []byte(created.ID)) {
-		return fmt.Errorf("delegated-human role did not cap direct agent owner before stored disclosure/accounting: err=%v before=%s after=%s counts=%+v/%+v body=%s",
-			err, afterRestricted, afterHumanRoleDenied, humanRoleCounts, run.counts(ctx), humanRoleDenied.Body)
+	beforeCreatorFallback, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
 	}
-	agentRoleCounts := run.counts(ctx)
+	creatorFallback := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
+	if err := run.assertAuthorityControl(ctx, store, beforeCreatorFallback, creatorFallback, http.StatusCreated, stored, "delegated human creator fallback"); err != nil {
+		return err
+	}
+
+	policyProject, err := run.createProject(run.agent, "m2e-independent-delegated-policy", run.agentHeaders())
+	if err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP)
+		ON CONFLICT (project_id,principal_id) DO UPDATE SET role=EXCLUDED.role`, policyProject.ID, humanID); err != nil {
+		return err
+	}
+	policyKey := "m2e-independent-delegated-policy-create"
+	policyWork, policyStored, err := run.createWork(run.agent, policyProject.ID, policyKey, "Delegated policy private secret", nil, run.agentHeaders())
+	if err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `DELETE FROM project_memberships WHERE project_id=$1 AND principal_id=$2`, policyProject.ID, humanID); err != nil {
+		return err
+	}
+	beforeOrganizationRead, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	organizationRead := run.call(run.agent, http.MethodGet, "/api/v1/work-items/"+policyWork.ID, nil, run.agentHeaders())
+	afterOrganizationRead, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	if responseErr := expect(organizationRead, http.StatusOK, ""); responseErr != nil || afterOrganizationRead.Counts != beforeOrganizationRead.Counts ||
+		!reflect.DeepEqual(afterOrganizationRead.Head, beforeOrganizationRead.Head) {
+		return fmt.Errorf("delegated human organization-visible read control failed: response_err=%v counts=%+v/%+v head=%+v/%+v",
+			responseErr, beforeOrganizationRead.Counts, afterOrganizationRead.Counts, beforeOrganizationRead.Head, afterOrganizationRead.Head)
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE projects SET visibility='private' WHERE id=$1`, policyProject.ID); err != nil {
+		return err
+	}
+	beforePrivateDenied, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	privateDenied := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+policyProject.ID+"/work-items", workInput("Delegated policy private secret", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": policyKey}))
+	if err := run.assertAuthorityDenial(ctx, store, beforePrivateDenied, privateDenied, http.StatusNotFound, "not_found", policyWork.ID, "delegated human no-membership private project"); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	beforeOrganizationOwner, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
+	organizationOwner := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+policyProject.ID+"/work-items", workInput("Delegated policy private secret", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": policyKey}))
+	if err := run.assertAuthorityControl(ctx, store, beforeOrganizationOwner, organizationOwner, http.StatusCreated, policyStored, "delegated human organization owner"); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='member' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+
 	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='observer' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, agentID); err != nil {
+		return err
+	}
+	beforeDirectObserver, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
 		return err
 	}
 	directRoleDenied := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
 		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	var afterDirectRoleDenied time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterDirectRoleDenied); err != nil {
+	if err := run.assertAuthorityDenial(ctx, store, beforeDirectObserver, directRoleDenied, http.StatusForbidden, "forbidden", created.ID, "direct agent observer"); err != nil {
 		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='owner' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, agentID); err != nil {
 		return err
 	}
-	if err := expect(directRoleDenied, http.StatusForbidden, "forbidden"); err != nil || !afterDirectRoleDenied.Equal(afterHumanRoleDenied) ||
-		run.counts(ctx) != agentRoleCounts || bytes.Contains(directRoleDenied.Body, []byte(created.ID)) {
-		return fmt.Errorf("direct-agent role did not cap delegated human owner before stored disclosure/accounting: err=%v before=%s after=%s counts=%+v/%+v body=%s",
-			err, afterHumanRoleDenied, afterDirectRoleDenied, agentRoleCounts, run.counts(ctx), directRoleDenied.Body)
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP)
+		ON CONFLICT (project_id,principal_id) DO UPDATE SET role=EXCLUDED.role`, projectItem.ID, humanID); err != nil {
+		return err
 	}
-	restoredCounts := run.counts(ctx)
+	if _, err := run.db.ExecContext(ctx, `UPDATE organization_memberships SET role='owner' WHERE organization_id=$1 AND principal_id=$2`, organizationID, humanID); err != nil {
+		return err
+	}
+	beforeRestored, err := run.captureAuthorityState(ctx, store)
+	if err != nil {
+		return err
+	}
 	restored := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
 		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	if err := expect(restored, http.StatusCreated, ""); err != nil || !bytes.Equal(restored.Body, stored.Body) || run.counts(ctx) != restoredCounts {
-		return fmt.Errorf("intersected current roles did not restore the exact stored result without mutation: err=%v counts=%+v/%+v", err, restoredCounts, run.counts(ctx))
+	if err := run.assertAuthorityControl(ctx, store, beforeRestored, restored, http.StatusCreated, stored, "intersected authority restoration"); err != nil {
+		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
@@ -1158,10 +1311,15 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	}
 	run.write("m2e-current-authority.json", map[string]any{"scope_revoked_retry": "forbidden", "last_used_unchanged_on_deny": true,
 		"authority_restored_exact_retry": true, "expired_retry": "unauthenticated", "project_restricted_retry": "forbidden",
-		"delegated_human_observer_direct_agent_owner": "forbidden-before-disclosure-accounting",
-		"direct_agent_observer_delegated_human_owner": "forbidden-before-disclosure-accounting",
-		"paired_role_denials_zero_residue":            true, "intersected_roles_restored_exact_retry": true, "revoked_token": "unauthenticated"})
-	run.checks = append(run.checks, "current-scope-project-direct-agent-and-delegated-human-intersection-before-idempotency")
+		"delegated_human_observer_direct_agent_owner":          "forbidden-before-disclosure-accounting",
+		"delegated_human_creator_without_membership":           "exact-stored-control",
+		"delegated_human_org_visible_read_without_membership":  "authorized-control",
+		"delegated_human_no_membership_private":                "not-found-before-disclosure-accounting",
+		"delegated_human_org_owner_without_membership_private": "exact-stored-control",
+		"direct_agent_observer_delegated_human_creator":        "forbidden-before-disclosure-accounting",
+		"denied_retries_counts_head_and_last_used_unchanged":   true,
+		"intersected_policy_restored_exact_retry":              true, "revoked_token": "unauthenticated"})
+	run.checks = append(run.checks, "current-scope-project-and-independent-direct-agent-delegated-human-policy-before-idempotency")
 	return nil
 }
 
@@ -1393,6 +1551,18 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 			payload["reason"] = "tampered"
 			return nil
 		}},
+		{"create-null-required-reason", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.created' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["reason"] = nil
+			return nil
+		}},
+		{"create-null-required-batch", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.created' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["batch"] = nil
+			return nil
+		}},
+		{"create-wrong-reason-type", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.created' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["reason"] = false
+			return nil
+		}},
 		{"update-omitted-reason", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.updated' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
 			delete(payload, "reason")
 			return nil
@@ -1414,6 +1584,14 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 				return err
 			}
 			payload["removed"] = true
+			return nil
+		}},
+		{"dependency-add-null-required-removal", `SELECT event_id,payload FROM domain_events WHERE event_type='dependency.added' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["removed"] = nil
+			return nil
+		}},
+		{"dependency-add-wrong-removal-type", `SELECT event_id,payload FROM domain_events WHERE event_type='dependency.added' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["removed"] = "false"
 			return nil
 		}},
 		{"dependency-remove-inconsistent-removal", `SELECT event_id,payload FROM domain_events WHERE event_type='dependency.removed' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {

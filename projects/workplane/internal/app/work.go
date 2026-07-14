@@ -185,43 +185,33 @@ func workItemView(ctx context.Context, queryer databaseQueryer, item WorkItemRec
 	return WorkItem{WorkItemRecord: item, Blocked: len(reasons) > 0, BlockingReasons: reasons}, nil
 }
 
-// authorizeWorkProjectWith applies delegated authority as an intersection. The
-// shared policy establishes organization, visibility, creator, and effective
-// project authority. Explicit project memberships then remain current-role
-// caps even when an organization owner/admin would otherwise take the shared
-// privileged shortcut: neither the agent nor the delegating human can replace
-// or widen the other's explicit project role.
+// authorizeWorkProjectWith evaluates the complete current project policy for
+// each delegated principal independently. Modeling each side as one principal
+// prevents the shared agent fallback from selecting only one membership while
+// retaining visibility, creator fallback, and organization privilege on both
+// sides. The delegated request is admitted only by their intersection.
 func (service *Service) authorizeWorkProjectWith(ctx context.Context, query projectAuthorizationQuery, actor Actor,
 	projectID, organizationID, action, rid string) (generated.Response, bool) {
-	if denied, ok := service.authorizeProjectWith(ctx, query, actor, projectID, organizationID, action, rid); !ok {
-		return denied, false
-	}
 	if actor.Kind != "agent" {
-		return generated.Response{}, true
+		return service.authorizeProjectWith(ctx, query, actor, projectID, organizationID, action, rid)
 	}
-	if actor.PrincipalID == nil || *actor.PrincipalID == actor.ID {
+	direct, delegated, ok := independentWorkProjectActors(actor)
+	if !ok {
 		return problem(http.StatusForbidden, "forbidden", "Action denied", "The delegated principal is not available.", rid), false
 	}
-	var directRole, delegatedRole sql.NullString
-	err := query.QueryRowContext(ctx, `SELECT
-		(SELECT membership.role FROM project_memberships membership
-			WHERE membership.project_id=project.id AND membership.principal_id=$3),
-		(SELECT membership.role FROM project_memberships membership
-			WHERE membership.project_id=project.id AND membership.principal_id=$4)
-		FROM projects project WHERE project.id=$1 AND project.organization_id=$2`,
-		projectID, organizationID, actor.ID, *actor.PrincipalID).Scan(&directRole, &delegatedRole)
-	if err != nil {
-		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
+	if denied, allowed := service.authorizeProjectWith(ctx, query, direct, projectID, organizationID, action, rid); !allowed {
+		return denied, false
 	}
-	if !explicitWorkProjectRolesAllow(action, directRole, delegatedRole) {
-		return problem(http.StatusForbidden, "forbidden", "Action denied", "The current delegated project roles do not permit this action.", rid), false
-	}
-	return generated.Response{}, true
+	return service.authorizeProjectWith(ctx, query, delegated, projectID, organizationID, action, rid)
 }
 
-func explicitWorkProjectRolesAllow(action string, directRole, delegatedRole sql.NullString) bool {
-	return (!directRole.Valid || projectRoleAllows(directRole.String, action)) &&
-		(!delegatedRole.Valid || projectRoleAllows(delegatedRole.String, action))
+func independentWorkProjectActors(actor Actor) (Actor, Actor, bool) {
+	if actor.Kind != "agent" || actor.PrincipalID == nil || *actor.PrincipalID == actor.ID {
+		return Actor{}, Actor{}, false
+	}
+	direct := Actor{ID: actor.ID, Kind: "human", OrganizationID: actor.OrganizationID, Role: actor.Role}
+	delegated := Actor{ID: *actor.PrincipalID, Kind: "human", OrganizationID: actor.OrganizationID, Role: actor.DelegatedRole}
+	return direct, delegated, true
 }
 
 func (service *Service) authorizeWorkProject(ctx context.Context, actor Actor, projectID, organizationID, action, rid string) (generated.Response, bool) {
