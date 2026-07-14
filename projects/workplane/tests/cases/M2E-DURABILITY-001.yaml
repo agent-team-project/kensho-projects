@@ -1,8 +1,8 @@
 id: M2E-DURABILITY-001
 requirement: M2E-DURABILITY-001
 layer: integration
-title: Work lifecycle assignment and graph events replay to the same checksum and canonical realtime envelopes
-given: {ledger: populated, outbox_consumers: [projection-v1, realtime-v1], transports: [websocket, sse]}
-when: {command: scripts/test_work.sh, actions: [replay, restart, resume, integrity_doctor]}
-then: {result: pass, live_rebuilt_checksum_equal: true, known_good_head_advanced: true, realtime_field_parity: true}
-evidence: [target/agent-evidence/m2e/m2e-durability-realtime.json]
+title: Strict canonical work and dependency events replay to the same checksum and canonical realtime envelopes
+given: {ledger: populated, outbox_consumers: [projection-v1, realtime-v1], transports: [websocket, sse], payload_members: exact}
+when: {command: scripts/test_work.sh, actions: [replay, restart, resume, integrity_doctor, mutate_create, mutate_update, mutate_assign, mutate_transition, mutate_batch, mutate_dependency_add, mutate_dependency_remove]}
+then: {result: pass, live_rebuilt_checksum_equal: true, known_good_head_advanced: true, every_tamper_failure: invalid_event_payload, failed_replay_head_unchanged: true, recovered_replay_exact: true, realtime_field_parity: true}
+evidence: [target/agent-evidence/m2e/m2e-durability-realtime.json, target/agent-evidence/m2e/m2e-replay-tamper.json]

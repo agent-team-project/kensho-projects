@@ -1877,7 +1877,7 @@ func (run *harness) seedWorkRecord(projectID, marker string) (realtimeWorkRecord
 		Title: marker, Description: "Realtime authorization resource canary", State: "open", Priority: "normal",
 		Version: 1, CreatedBy: humanID, CreatedAt: now.Format("2006-01-02T15:04:05.000000Z"), UpdatedAt: now.Format("2006-01-02T15:04:05.000000Z"),
 	}
-	payload := map[string]any{"work_item": item, "command": "create", "reason": "", "evidence_ids": []string{}, "finding_id": nil}
+	payload := map[string]any{"work_item": item, "command": "create", "reason": "", "evidence_ids": []string{}, "finding_id": nil, "batch": false}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return realtimeWorkRecord{}, nil, err

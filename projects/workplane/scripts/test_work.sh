@@ -59,6 +59,7 @@ for artifact in \
   m2e-cross-organization.json \
   m2e-realtime-resume.json \
   m2e-durability-realtime.json \
+  m2e-replay-tamper.json \
   m2e-upgrade-integrity.json \
   m2e-summary.json \
   m2e-restart-summary.json; do

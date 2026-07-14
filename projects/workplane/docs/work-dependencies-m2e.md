@@ -52,7 +52,10 @@ Authorization is re-evaluated before stored idempotent success. Cross-project
 dependency mutations require current edit authority on both endpoints. Graph
 reads suppress an edge and its remote endpoint unless both projects are
 currently readable. Cross-organization ids receive `not_found` and cannot
-influence a local batch.
+influence a local batch. A delegated request independently resolves the
+agent's current direct project role and the human principal's current project
+role; both must authorize the operation before stored-result disclosure,
+mutation, or accepted-request token accounting.
 
 Realtime delivery applies the same resource boundary before either transport
 emits or resumes an envelope. Every `work_item.*` envelope resolves its live
@@ -69,15 +72,20 @@ Migration `000008_m2_work_dependencies.up.sql` is additive and captures exact
 pre-upgrade counts and digests for accepted M2D aggregates, ledger rows,
 outbox rows, and consumer checkpoints before applying M2E DDL. Work and
 dependency events rebuild into shadow projections; the active replay head
-advances only when the rebuilt checksum matches live state.
+advances only when the rebuilt checksum matches live state. Replay requires
+the exact version-one member set for every work and dependency event, validates
+each member's canonical value and cross-member semantics, and rejects omitted,
+extra, inconsistent, or impossible payloads as `invalid_event_payload` without
+changing the active projection head.
 
 `scripts/test_work.sh` runs the public contract against real PostgreSQL and the
 production API/outbox processes. It covers both actor kinds, fixed lifecycle
 and deliverable separation, hard-gate and dependency blocking, graph
 non-disclosure, direct/transitive/concurrent cycles, exact add/remove retries,
 atomic batch negatives and fault injection, current-authority denial, signed
-SSE resume, process restart, replay corruption without head advancement, and
-doctor detection of graph cycles and projection drift. Evidence is written to
+SSE resume, process restart, a seven-class canonical payload mutation matrix
+without head advancement, and doctor detection of graph cycles and projection
+drift. Evidence is written to
 `target/agent-evidence/m2e/` and is snapshotted by the exact-head smoke gate.
 The shared realtime gate adds private work-item and cross-project dependency
 controls and denials through human and delegated-agent WebSocket plus agent SSE,

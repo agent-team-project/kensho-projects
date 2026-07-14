@@ -1025,6 +1025,11 @@ func (run *runner) batchAtomicity(ctx context.Context, projectItem project) erro
 }
 
 func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem project) error {
+	if _, err := run.db.ExecContext(ctx, `INSERT INTO project_memberships (project_id,principal_id,role,created_at)
+		VALUES ($1,$2,'owner',CURRENT_TIMESTAMP)
+		ON CONFLICT (project_id,principal_id) DO UPDATE SET role=EXCLUDED.role`, projectItem.ID, agentID); err != nil {
+		return err
+	}
 	key := "m2e-current-authority-create"
 	created, stored, err := run.createWork(run.agent, projectItem.ID, key, "Current authority retry", nil, run.agentHeaders())
 	if err != nil {
@@ -1088,20 +1093,47 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	if err := expect(restricted, http.StatusForbidden, "forbidden"); err != nil || !afterRestricted.Equal(afterExpired) {
 		return fmt.Errorf("project-restricted exact retry returned stored success or advanced usage: err=%v before=%s after=%s", err, afterExpired, afterRestricted)
 	}
+	humanRoleCounts := run.counts(ctx)
 	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='observer' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, humanID); err != nil {
 		return err
 	}
-	roleDenied := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
+	humanRoleDenied := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
 		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
-	var afterRoleDenied time.Time
-	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterRoleDenied); err != nil {
+	var afterHumanRoleDenied time.Time
+	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterHumanRoleDenied); err != nil {
 		return err
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='owner' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, humanID); err != nil {
 		return err
 	}
-	if err := expect(roleDenied, http.StatusForbidden, "forbidden"); err != nil || !afterRoleDenied.Equal(afterRestricted) {
-		return fmt.Errorf("current-role exact retry returned stored success or advanced usage: err=%v before=%s after=%s", err, afterRestricted, afterRoleDenied)
+	if err := expect(humanRoleDenied, http.StatusForbidden, "forbidden"); err != nil || !afterHumanRoleDenied.Equal(afterRestricted) ||
+		run.counts(ctx) != humanRoleCounts || bytes.Contains(humanRoleDenied.Body, []byte(created.ID)) {
+		return fmt.Errorf("delegated-human role did not cap direct agent owner before stored disclosure/accounting: err=%v before=%s after=%s counts=%+v/%+v body=%s",
+			err, afterRestricted, afterHumanRoleDenied, humanRoleCounts, run.counts(ctx), humanRoleDenied.Body)
+	}
+	agentRoleCounts := run.counts(ctx)
+	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='observer' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, agentID); err != nil {
+		return err
+	}
+	directRoleDenied := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
+	var afterDirectRoleDenied time.Time
+	if err := run.db.QueryRowContext(ctx, `SELECT last_used_at FROM agent_tokens WHERE token_prefix=$1`, agentToken[:16]).Scan(&afterDirectRoleDenied); err != nil {
+		return err
+	}
+	if _, err := run.db.ExecContext(ctx, `UPDATE project_memberships SET role='owner' WHERE project_id=$1 AND principal_id=$2`, projectItem.ID, agentID); err != nil {
+		return err
+	}
+	if err := expect(directRoleDenied, http.StatusForbidden, "forbidden"); err != nil || !afterDirectRoleDenied.Equal(afterHumanRoleDenied) ||
+		run.counts(ctx) != agentRoleCounts || bytes.Contains(directRoleDenied.Body, []byte(created.ID)) {
+		return fmt.Errorf("direct-agent role did not cap delegated human owner before stored disclosure/accounting: err=%v before=%s after=%s counts=%+v/%+v body=%s",
+			err, afterHumanRoleDenied, afterDirectRoleDenied, agentRoleCounts, run.counts(ctx), directRoleDenied.Body)
+	}
+	restoredCounts := run.counts(ctx)
+	restored := run.call(run.agent, http.MethodPost, "/api/v1/projects/"+projectItem.ID+"/work-items", workInput("Current authority retry", nil),
+		merge(run.agentHeaders(), map[string]string{"Idempotency-Key": key}))
+	if err := expect(restored, http.StatusCreated, ""); err != nil || !bytes.Equal(restored.Body, stored.Body) || run.counts(ctx) != restoredCounts {
+		return fmt.Errorf("intersected current roles did not restore the exact stored result without mutation: err=%v counts=%+v/%+v", err, restoredCounts, run.counts(ctx))
 	}
 	if _, err := run.db.ExecContext(ctx, `UPDATE agent_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE token_prefix=$1`, agentToken[:16]); err != nil {
 		return err
@@ -1115,8 +1147,10 @@ func (run *runner) currentAuthorityRetry(ctx context.Context, projectItem projec
 	}
 	run.write("m2e-current-authority.json", map[string]any{"scope_revoked_retry": "forbidden", "last_used_unchanged_on_deny": true,
 		"authority_restored_exact_retry": true, "expired_retry": "unauthenticated", "project_restricted_retry": "forbidden",
-		"current_role_retry": "forbidden", "revoked_token": "unauthenticated"})
-	run.checks = append(run.checks, "current-scope-revocation-and-token-revocation-before-idempotency")
+		"delegated_human_observer_direct_agent_owner": "forbidden-before-disclosure-accounting",
+		"direct_agent_observer_delegated_human_owner": "forbidden-before-disclosure-accounting",
+		"paired_role_denials_zero_residue":            true, "intersected_roles_restored_exact_retry": true, "revoked_token": "unauthenticated"})
+	run.checks = append(run.checks, "current-scope-project-direct-agent-and-delegated-human-intersection-before-idempotency")
 	return nil
 }
 
@@ -1332,42 +1366,93 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var eventID string
-	var original []byte
-	if err := run.db.QueryRowContext(ctx, `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.created' ORDER BY sequence LIMIT 1`).Scan(&eventID, &original); err != nil {
-		return err
+	objectMember := func(payload map[string]any, name string) (map[string]any, error) {
+		value, ok := payload[name].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("payload member %s is not an object", name)
+		}
+		return value, nil
 	}
-	var corrupt map[string]any
-	if err := json.Unmarshal(original, &corrupt); err != nil {
-		return err
+	tamperCases := []struct {
+		Name   string
+		Query  string
+		Mutate func(map[string]any) error
+	}{
+		{"create-nonprojected-reason", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.created' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["reason"] = "tampered"
+			return nil
+		}},
+		{"update-omitted-reason", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.updated' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			delete(payload, "reason")
+			return nil
+		}},
+		{"assign-extra-member", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.assigned' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["unexpected"] = true
+			return nil
+		}},
+		{"transition-impossible-finding", `SELECT event_id,payload FROM domain_events WHERE event_type='work_item.started' AND payload->>'batch'='false' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["finding_id"] = humanID
+			return nil
+		}},
+		{"batch-inconsistent-marker", `SELECT event_id,payload FROM domain_events WHERE event_type IN ('work_item.started','work_item.review_requested','work_item.bounced','work_item.accepted','work_item.cancelled') AND payload->>'batch'='true' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			payload["batch"] = false
+			return nil
+		}},
+		{"dependency-add-inconsistent-removal", `SELECT event_id,payload FROM domain_events WHERE event_type='dependency.added' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			if _, err := objectMember(payload, "dependency"); err != nil {
+				return err
+			}
+			payload["removed"] = true
+			return nil
+		}},
+		{"dependency-remove-inconsistent-removal", `SELECT event_id,payload FROM domain_events WHERE event_type='dependency.removed' ORDER BY sequence LIMIT 1`, func(payload map[string]any) error {
+			if _, err := objectMember(payload, "source"); err != nil {
+				return err
+			}
+			payload["removed"] = false
+			return nil
+		}},
 	}
-	workPayload, ok := corrupt["work_item"].(map[string]any)
-	if !ok {
-		return errors.New("work creation payload lacks work_item")
-	}
-	workPayload["state"] = "invalid"
-	corruptJSON, err := json.Marshal(corrupt)
-	if err != nil {
-		return err
-	}
-	if err := run.replaceEventPayload(ctx, eventID, corruptJSON); err != nil {
-		return err
-	}
-	_, replayErr := store.Replay(ctx)
-	var replayFailure *app.ReplayFailure
-	if !errors.As(replayErr, &replayFailure) || replayFailure.Code != "invalid_event_payload" {
-		_ = run.replaceEventPayload(ctx, eventID, original)
-		return fmt.Errorf("replay accepted corrupt work event: failure=%+v err=%v", replayFailure, replayErr)
-	}
-	headAfterFailure, err := store.ActiveProjectionHead(ctx)
-	if err != nil {
-		return err
-	}
-	if headAfterFailure.RunID != headBefore.RunID || headAfterFailure.LiveChecksum != headBefore.LiveChecksum {
-		return fmt.Errorf("failed replay advanced active head: before=%+v after=%+v", headBefore, headAfterFailure)
-	}
-	if err := run.replaceEventPayload(ctx, eventID, original); err != nil {
-		return err
+	tamperProofs := make(map[string]any, len(tamperCases))
+	for _, tamper := range tamperCases {
+		var eventID string
+		var original []byte
+		if err := run.db.QueryRowContext(ctx, tamper.Query).Scan(&eventID, &original); err != nil {
+			return fmt.Errorf("load %s event: %w", tamper.Name, err)
+		}
+		var corrupt map[string]any
+		if err := json.Unmarshal(original, &corrupt); err != nil {
+			return err
+		}
+		if err := tamper.Mutate(corrupt); err != nil {
+			return fmt.Errorf("mutate %s: %w", tamper.Name, err)
+		}
+		corruptJSON, err := json.Marshal(corrupt)
+		if err != nil {
+			return err
+		}
+		if err := run.replaceEventPayload(ctx, eventID, corruptJSON); err != nil {
+			return err
+		}
+		_, replayErr := store.Replay(ctx)
+		var replayFailure *app.ReplayFailure
+		if !errors.As(replayErr, &replayFailure) || replayFailure.Code != "invalid_event_payload" {
+			_ = run.replaceEventPayload(ctx, eventID, original)
+			return fmt.Errorf("replay accepted %s payload tamper: failure=%+v err=%v", tamper.Name, replayFailure, replayErr)
+		}
+		headAfterFailure, err := store.ActiveProjectionHead(ctx)
+		if err != nil {
+			_ = run.replaceEventPayload(ctx, eventID, original)
+			return err
+		}
+		if !reflect.DeepEqual(headAfterFailure, headBefore) {
+			_ = run.replaceEventPayload(ctx, eventID, original)
+			return fmt.Errorf("%s failed replay changed active head: before=%+v after=%+v", tamper.Name, headBefore, headAfterFailure)
+		}
+		if err := run.replaceEventPayload(ctx, eventID, original); err != nil {
+			return err
+		}
+		tamperProofs[tamper.Name] = map[string]any{"failure": replayFailure, "active_head_unchanged": true}
 	}
 	recovered, err := store.Replay(ctx)
 	if err != nil || recovered.LiveChecksum != recovered.RebuiltChecksum {
@@ -1379,8 +1464,10 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 	}
 	run.write("m2e-upgrade-integrity.json", map[string]any{"restart_work_status": workResponse.Status, "restart_graph_status": graphResponse.Status,
 		"healthy_replay": healthy, "dependency_cycle_detected": true, "projection_drift_detected": true,
-		"corrupt_event_failure": replayFailure, "failed_replay_head_unchanged": true, "recovered_replay": recovered, "final_doctor": finalFindings})
-	run.checks = append(run.checks, "restart-persistence-replay-failure-head-integrity-and-doctor-corruption")
+		"canonical_payload_tamper_proofs": tamperProofs, "failed_replay_head_unchanged": true, "recovered_replay": recovered, "final_doctor": finalFindings})
+	run.write("m2e-replay-tamper.json", map[string]any{"baseline_head": headBefore, "tamper_proofs": tamperProofs,
+		"failure_code": "invalid_event_payload", "active_head_exactly_unchanged_for_every_failure": true, "recovered_replay": recovered})
+	run.checks = append(run.checks, "restart-canonical-payload-mutation-matrix-head-integrity-and-doctor-corruption")
 	run.write("m2e-restart-summary.json", map[string]any{"checks": run.checks, "count": len(run.checks)})
 	return nil
 }

@@ -46,6 +46,44 @@ func TestWorkUpdatePresenceAndBatchDuplicatesFailClosed(t *testing.T) {
 	}
 }
 
+func TestWorkTransitionMetadataIsCommandSpecific(t *testing.T) {
+	evidenceID := "00000000-0000-4000-8000-000000000031"
+	findingID := "00000000-0000-4000-8000-000000000032"
+	valid := []struct {
+		command  string
+		evidence []string
+		finding  *string
+	}{
+		{"start", []string{}, nil},
+		{"request_review", []string{evidenceID}, nil},
+		{"bounce", []string{}, &findingID},
+		{"accept", []string{evidenceID}, nil},
+		{"cancel", []string{}, nil},
+	}
+	for _, test := range valid {
+		if _, _, _, _, ok := normalizeWorkTransition(test.command, "Current reason", test.evidence, test.finding); !ok {
+			t.Fatalf("canonical %s metadata was rejected", test.command)
+		}
+	}
+	invalid := []struct {
+		command  string
+		evidence []string
+		finding  *string
+	}{
+		{"start", []string{evidenceID}, nil},
+		{"cancel", []string{}, &findingID},
+		{"request_review", []string{}, nil},
+		{"accept", []string{evidenceID}, &findingID},
+		{"bounce", []string{evidenceID}, &findingID},
+		{"bounce", []string{}, nil},
+	}
+	for _, test := range invalid {
+		if _, _, _, _, ok := normalizeWorkTransition(test.command, "Current reason", test.evidence, test.finding); ok {
+			t.Fatalf("impossible %s metadata was accepted: evidence=%v finding=%v", test.command, test.evidence, test.finding)
+		}
+	}
+}
+
 func TestReplayBlockingUsesAtomicBatchFinalState(t *testing.T) {
 	source := WorkItemRecord{ID: "source", OrganizationID: "org", State: "open"}
 	target := WorkItemRecord{ID: "target", OrganizationID: "org", State: "open"}

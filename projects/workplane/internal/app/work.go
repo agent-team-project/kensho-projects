@@ -57,7 +57,7 @@ type WorkItemEvent struct {
 	Reason      string         `json:"reason"`
 	EvidenceIDs []string       `json:"evidence_ids"`
 	FindingID   *string        `json:"finding_id"`
-	Batch       bool           `json:"batch,omitempty"`
+	Batch       bool           `json:"batch"`
 }
 
 type WorkDependencyEvent struct {
@@ -185,6 +185,31 @@ func workItemView(ctx context.Context, queryer databaseQueryer, item WorkItemRec
 	return WorkItem{WorkItemRecord: item, Blocked: len(reasons) > 0, BlockingReasons: reasons}, nil
 }
 
+// authorizeWorkProjectWith applies delegated authority as an intersection. The
+// ordinary project check resolves the agent's current direct role (falling back
+// to the delegated identity only when no direct role exists); the second check
+// always resolves the human principal independently. A direct agent role can
+// therefore narrow the delegation, but can never replace or widen the human's
+// current project authority.
+func (service *Service) authorizeWorkProjectWith(ctx context.Context, query projectAuthorizationQuery, actor Actor,
+	projectID, organizationID, action, rid string) (generated.Response, bool) {
+	if denied, ok := service.authorizeProjectWith(ctx, query, actor, projectID, organizationID, action, rid); !ok {
+		return denied, false
+	}
+	if actor.Kind != "agent" {
+		return generated.Response{}, true
+	}
+	if actor.PrincipalID == nil || *actor.PrincipalID == actor.ID {
+		return problem(http.StatusForbidden, "forbidden", "Action denied", "The delegated principal is not available.", rid), false
+	}
+	delegated := Actor{ID: *actor.PrincipalID, Kind: "human", OrganizationID: actor.OrganizationID, Role: actor.DelegatedRole}
+	return service.authorizeProjectWith(ctx, query, delegated, projectID, organizationID, action, rid)
+}
+
+func (service *Service) authorizeWorkProject(ctx context.Context, actor Actor, projectID, organizationID, action, rid string) (generated.Response, bool) {
+	return service.authorizeWorkProjectWith(ctx, service.db, actor, projectID, organizationID, action, rid)
+}
+
 func (service *Service) GetWorkItem(ctx context.Context, request generated.Request) (generated.Response, error) {
 	id := request.HTTPRequest.PathValue("id")
 	projectID, found := service.workItemProjectID(ctx, id)
@@ -203,7 +228,7 @@ func (service *Service) GetWorkItem(ctx context.Context, request generated.Reque
 	if err != nil {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeProject(ctx, actor, item.ProjectID, item.OrganizationID, "work.read", rid); !ok {
+	if denied, ok := service.authorizeWorkProject(ctx, actor, item.ProjectID, item.OrganizationID, "work.read", rid); !ok {
 		return denied, nil
 	}
 	view, err := workItemView(ctx, service.db, item, nil)
@@ -224,7 +249,7 @@ func (service *Service) ListWorkItems(ctx context.Context, request generated.Req
 	if len(strings.TrimSpace(string(request.Body))) > 0 || !uuidPattern.MatchString(projectID) {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeProject(ctx, actor, projectID, actor.OrganizationID, "work.read", rid); !ok {
+	if denied, ok := service.authorizeWorkProject(ctx, actor, projectID, actor.OrganizationID, "work.read", rid); !ok {
 		return denied, nil
 	}
 	rows, err := service.db.QueryContext(ctx, selectWorkItem+` WHERE project_id=$1 AND organization_id=$2 ORDER BY created_at,id`, projectID, actor.OrganizationID)
@@ -310,7 +335,7 @@ func (service *Service) prepareProjectWorkMutation(ctx context.Context, request 
 			return Actor{}, "", 0, problem(http.StatusPreconditionRequired, "version_conflict", "Expected version required", "If-Match must contain the quoted aggregate version.", rid), false
 		}
 	}
-	if denied, ok := service.authorizeProject(ctx, actor, projectID, actor.OrganizationID, action, rid); !ok {
+	if denied, ok := service.authorizeWorkProject(ctx, actor, projectID, actor.OrganizationID, action, rid); !ok {
 		return Actor{}, "", 0, denied, false
 	}
 	return actor, rid, expected, generated.Response{}, true
@@ -396,7 +421,7 @@ func (service *Service) CreateWorkItem(ctx context.Context, request generated.Re
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, actor.OrganizationID+actor.ID+"createWorkItem"+request.IdempotencyKey); err != nil {
 		return serviceUnavailable(rid), nil
 	}
-	if denied, ok := service.authorizeProjectWith(ctx, tx, actor, projectID, actor.OrganizationID, "work.edit", rid); !ok {
+	if denied, ok := service.authorizeWorkProjectWith(ctx, tx, actor, projectID, actor.OrganizationID, "work.edit", rid); !ok {
 		return denied, nil
 	}
 	if replay, found, conflict := replayIdempotency(ctx, tx, actor.OrganizationID, actor.ID, "createWorkItem", request.IdempotencyKey, hash); found {
@@ -493,7 +518,7 @@ func (service *Service) executeWorkItemMutation(ctx context.Context, request gen
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid)
 	}
 	action := map[string]string{"updateWorkItem": "work.edit", "assignWorkItem": "work.assign", "transitionWorkItem": "work.transition"}[operation]
-	if denied, ok := service.authorizeProjectWith(ctx, tx, actor, item.ProjectID, item.OrganizationID, action, rid); !ok {
+	if denied, ok := service.authorizeWorkProjectWith(ctx, tx, actor, item.ProjectID, item.OrganizationID, action, rid); !ok {
 		return denied
 	}
 	if replay, found, conflict := replayIdempotency(ctx, tx, actor.OrganizationID, actor.ID, operation, request.IdempotencyKey, hash); found {
@@ -694,6 +719,20 @@ func normalizeWorkTransition(command, reason string, evidenceIDs []string, findi
 	if command != "start" && command != "request_review" && command != "bounce" && command != "accept" && command != "cancel" {
 		return "", "", nil, nil, false
 	}
+	switch command {
+	case "request_review", "accept":
+		if len(evidenceIDs) == 0 || findingID != nil {
+			return "", "", nil, nil, false
+		}
+	case "bounce":
+		if len(evidenceIDs) != 0 || findingID == nil {
+			return "", "", nil, nil, false
+		}
+	default:
+		if len(evidenceIDs) != 0 || findingID != nil {
+			return "", "", nil, nil, false
+		}
+	}
 	return command, reason, evidenceIDs, findingID, true
 }
 
@@ -813,7 +852,7 @@ func (service *Service) authorizeDependencyProject(ctx context.Context, tx *sql.
 	if actor.Kind == "agent" && !agentProjectRestrictionAllows(actor.ProjectIDs, projectID) {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), false
 	}
-	return service.authorizeProjectWith(ctx, tx, actor, projectID, actor.OrganizationID, "dependency.edit", rid)
+	return service.authorizeWorkProjectWith(ctx, tx, actor, projectID, actor.OrganizationID, "dependency.edit", rid)
 }
 
 func blockingPathExists(ctx context.Context, tx *sql.Tx, organizationID, fromID, toID string) (bool, error) {
@@ -862,7 +901,7 @@ func (service *Service) AddWorkItemDependency(ctx context.Context, request gener
 	if source.ProjectID != projectID {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeProjectWith(ctx, tx, actor, source.ProjectID, source.OrganizationID, "dependency.edit", rid); !ok {
+	if denied, ok := service.authorizeWorkProjectWith(ctx, tx, actor, source.ProjectID, source.OrganizationID, "dependency.edit", rid); !ok {
 		return denied, nil
 	}
 	target, err := scanWorkItem(tx.QueryRowContext(ctx, selectWorkItem+` WHERE id=$1 AND organization_id=$2 FOR UPDATE`, input.TargetWorkItemID, actor.OrganizationID))
@@ -982,7 +1021,7 @@ func (service *Service) RemoveWorkItemDependency(ctx context.Context, request ge
 	if source.ProjectID != projectID {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeProjectWith(ctx, tx, actor, source.ProjectID, source.OrganizationID, "dependency.edit", rid); !ok {
+	if denied, ok := service.authorizeWorkProjectWith(ctx, tx, actor, source.ProjectID, source.OrganizationID, "dependency.edit", rid); !ok {
 		return denied, nil
 	}
 	// Removal deletes the edge itself, so an exact retry cannot rediscover its
@@ -1110,7 +1149,7 @@ func (service *Service) BatchTransitionWorkItems(ctx context.Context, request ge
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, actor.OrganizationID+actor.ID+"batchTransitionWorkItems"+request.IdempotencyKey); err != nil {
 		return serviceUnavailable(rid), nil
 	}
-	if denied, ok := service.authorizeProjectWith(ctx, tx, actor, projectID, actor.OrganizationID, "work.transition", rid); !ok {
+	if denied, ok := service.authorizeWorkProjectWith(ctx, tx, actor, projectID, actor.OrganizationID, "work.transition", rid); !ok {
 		return denied, nil
 	}
 	if replay, found, conflict := replayIdempotency(ctx, tx, actor.OrganizationID, actor.ID, "batchTransitionWorkItems", request.IdempotencyKey, hash); found {
@@ -1226,7 +1265,7 @@ func (service *Service) GetDependencyGraph(ctx context.Context, request generate
 	if len(strings.TrimSpace(string(request.Body))) > 0 || !uuidPattern.MatchString(projectID) {
 		return problem(http.StatusNotFound, "not_found", "Resource not found", "The requested resource is not available.", rid), nil
 	}
-	if denied, ok := service.authorizeProject(ctx, actor, projectID, actor.OrganizationID, "dependency.read", rid); !ok {
+	if denied, ok := service.authorizeWorkProject(ctx, actor, projectID, actor.OrganizationID, "dependency.read", rid); !ok {
 		return denied, nil
 	}
 	rows, err := service.db.QueryContext(ctx, `SELECT dependency.id,dependency.organization_id,dependency.source_work_item_id,
@@ -1271,7 +1310,7 @@ func (service *Service) GetDependencyGraph(ctx context.Context, request generate
 			if actor.Kind == "agent" && !agentProjectRestrictionAllows(actor.ProjectIDs, candidate) {
 				continue
 			}
-			if _, allowed := service.authorizeProject(ctx, actor, candidate, actor.OrganizationID, "dependency.read", rid); allowed {
+			if _, allowed := service.authorizeWorkProject(ctx, actor, candidate, actor.OrganizationID, "dependency.read", rid); allowed {
 				visibleProjects[candidate] = true
 			}
 		}

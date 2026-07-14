@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -739,6 +740,152 @@ func sameWorkIdentity(left, right WorkItemRecord) bool {
 		left.CreatedBy == right.CreatedBy && left.CreatedAt == right.CreatedAt
 }
 
+func sameWorkContent(left, right WorkItemRecord) bool {
+	return left.Title == right.Title && left.Description == right.Description && left.State == right.State &&
+		left.Priority == right.Priority && equalOptionalString(left.DeliverableID, right.DeliverableID) &&
+		equalOptionalString(left.AssigneeID, right.AssigneeID)
+}
+
+var workItemRecordMembers = []string{
+	"id", "organization_id", "project_id", "deliverable_id", "title", "description", "state",
+	"priority", "assignee_id", "version", "created_by", "created_at", "updated_at",
+}
+
+func requireJSONMembers(value []byte, expected ...string) (map[string]json.RawMessage, error) {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(value, &members); err != nil {
+		return nil, err
+	}
+	if len(members) != len(expected) {
+		return nil, fmt.Errorf("payload has %d members, expected %d", len(members), len(expected))
+	}
+	for _, name := range expected {
+		if _, ok := members[name]; !ok {
+			return nil, fmt.Errorf("payload member %q is required", name)
+		}
+	}
+	return members, nil
+}
+
+func canonicalTimestamp(value string) bool {
+	parsed, err := time.Parse(timeFormat, value)
+	return err == nil && parsed.UTC().Format(timeFormat) == value
+}
+
+func canonicalWorkState(value string) bool {
+	return value == "open" || value == "in_progress" || value == "in_review" || value == "done" || value == "cancelled"
+}
+
+func canonicalOptionalUUID(value *string) bool {
+	return value == nil || uuidPattern.MatchString(*value)
+}
+
+func canonicalWorkRecord(item WorkItemRecord) bool {
+	if !uuidPattern.MatchString(item.ID) || !uuidPattern.MatchString(item.OrganizationID) ||
+		!uuidPattern.MatchString(item.ProjectID) || !uuidPattern.MatchString(item.CreatedBy) ||
+		!canonicalOptionalUUID(item.DeliverableID) || !canonicalOptionalUUID(item.AssigneeID) ||
+		!validText(item.Title, 1, 200) || strings.TrimSpace(item.Title) != item.Title ||
+		!validText(item.Description, 1, 4000) || strings.TrimSpace(item.Description) != item.Description ||
+		!canonicalWorkState(item.State) || !validWorkPriority(item.Priority) || item.Version < 1 ||
+		!canonicalTimestamp(item.CreatedAt) || !canonicalTimestamp(item.UpdatedAt) {
+		return false
+	}
+	created, _ := time.Parse(timeFormat, item.CreatedAt)
+	updated, _ := time.Parse(timeFormat, item.UpdatedAt)
+	return !updated.Before(created)
+}
+
+func canonicalEvidenceIDs(values []string) bool {
+	if values == nil || len(values) > 64 {
+		return false
+	}
+	normalized, ok := normalizeUUIDList(values, 0, 64)
+	if !ok {
+		return false
+	}
+	for index := range values {
+		if values[index] != normalized[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeCanonicalWorkEvent(value []byte, eventType string) (WorkItemEvent, error) {
+	members, err := requireJSONMembers(value, "work_item", "command", "reason", "evidence_ids", "finding_id", "batch")
+	if err != nil {
+		return WorkItemEvent{}, err
+	}
+	if _, err := requireJSONMembers(members["work_item"], workItemRecordMembers...); err != nil {
+		return WorkItemEvent{}, fmt.Errorf("work_item: %w", err)
+	}
+	var event WorkItemEvent
+	if err := decodeStrictJSON(value, &event); err != nil {
+		return WorkItemEvent{}, err
+	}
+	if !canonicalWorkRecord(event.WorkItem) || !canonicalEvidenceIDs(event.EvidenceIDs) ||
+		strings.TrimSpace(event.Reason) != event.Reason || !canonicalOptionalUUID(event.FindingID) {
+		return WorkItemEvent{}, errors.New("work item payload members are not canonical")
+	}
+	expectedCommand := map[string]string{
+		"work_item.created": "create", "work_item.updated": "update", "work_item.assigned": "assign",
+		"work_item.started": "start", "work_item.review_requested": "request_review", "work_item.bounced": "bounce",
+		"work_item.accepted": "accept", "work_item.cancelled": "cancel",
+	}[eventType]
+	if expectedCommand == "" || event.Command != expectedCommand {
+		return WorkItemEvent{}, errors.New("work item command does not match its event type")
+	}
+	switch event.Command {
+	case "create", "update", "assign":
+		if event.Reason != "" || len(event.EvidenceIDs) != 0 || event.FindingID != nil || event.Batch {
+			return WorkItemEvent{}, errors.New("work item mutation metadata is not canonical")
+		}
+	case "request_review", "accept":
+		if !validText(event.Reason, 1, 4000) || len(event.EvidenceIDs) == 0 || event.FindingID != nil {
+			return WorkItemEvent{}, errors.New("review transition metadata is not canonical")
+		}
+	case "bounce":
+		if !validText(event.Reason, 1, 4000) || len(event.EvidenceIDs) != 0 || event.FindingID == nil {
+			return WorkItemEvent{}, errors.New("bounce transition metadata is not canonical")
+		}
+	case "start", "cancel":
+		if !validText(event.Reason, 1, 4000) || len(event.EvidenceIDs) != 0 || event.FindingID != nil {
+			return WorkItemEvent{}, errors.New("lifecycle transition metadata is not canonical")
+		}
+	}
+	return event, nil
+}
+
+func canonicalDependencyRecord(dependency WorkItemDependency) bool {
+	return uuidPattern.MatchString(dependency.ID) && uuidPattern.MatchString(dependency.OrganizationID) &&
+		uuidPattern.MatchString(dependency.SourceWorkItemID) && uuidPattern.MatchString(dependency.TargetWorkItemID) &&
+		(dependency.Kind == "blocks" || dependency.Kind == "relates" || dependency.Kind == "caused-by") &&
+		dependency.Version == 1 && uuidPattern.MatchString(dependency.CreatedBy) && canonicalTimestamp(dependency.CreatedAt)
+}
+
+func decodeCanonicalDependencyEvent(value []byte, eventType string) (WorkDependencyEvent, error) {
+	members, err := requireJSONMembers(value, "dependency", "source", "removed")
+	if err != nil {
+		return WorkDependencyEvent{}, err
+	}
+	if _, err := requireJSONMembers(members["dependency"], "id", "organization_id", "source_work_item_id",
+		"target_work_item_id", "kind", "version", "created_by", "created_at"); err != nil {
+		return WorkDependencyEvent{}, fmt.Errorf("dependency: %w", err)
+	}
+	if _, err := requireJSONMembers(members["source"], workItemRecordMembers...); err != nil {
+		return WorkDependencyEvent{}, fmt.Errorf("source: %w", err)
+	}
+	var event WorkDependencyEvent
+	if err := decodeStrictJSON(value, &event); err != nil {
+		return WorkDependencyEvent{}, err
+	}
+	if !canonicalDependencyRecord(event.Dependency) || !canonicalWorkRecord(event.Source) ||
+		(eventType == "dependency.added" && event.Removed) || (eventType == "dependency.removed" && !event.Removed) {
+		return WorkDependencyEvent{}, errors.New("dependency payload members are not canonical")
+	}
+	return event, nil
+}
+
 func replayBlockingPath(dependencies map[string]WorkItemDependency, organizationID, fromID, toID string) bool {
 	seen := map[string]bool{fromID: true}
 	queue := []string{fromID}
@@ -841,12 +988,37 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 	// states so blocking validation is independent of input/event order. Every
 	// event is still validated sequentially below; a malformed later member
 	// therefore fails the complete replay and cannot advance the active head.
+	type workTransitionCommand struct {
+		Count, BatchCount                    int
+		OrganizationID, ProjectID, ActorKind string
+		ActorID, RequestID, OccurredAt       string
+		PrincipalID                          *string
+		Consistent, Initialized              bool
+	}
 	batchFinalStates := make(map[string]map[string]string)
+	transitionCommands := make(map[string]workTransitionCommand)
 	for _, event := range events {
 		switch event.Projection.EventType {
 		case "work_item.started", "work_item.review_requested", "work_item.bounced", "work_item.accepted", "work_item.cancelled":
-			var workEvent WorkItemEvent
-			if json.Unmarshal(event.Payload, &workEvent) == nil && workEvent.Batch && workEvent.WorkItem.ID != "" {
+			workEvent, err := decodeCanonicalWorkEvent(event.Payload, event.Projection.EventType)
+			if err != nil {
+				continue
+			}
+			item := event.Projection
+			command := transitionCommands[item.CommandID]
+			if !command.Initialized {
+				command = workTransitionCommand{OrganizationID: item.OrganizationID, ProjectID: workEvent.WorkItem.ProjectID,
+					ActorKind: item.ActorKind, ActorID: item.ActorID, PrincipalID: item.PrincipalID, RequestID: item.RequestID,
+					OccurredAt: item.OccurredAt, Consistent: true, Initialized: true}
+			} else if command.OrganizationID != item.OrganizationID || command.ProjectID != workEvent.WorkItem.ProjectID ||
+				command.ActorKind != item.ActorKind || command.ActorID != item.ActorID ||
+				!equalOptionalString(command.PrincipalID, item.PrincipalID) || command.RequestID != item.RequestID ||
+				command.OccurredAt != item.OccurredAt {
+				command.Consistent = false
+			}
+			command.Count++
+			if workEvent.Batch {
+				command.BatchCount++
 				states := batchFinalStates[event.Projection.CommandID]
 				if states == nil {
 					states = make(map[string]string)
@@ -854,6 +1026,7 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 				}
 				states[workEvent.WorkItem.ID] = workEvent.WorkItem.State
 			}
+			transitionCommands[item.CommandID] = command
 		}
 	}
 	for _, event := range events {
@@ -1314,22 +1487,22 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			projects[project.ID] = project
 		case "work_item.created", "work_item.updated", "work_item.assigned", "work_item.started",
 			"work_item.review_requested", "work_item.bounced", "work_item.accepted", "work_item.cancelled":
-			var workEvent WorkItemEvent
-			if err := decodeStrictJSON(event.Payload, &workEvent); err != nil {
+			workEvent, err := decodeCanonicalWorkEvent(event.Payload, item.EventType)
+			if err != nil {
 				return failure("invalid_event_payload", err.Error())
 			}
 			work := workEvent.WorkItem
 			project, projectExists := projects[work.ProjectID]
 			if item.AggregateType != "work_item" || !projectExists || work.ID != item.AggregateID ||
 				work.OrganizationID != item.OrganizationID || project.OrganizationID != work.OrganizationID ||
-				work.Version != item.AggregateVersion || workEvent.EvidenceIDs == nil {
+				work.Version != item.AggregateVersion || work.UpdatedAt != item.OccurredAt {
 				return failure("invalid_event_payload", "work item identity, project, version, or required event members are invalid")
 			}
 			prior, exists := workItems[work.ID]
 			if item.EventType == "work_item.created" {
 				if exists || workEvent.Command != "create" || work.State != "open" || work.Version != 1 ||
 					work.CreatedBy != item.ActorID || !validText(work.Title, 1, 200) || !validText(work.Description, 1, 4000) ||
-					!validWorkPriority(work.Priority) || work.AssigneeID != nil {
+					!validWorkPriority(work.Priority) || work.AssigneeID != nil || work.CreatedAt != item.OccurredAt {
 					return failure("invalid_event_payload", "work item creation payload is invalid")
 				}
 				if work.DeliverableID != nil && deliverables[*work.DeliverableID].ProjectID != work.ProjectID {
@@ -1350,9 +1523,17 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			if workEvent.Command != expectedCommand {
 				return failure("invalid_event_payload", "work item event command does not match its type")
 			}
+			if item.EventType != "work_item.created" && item.EventType != "work_item.updated" && item.EventType != "work_item.assigned" {
+				command := transitionCommands[item.CommandID]
+				if !command.Initialized || !command.Consistent || (command.Count > 1 && command.BatchCount != command.Count) ||
+					(workEvent.Batch && command.BatchCount != command.Count) {
+					return failure("invalid_event_payload", "work item batch marker is inconsistent with its command group")
+				}
+			}
 			switch item.EventType {
 			case "work_item.updated":
-				if work.State != prior.State || !equalOptionalString(work.AssigneeID, prior.AssigneeID) {
+				if work.State != prior.State || !equalOptionalString(work.AssigneeID, prior.AssigneeID) ||
+					(prior.DeliverableID != nil && work.DeliverableID == nil) {
 					return failure("invalid_event_payload", "work item update changed lifecycle or assignment")
 				}
 				if work.DeliverableID != nil && deliverables[*work.DeliverableID].ProjectID != work.ProjectID {
@@ -1404,8 +1585,8 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			}
 			workItems[work.ID] = work
 		case "dependency.added", "dependency.removed":
-			var dependencyEvent WorkDependencyEvent
-			if err := decodeStrictJSON(event.Payload, &dependencyEvent); err != nil {
+			dependencyEvent, err := decodeCanonicalDependencyEvent(event.Payload, item.EventType)
+			if err != nil {
 				return failure("invalid_event_payload", err.Error())
 			}
 			dependency, source := dependencyEvent.Dependency, dependencyEvent.Source
@@ -1414,13 +1595,15 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			if item.AggregateType != "work_item" || !sourceExists || !targetExists || source.ID != item.AggregateID ||
 				dependency.SourceWorkItemID != source.ID || source.OrganizationID != item.OrganizationID ||
 				dependency.OrganizationID != item.OrganizationID || target.OrganizationID != item.OrganizationID ||
+				source.ProjectID != target.ProjectID || source.UpdatedAt != item.OccurredAt ||
 				source.Version != item.AggregateVersion || source.Version != priorSource.Version+1 ||
-				!sameWorkIdentity(priorSource, source) || source.State != priorSource.State ||
+				!sameWorkIdentity(priorSource, source) || !sameWorkContent(priorSource, source) ||
 				dependency.Version != 1 || (dependency.Kind != "blocks" && dependency.Kind != "relates" && dependency.Kind != "caused-by") {
 				return failure("invalid_event_payload", "dependency event identity, endpoint, kind, or source version is invalid")
 			}
 			if item.EventType == "dependency.added" {
-				if dependencyEvent.Removed || dependency.SourceWorkItemID == dependency.TargetWorkItemID || dependencies[dependency.ID].ID != "" {
+				if dependencyEvent.Removed || dependency.SourceWorkItemID == dependency.TargetWorkItemID || dependencies[dependency.ID].ID != "" ||
+					dependency.CreatedBy != item.ActorID || dependency.CreatedAt != item.OccurredAt {
 					return failure("invalid_event_payload", "dependency add is duplicate or self-referential")
 				}
 				for _, existing := range dependencies {
@@ -2504,8 +2687,12 @@ func decodeStrictJSON(value []byte, target any) error {
 	if err := decoder.Decode(target); err != nil {
 		return err
 	}
-	if decoder.More() {
-		return errors.New("multiple JSON values")
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
 	}
 	return nil
 }
