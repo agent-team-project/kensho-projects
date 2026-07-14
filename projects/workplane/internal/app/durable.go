@@ -1077,6 +1077,7 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 		ActorID, RequestID, OccurredAt       string
 		PrincipalID                          *string
 		Consistent, Initialized              bool
+		RepeatedAggregate                    bool
 	}
 	batchFinalStates := make(map[string]map[string]string)
 	transitionCommands := make(map[string]workTransitionCommand)
@@ -1106,6 +1107,9 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 				if states == nil {
 					states = make(map[string]string)
 					batchFinalStates[event.Projection.CommandID] = states
+				}
+				if _, exists := states[workEvent.WorkItem.ID]; exists {
+					command.RepeatedAggregate = true
 				}
 				states[workEvent.WorkItem.ID] = workEvent.WorkItem.State
 			}
@@ -1608,6 +1612,9 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			}
 			if item.EventType != "work_item.created" && item.EventType != "work_item.updated" && item.EventType != "work_item.assigned" {
 				command := transitionCommands[item.CommandID]
+				if command.RepeatedAggregate {
+					return failure("invalid_event_payload", "work item batch command repeats an aggregate")
+				}
 				if !command.Initialized || !command.Consistent || (command.Count > 1 && command.BatchCount != command.Count) ||
 					(workEvent.Batch && command.BatchCount != command.Count) {
 					return failure("invalid_event_payload", "work item batch marker is inconsistent with its command group")

@@ -1730,7 +1730,12 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 			return nil
 		}},
 	}
-	tamperProofs := make(map[string]any, len(tamperCases))
+	tamperProofs := make(map[string]any, len(tamperCases)+1)
+	duplicateTargetProof, err := run.verifyDuplicateBatchTargetTamper(ctx, store, headBefore)
+	if err != nil {
+		return err
+	}
+	tamperProofs["batch-duplicate-target"] = duplicateTargetProof
 	for _, tamper := range tamperCases {
 		var eventID string
 		var original []byte
@@ -1789,6 +1794,86 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 	return nil
 }
 
+func (run *runner) verifyDuplicateBatchTargetTamper(ctx context.Context, store *app.DurableStore, headBefore app.ReplayReport) (map[string]any, error) {
+	type mutableEvent struct {
+		EventID, EventType, AggregateID, CommandID string
+		AggregateVersion                           int64
+		Payload                                    []byte
+	}
+	rows, err := run.db.QueryContext(ctx, `WITH eligible_command AS (
+		SELECT command_id FROM domain_events GROUP BY command_id
+		HAVING count(*)=2 AND bool_and(event_type='work_item.started' AND payload->>'batch'='true')
+		ORDER BY min(sequence) LIMIT 1
+	)
+	SELECT event_id,event_type,aggregate_id,aggregate_version,command_id,payload
+	FROM domain_events WHERE command_id=(SELECT command_id FROM eligible_command) ORDER BY sequence`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	batchEvents := make([]mutableEvent, 0, 2)
+	for rows.Next() {
+		var event mutableEvent
+		if err := rows.Scan(&event.EventID, &event.EventType, &event.AggregateID, &event.AggregateVersion, &event.CommandID, &event.Payload); err != nil {
+			return nil, err
+		}
+		batchEvents = append(batchEvents, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(batchEvents) != 2 {
+		return nil, fmt.Errorf("duplicate-target replay proof requires one two-item start batch, got %d events", len(batchEvents))
+	}
+	first, second := batchEvents[0], batchEvents[1]
+	var corruptPayload map[string]any
+	if err := json.Unmarshal(first.Payload, &corruptPayload); err != nil {
+		return nil, err
+	}
+	work, ok := corruptPayload["work_item"].(map[string]any)
+	if !ok {
+		return nil, errors.New("duplicate-target replay proof work_item payload is not an object")
+	}
+	work["state"] = "cancelled"
+	work["version"] = first.AggregateVersion + 1
+	corruptPayload["command"] = "cancel"
+	corruptPayload["reason"] = "Production-impossible repeated target batch"
+	corruptJSON, err := json.Marshal(corruptPayload)
+	if err != nil {
+		return nil, err
+	}
+	if err := run.replaceDomainEvent(ctx, second.EventID, "work_item.cancelled", first.AggregateID, first.AggregateVersion+1, corruptJSON); err != nil {
+		return nil, err
+	}
+	restore := func() error {
+		return run.replaceDomainEvent(ctx, second.EventID, second.EventType, second.AggregateID, second.AggregateVersion, second.Payload)
+	}
+	_, replayErr := store.Replay(ctx)
+	var replayFailure *app.ReplayFailure
+	if !errors.As(replayErr, &replayFailure) || replayFailure.Code != "invalid_event_payload" ||
+		replayFailure.Detail != "work item batch command repeats an aggregate" || replayFailure.EventID != first.EventID {
+		_ = restore()
+		return nil, fmt.Errorf("replay accepted duplicate batch target: failure=%+v err=%v", replayFailure, replayErr)
+	}
+	headAfterFailure, err := store.ActiveProjectionHead(ctx)
+	if err != nil {
+		_ = restore()
+		return nil, err
+	}
+	if !reflect.DeepEqual(headAfterFailure, headBefore) {
+		_ = restore()
+		return nil, fmt.Errorf("duplicate-target failed replay changed active head: before=%+v after=%+v", headBefore, headAfterFailure)
+	}
+	if err := restore(); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"command_id": first.CommandID, "source_event_ids": []string{first.EventID, second.EventID}, "failure": replayFailure,
+		"rejected_before_first_projection": true, "active_head_unchanged": true, "active_checksum_before": headBefore.RebuiltChecksum,
+		"active_checksum_after": headAfterFailure.RebuiltChecksum,
+	}, nil
+}
+
 func (run *runner) replaceEventPayload(ctx context.Context, eventID string, payload []byte) error {
 	tx, err := run.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1799,6 +1884,25 @@ func (run *runner) replaceEventPayload(ctx context.Context, eventID string, payl
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE domain_events SET payload=$1::jsonb WHERE event_id=$2`, payload, eventID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE domain_events ENABLE TRIGGER domain_events_append_only`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (run *runner) replaceDomainEvent(ctx context.Context, eventID, eventType, aggregateID string, aggregateVersion int64, payload []byte) error {
+	tx, err := run.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE domain_events DISABLE TRIGGER domain_events_append_only`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE domain_events SET event_type=$1,aggregate_id=$2,aggregate_version=$3,payload=$4::jsonb WHERE event_id=$5`,
+		eventType, aggregateID, aggregateVersion, payload, eventID); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `ALTER TABLE domain_events ENABLE TRIGGER domain_events_append_only`); err != nil {

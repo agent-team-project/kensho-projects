@@ -238,6 +238,61 @@ func TestReplayRejectsBatchMarkerValueTamper(t *testing.T) {
 	}
 }
 
+func TestReplayRejectsDuplicateTargetWithinBatch(t *testing.T) {
+	t.Parallel()
+	const (
+		organizationID = "00000000-0000-4000-8000-000000000010"
+		projectID      = "00000000-0000-4000-8000-000000000020"
+		workID         = "00000000-0000-4000-8000-000000000030"
+		actorID        = "00000000-0000-4000-8000-000000000040"
+		batchCommandID = "00000000-0000-4000-8000-000000000050"
+		createdAt      = "2026-07-13T10:00:00.123456Z"
+		assignedAt     = "2026-07-13T10:01:00.123456Z"
+		transitionedAt = "2026-07-13T10:02:00.123456Z"
+	)
+	item := WorkItemRecord{ID: workID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: "Repeated batch target", Description: "One aggregate may occur only once per batch", State: "open",
+		Priority: "normal", Version: 1, CreatedBy: actorID, CreatedAt: createdAt, UpdatedAt: createdAt}
+	events := []eventRow{
+		{Projection: eventProjection{Sequence: 1, EventID: "00000000-0000-4000-8000-000000000101",
+			EventType: "project.created", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project",
+			AggregateID: projectID, AggregateVersion: 1, ActorKind: "human", ActorID: actorID},
+			Payload: canonicalJSON(Project{ID: projectID, OrganizationID: organizationID, Mode: "exploration", State: "proposed", Version: 1})},
+		{Projection: eventProjection{Sequence: 2, EventID: "00000000-0000-4000-8000-000000000102",
+			EventType: "work_item.created", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+			AggregateID: workID, AggregateVersion: 1, ActorKind: "human", ActorID: actorID,
+			CommandID: "00000000-0000-4000-8000-000000000201", RequestID: "create-repeated-target", OccurredAt: createdAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "create", EvidenceIDs: []string{}})},
+	}
+	item.AssigneeID, item.Version, item.UpdatedAt = &item.CreatedBy, 2, assignedAt
+	events = append(events, eventRow{Projection: eventProjection{Sequence: 3,
+		EventID: "00000000-0000-4000-8000-000000000103", EventType: "work_item.assigned", SchemaVersion: 1,
+		OrganizationID: organizationID, AggregateType: "work_item", AggregateID: workID, AggregateVersion: 2,
+		ActorKind: "human", ActorID: actorID, CommandID: "00000000-0000-4000-8000-000000000202",
+		RequestID: "assign-repeated-target", OccurredAt: assignedAt},
+		Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "assign", EvidenceIDs: []string{}})})
+	item.State, item.Version, item.UpdatedAt = "in_progress", 3, transitionedAt
+	events = append(events, eventRow{Projection: eventProjection{Sequence: 4,
+		EventID: "00000000-0000-4000-8000-000000000104", EventType: "work_item.started", SchemaVersion: 1,
+		OrganizationID: organizationID, AggregateType: "work_item", AggregateID: workID, AggregateVersion: 3,
+		ActorKind: "human", ActorID: actorID, CommandID: batchCommandID, RequestID: "duplicate-target-batch",
+		OccurredAt: transitionedAt}, Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "start",
+		Reason: "First valid transition", EvidenceIDs: []string{}, Batch: true})})
+	item.State, item.Version = "cancelled", 4
+	events = append(events, eventRow{Projection: eventProjection{Sequence: 5,
+		EventID: "00000000-0000-4000-8000-000000000105", EventType: "work_item.cancelled", SchemaVersion: 1,
+		OrganizationID: organizationID, AggregateType: "work_item", AggregateID: workID, AggregateVersion: 4,
+		ActorKind: "human", ActorID: actorID, CommandID: batchCommandID, RequestID: "duplicate-target-batch",
+		OccurredAt: transitionedAt}, Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "cancel",
+		Reason: "Second individually valid transition", EvidenceIDs: []string{}, Batch: true})})
+
+	_, failure := rebuildSnapshot("duplicate-target-batch", events)
+	if failure == nil || failure.Code != "invalid_event_payload" || failure.Detail != "work item batch command repeats an aggregate" ||
+		failure.Sequence != 4 || failure.EventID != "00000000-0000-4000-8000-000000000104" {
+		t.Fatalf("duplicate target within a batch did not fail closed: %+v", failure)
+	}
+}
+
 func TestReplayAcceptsAuthorizedCrossProjectDependencyLifecycle(t *testing.T) {
 	t.Parallel()
 	const (
