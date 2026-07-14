@@ -425,6 +425,17 @@ func (run *runner) lifecycleFlow(ctx context.Context, projectItem project, deliv
 	if err := expect(emptyUpdate, http.StatusBadRequest, "invalid_request"); err != nil {
 		return workItem{}, err
 	}
+	updated := run.call(run.human, http.MethodPatch, "/api/v1/work-items/"+item.ID,
+		map[string]any{"description": "Observable M2E work after a production update"},
+		run.versionedHuman("m2e-valid-update-000001", item.Version))
+	if err := expect(updated, http.StatusOK, ""); err != nil {
+		return workItem{}, err
+	}
+	priorVersion := item.Version
+	if err := json.Unmarshal(updated.Body, &item); err != nil || item.Version != priorVersion+1 ||
+		item.Description != "Observable M2E work after a production update" {
+		return workItem{}, fmt.Errorf("valid production update did not advance the fixture: item=%+v err=%v", item, err)
+	}
 	item, _, err = run.assign(run.human, item, "m2e-lifecycle-assign-01", run.humanHeaders())
 	if err != nil {
 		return workItem{}, err
@@ -1452,7 +1463,7 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 		if err := run.replaceEventPayload(ctx, eventID, original); err != nil {
 			return err
 		}
-		tamperProofs[tamper.Name] = map[string]any{"failure": replayFailure, "active_head_unchanged": true}
+		tamperProofs[tamper.Name] = map[string]any{"source_event_id": eventID, "failure": replayFailure, "active_head_unchanged": true}
 	}
 	recovered, err := store.Replay(ctx)
 	if err != nil || recovered.LiveChecksum != recovered.RebuiltChecksum {
