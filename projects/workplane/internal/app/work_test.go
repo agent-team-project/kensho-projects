@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"encoding/json"
 	"testing"
 
@@ -81,6 +82,31 @@ func TestWorkTransitionMetadataIsCommandSpecific(t *testing.T) {
 		if _, _, _, _, ok := normalizeWorkTransition(test.command, "Current reason", test.evidence, test.finding); ok {
 			t.Fatalf("impossible %s metadata was accepted: evidence=%v finding=%v", test.command, test.evidence, test.finding)
 		}
+	}
+}
+
+func TestExplicitWorkProjectRolesAreAnIntersection(t *testing.T) {
+	role := func(value string) sql.NullString { return sql.NullString{String: value, Valid: true} }
+	tests := []struct {
+		name              string
+		action            string
+		direct, delegated sql.NullString
+		allowed           bool
+	}{
+		{"both owners mutate", "work.edit", role("owner"), role("owner"), true},
+		{"delegated observer caps direct owner", "work.edit", role("owner"), role("observer"), false},
+		{"direct observer caps delegated owner", "work.edit", role("observer"), role("owner"), false},
+		{"absent direct role inherits delegated owner", "work.edit", sql.NullString{}, role("owner"), true},
+		{"delegated observer caps absent direct role", "work.edit", sql.NullString{}, role("observer"), false},
+		{"both observers read", "work.read", role("observer"), role("observer"), true},
+		{"no explicit roles defer to shared policy", "work.edit", sql.NullString{}, sql.NullString{}, true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := explicitWorkProjectRolesAllow(test.action, test.direct, test.delegated); got != test.allowed {
+				t.Fatalf("explicit role intersection = %v, want %v", got, test.allowed)
+			}
+		})
 	}
 }
 
