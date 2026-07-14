@@ -1730,12 +1730,17 @@ func (run *runner) verifyRestart(ctx context.Context) error {
 			return nil
 		}},
 	}
-	tamperProofs := make(map[string]any, len(tamperCases)+1)
+	tamperProofs := make(map[string]any, len(tamperCases)+2)
 	duplicateTargetProof, err := run.verifyDuplicateBatchTargetTamper(ctx, store, headBefore)
 	if err != nil {
 		return err
 	}
 	tamperProofs["batch-duplicate-target"] = duplicateTargetProof
+	mixedCommandProof, err := run.verifyMixedBatchCommandTamper(ctx, store, headBefore)
+	if err != nil {
+		return err
+	}
+	tamperProofs["batch-mixed-command-membership"] = mixedCommandProof
 	for _, tamper := range tamperCases {
 		var eventID string
 		var original []byte
@@ -1874,6 +1879,110 @@ func (run *runner) verifyDuplicateBatchTargetTamper(ctx context.Context, store *
 	}, nil
 }
 
+func (run *runner) verifyMixedBatchCommandTamper(ctx context.Context, store *app.DurableStore, headBefore app.ReplayReport) (map[string]any, error) {
+	type mutableEvent struct {
+		EventID, EventType, AggregateID, CommandID string
+		AggregateVersion                           int64
+		Payload                                    []byte
+	}
+	rows, err := run.db.QueryContext(ctx, `WITH eligible_command AS (
+		SELECT event.command_id FROM domain_events event
+		JOIN work_items work ON work.id=event.aggregate_id AND work.version=event.aggregate_version
+		GROUP BY event.command_id
+		HAVING count(*)=2 AND bool_and(event.event_type='work_item.started' AND event.payload->>'batch'='true')
+		ORDER BY min(event.sequence) LIMIT 1
+	)
+	SELECT event_id,event_type,aggregate_id,aggregate_version,command_id,payload
+	FROM domain_events WHERE command_id=(SELECT command_id FROM eligible_command) ORDER BY sequence`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	batchEvents := make([]mutableEvent, 0, 2)
+	for rows.Next() {
+		var event mutableEvent
+		if err := rows.Scan(&event.EventID, &event.EventType, &event.AggregateID, &event.AggregateVersion, &event.CommandID, &event.Payload); err != nil {
+			return nil, err
+		}
+		batchEvents = append(batchEvents, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(batchEvents) != 2 {
+		return nil, fmt.Errorf("mixed-command replay proof requires one current two-item start batch, got %d events", len(batchEvents))
+	}
+	first, second := batchEvents[0], batchEvents[1]
+	if first.AggregateID == second.AggregateID {
+		return nil, errors.New("mixed-command replay proof requires two unique production batch aggregates")
+	}
+	var firstPayload, secondPayload app.WorkItemEvent
+	if err := json.Unmarshal(first.Payload, &firstPayload); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(second.Payload, &secondPayload); err != nil {
+		return nil, err
+	}
+	var priorSecondJSON []byte
+	if err := run.db.QueryRowContext(ctx, `SELECT payload FROM domain_events
+		WHERE aggregate_type='work_item' AND aggregate_id=$1 AND aggregate_version=$2 ORDER BY sequence LIMIT 1`,
+		second.AggregateID, second.AggregateVersion-1).Scan(&priorSecondJSON); err != nil {
+		return nil, fmt.Errorf("load mixed-command prior second aggregate: %w", err)
+	}
+	var priorSecondPayload app.WorkItemEvent
+	if err := json.Unmarshal(priorSecondJSON, &priorSecondPayload); err != nil {
+		return nil, err
+	}
+	if priorSecondPayload.WorkItem.ID != second.AggregateID || priorSecondPayload.WorkItem.Version != second.AggregateVersion-1 {
+		return nil, errors.New("mixed-command replay proof did not find the second aggregate's prior projection")
+	}
+	updated := priorSecondPayload.WorkItem
+	updated.Description += " with a production-impossible mixed batch member"
+	updated.Version = second.AggregateVersion
+	updated.UpdatedAt = secondPayload.WorkItem.UpdatedAt
+	corruptPayload, err := json.Marshal(app.WorkItemEvent{WorkItem: updated, Command: "update", EvidenceIDs: []string{}})
+	if err != nil {
+		return nil, err
+	}
+	if err := run.replaceDomainEvent(ctx, second.EventID, "work_item.updated", second.AggregateID, updated.Version, corruptPayload); err != nil {
+		return nil, err
+	}
+	restore := func() error {
+		return errors.Join(
+			run.replaceDomainEvent(ctx, second.EventID, second.EventType, second.AggregateID, second.AggregateVersion, second.Payload),
+			run.replaceWorkItemRows(ctx, firstPayload.WorkItem, secondPayload.WorkItem),
+		)
+	}
+	if err := run.replaceWorkItemRows(ctx, firstPayload.WorkItem, updated); err != nil {
+		_ = restore()
+		return nil, err
+	}
+	_, replayErr := store.Replay(ctx)
+	var replayFailure *app.ReplayFailure
+	headAfterFailure, headErr := store.ActiveProjectionHead(ctx)
+	restoreErr := restore()
+	if restoreErr != nil {
+		return nil, fmt.Errorf("restore mixed-command replay proof: %w", restoreErr)
+	}
+	if headErr != nil {
+		return nil, headErr
+	}
+	if !errors.As(replayErr, &replayFailure) || replayFailure.Code != "invalid_event_payload" ||
+		replayFailure.Detail != "work item batch command contains a non-transition member" || replayFailure.EventID != first.EventID {
+		return nil, fmt.Errorf("replay accepted mixed batch command member: failure=%+v err=%v", replayFailure, replayErr)
+	}
+	if !reflect.DeepEqual(headAfterFailure, headBefore) {
+		return nil, fmt.Errorf("mixed-command failed replay changed active head: before=%+v after=%+v", headBefore, headAfterFailure)
+	}
+	return map[string]any{
+		"command_id": first.CommandID, "source_event_ids": []string{first.EventID, second.EventID}, "failure": replayFailure,
+		"aggregate_ids": []string{first.AggregateID, second.AggregateID}, "aggregates_unique": true,
+		"mixed_member_type": "work_item.updated", "ledger_and_live_rows_consistent": true,
+		"rejected_before_first_projection": true, "active_head_unchanged": true,
+		"active_checksum_before": headBefore.RebuiltChecksum, "active_checksum_after": headAfterFailure.RebuiltChecksum,
+	}, nil
+}
+
 func (run *runner) replaceEventPayload(ctx context.Context, eventID string, payload []byte) error {
 	tx, err := run.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1906,6 +2015,36 @@ func (run *runner) replaceDomainEvent(ctx context.Context, eventID, eventType, a
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `ALTER TABLE domain_events ENABLE TRIGGER domain_events_append_only`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (run *runner) replaceWorkItemRows(ctx context.Context, items ...app.WorkItemRecord) error {
+	tx, err := run.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE work_items DISABLE TRIGGER work_item_guard`); err != nil {
+		return err
+	}
+	for _, item := range items {
+		result, err := tx.ExecContext(ctx, `UPDATE work_items SET deliverable_id=$1,title=$2,description=$3,state=$4,
+			priority=$5,version=$6,updated_at=$7 WHERE id=$8`, item.DeliverableID, item.Title,
+			item.Description, item.State, item.Priority, item.Version, item.UpdatedAt, item.ID)
+		if err != nil {
+			return err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if count != 1 {
+			return fmt.Errorf("replace work item %s affected %d rows, want 1", item.ID, count)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE work_items ENABLE TRIGGER work_item_guard`); err != nil {
 		return err
 	}
 	return tx.Commit()

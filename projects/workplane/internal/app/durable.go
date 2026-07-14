@@ -1067,54 +1067,104 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 	activity := make([]eventProjection, 0, len(events))
 	versions := make(map[string]int64)
 	// A batch is one atomic command even though the immutable ledger retains one
-	// versioned event per work aggregate. Precompute its declared endpoint
-	// states so blocking validation is independent of input/event order. Every
-	// event is still validated sequentially below; a malformed later member
-	// therefore fails the complete replay and cannot advance the active head.
-	type workTransitionCommand struct {
-		Count, BatchCount                    int
+	// versioned event per work aggregate. Index complete command groups before
+	// projection so one batch-marked lifecycle transition cannot hide a mixed
+	// mutation, dependency event, inconsistent identity, or repeated aggregate
+	// later in its group. Valid groups also provide their declared endpoint
+	// states so blocking validation is independent of input/event order.
+	type workCommandGroup struct {
+		MemberCount, Count, BatchCount       int
 		OrganizationID, ProjectID, ActorKind string
 		ActorID, RequestID, OccurredAt       string
 		PrincipalID                          *string
-		Consistent, Initialized              bool
+		Consistent, IdentityInitialized      bool
+		AllTransitions                       bool
 		RepeatedAggregate                    bool
+		First                                eventProjection
+		AggregateIDs                         map[string]struct{}
+		FinalStates                          map[string]string
 	}
 	batchFinalStates := make(map[string]map[string]string)
-	transitionCommands := make(map[string]workTransitionCommand)
+	workCommandGroups := make(map[string]workCommandGroup)
 	for _, event := range events {
-		switch event.Projection.EventType {
+		item := event.Projection
+		if !strings.HasPrefix(item.EventType, "work_item.") && !strings.HasPrefix(item.EventType, "dependency.") {
+			continue
+		}
+		command := workCommandGroups[item.CommandID]
+		if command.MemberCount == 0 {
+			command.First = item
+			command.Consistent = true
+			command.AllTransitions = true
+			command.AggregateIDs = make(map[string]struct{})
+		}
+		command.MemberCount++
+		aggregate := item.AggregateType + ":" + item.AggregateID
+		if _, exists := command.AggregateIDs[aggregate]; exists {
+			command.RepeatedAggregate = true
+		}
+		command.AggregateIDs[aggregate] = struct{}{}
+		switch item.EventType {
 		case "work_item.started", "work_item.review_requested", "work_item.bounced", "work_item.accepted", "work_item.cancelled":
-			workEvent, err := decodeCanonicalWorkEvent(event.Payload, event.Projection.EventType)
+			workEvent, err := decodeCanonicalWorkEvent(event.Payload, item.EventType)
 			if err != nil {
-				continue
+				command.AllTransitions = false
+				break
 			}
-			item := event.Projection
-			command := transitionCommands[item.CommandID]
-			if !command.Initialized {
-				command = workTransitionCommand{OrganizationID: item.OrganizationID, ProjectID: workEvent.WorkItem.ProjectID,
-					ActorKind: item.ActorKind, ActorID: item.ActorID, PrincipalID: item.PrincipalID, RequestID: item.RequestID,
-					OccurredAt: item.OccurredAt, Consistent: true, Initialized: true}
+			command.Count++
+			if !command.IdentityInitialized {
+				command.OrganizationID, command.ProjectID = item.OrganizationID, workEvent.WorkItem.ProjectID
+				command.ActorKind, command.ActorID, command.PrincipalID = item.ActorKind, item.ActorID, item.PrincipalID
+				command.RequestID, command.OccurredAt, command.IdentityInitialized = item.RequestID, item.OccurredAt, true
 			} else if command.OrganizationID != item.OrganizationID || command.ProjectID != workEvent.WorkItem.ProjectID ||
 				command.ActorKind != item.ActorKind || command.ActorID != item.ActorID ||
 				!equalOptionalString(command.PrincipalID, item.PrincipalID) || command.RequestID != item.RequestID ||
 				command.OccurredAt != item.OccurredAt {
 				command.Consistent = false
 			}
-			command.Count++
+			if item.AggregateType != "work_item" || workEvent.WorkItem.ID != item.AggregateID ||
+				workEvent.WorkItem.OrganizationID != item.OrganizationID {
+				command.Consistent = false
+			}
 			if workEvent.Batch {
 				command.BatchCount++
-				states := batchFinalStates[event.Projection.CommandID]
-				if states == nil {
-					states = make(map[string]string)
-					batchFinalStates[event.Projection.CommandID] = states
+				if command.FinalStates == nil {
+					command.FinalStates = make(map[string]string)
 				}
-				if _, exists := states[workEvent.WorkItem.ID]; exists {
-					command.RepeatedAggregate = true
-				}
-				states[workEvent.WorkItem.ID] = workEvent.WorkItem.State
+				command.FinalStates[workEvent.WorkItem.ID] = workEvent.WorkItem.State
 			}
-			transitionCommands[item.CommandID] = command
+		default:
+			command.AllTransitions = false
 		}
+		workCommandGroups[item.CommandID] = command
+	}
+	var batchFailure *ReplayFailure
+	for commandID, command := range workCommandGroups {
+		if command.BatchCount == 0 {
+			continue
+		}
+		detail := ""
+		switch {
+		case !command.AllTransitions || command.Count != command.MemberCount:
+			detail = "work item batch command contains a non-transition member"
+		case command.BatchCount != command.Count:
+			detail = "work item batch command contains a non-batch transition"
+		case !command.IdentityInitialized || !command.Consistent:
+			detail = "work item batch command identity is inconsistent"
+		case command.RepeatedAggregate:
+			detail = "work item batch command repeats an aggregate"
+		}
+		if detail != "" && (batchFailure == nil || command.First.Sequence < batchFailure.Sequence) {
+			first := command.First
+			batchFailure = &ReplayFailure{RunID: runID, Code: "invalid_event_payload", Sequence: first.Sequence,
+				EventID: first.EventID, EventType: first.EventType, SchemaVersion: first.SchemaVersion, Detail: detail}
+		}
+		if detail == "" {
+			batchFinalStates[commandID] = command.FinalStates
+		}
+	}
+	if batchFailure != nil {
+		return projectionSnapshot{}, batchFailure
 	}
 	for _, event := range events {
 		item := event.Projection
@@ -1611,11 +1661,8 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 				return failure("invalid_event_payload", "work item event command does not match its type")
 			}
 			if item.EventType != "work_item.created" && item.EventType != "work_item.updated" && item.EventType != "work_item.assigned" {
-				command := transitionCommands[item.CommandID]
-				if command.RepeatedAggregate {
-					return failure("invalid_event_payload", "work item batch command repeats an aggregate")
-				}
-				if !command.Initialized || !command.Consistent || (command.Count > 1 && command.BatchCount != command.Count) ||
+				command := workCommandGroups[item.CommandID]
+				if !command.IdentityInitialized || !command.Consistent || (command.Count > 1 && command.BatchCount != command.Count) ||
 					(workEvent.Batch && command.BatchCount != command.Count) {
 					return failure("invalid_event_payload", "work item batch marker is inconsistent with its command group")
 				}

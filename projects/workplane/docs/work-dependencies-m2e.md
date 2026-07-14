@@ -81,7 +81,12 @@ advances only when the rebuilt checksum matches live state. Replay requires
 the exact version-one member set for every work and dependency event, validates
 each member's canonical value and cross-member semantics, and rejects omitted,
 extra, inconsistent, or impossible payloads as `invalid_event_payload` without
-changing the active projection head.
+changing the active projection head. Before projection, replay indexes every
+work and dependency event by command id. A command containing any batch-marked
+lifecycle transition must contain only batch-marked lifecycle transitions with
+one shared organization, project, actor, principal, request, and timestamp and
+exactly one event per aggregate; replay rejects the whole group at its first
+event otherwise.
 
 `scripts/test_work.sh` runs the public contract against real PostgreSQL and the
 production API/outbox processes. It covers both actor kinds, fixed lifecycle

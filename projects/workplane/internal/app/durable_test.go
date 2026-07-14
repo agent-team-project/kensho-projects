@@ -232,9 +232,113 @@ func TestReplayRejectsBatchMarkerValueTamper(t *testing.T) {
 			ActorKind: "human", ActorID: actorID, CommandID: commandID, RequestID: requestID, OccurredAt: cancelledAt},
 			Payload: canonicalJSON(payload)})
 	}
-	_, failure := rebuildSnapshot("batch-marker-tamper", events)
-	if failure == nil || failure.Code != "invalid_event_payload" {
+	snapshot, failure := rebuildSnapshot("batch-marker-tamper", events)
+	if failure == nil || failure.Code != "invalid_event_payload" ||
+		failure.Detail != "work item batch command contains a non-batch transition" ||
+		failure.Sequence != 4 || failure.EventID != "00000000-0000-4000-8000-000000000104" {
 		t.Fatalf("batch marker value tamper did not fail closed: %+v", failure)
+	}
+	if len(snapshot.Projects) != 0 || len(snapshot.WorkItems) != 0 || len(snapshot.Activity) != 0 {
+		t.Fatalf("batch marker tamper built a partial projection: %+v", snapshot)
+	}
+}
+
+func TestReplayRejectsInconsistentBatchCommandIdentityBeforeProjection(t *testing.T) {
+	t.Parallel()
+	const (
+		organizationID = "00000000-0000-4000-8000-000000000010"
+		otherOrgID     = "00000000-0000-4000-8000-000000000011"
+		projectID      = "00000000-0000-4000-8000-000000000020"
+		otherProjectID = "00000000-0000-4000-8000-000000000021"
+		actorID        = "00000000-0000-4000-8000-000000000040"
+		otherActorID   = "00000000-0000-4000-8000-000000000041"
+		commandID      = "00000000-0000-4000-8000-000000000050"
+		requestID      = "batch-identity-proof"
+		createdAt      = "2026-07-13T10:00:00.123456Z"
+		cancelledAt    = "2026-07-13T10:01:00.123456Z"
+		otherTime      = "2026-07-13T10:01:01.123456Z"
+		firstEventID   = "00000000-0000-4000-8000-000000000104"
+	)
+	items := []WorkItemRecord{
+		{ID: "00000000-0000-4000-8000-000000000030", OrganizationID: organizationID, ProjectID: projectID,
+			Title: "First identity member", Description: "First atomic member", State: "open", Priority: "normal",
+			Version: 1, CreatedBy: actorID, CreatedAt: createdAt, UpdatedAt: createdAt},
+		{ID: "00000000-0000-4000-8000-000000000031", OrganizationID: organizationID, ProjectID: projectID,
+			Title: "Second identity member", Description: "Second atomic member", State: "open", Priority: "normal",
+			Version: 1, CreatedBy: actorID, CreatedAt: createdAt, UpdatedAt: createdAt},
+	}
+	events := []eventRow{{Projection: eventProjection{Sequence: 1, EventID: "00000000-0000-4000-8000-000000000101",
+		EventType: "project.created", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project",
+		AggregateID: projectID, AggregateVersion: 1, ActorKind: "human", ActorID: actorID},
+		Payload: canonicalJSON(Project{ID: projectID, OrganizationID: organizationID, Mode: "exploration", State: "proposed", Version: 1})}}
+	for index, item := range items {
+		events = append(events, eventRow{Projection: eventProjection{Sequence: int64(index + 2),
+			EventID: fmt.Sprintf("00000000-0000-4000-8000-%012d", index+102), EventType: "work_item.created", SchemaVersion: 1,
+			OrganizationID: organizationID, AggregateType: "work_item", AggregateID: item.ID, AggregateVersion: 1,
+			ActorKind: "human", ActorID: actorID, CommandID: fmt.Sprintf("00000000-0000-4000-8000-%012d", index+202),
+			RequestID: fmt.Sprintf("create-identity-%d", index), OccurredAt: createdAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "create", EvidenceIDs: []string{}})})
+	}
+	for index, item := range items {
+		item.State, item.Version, item.UpdatedAt = "cancelled", 2, cancelledAt
+		events = append(events, eventRow{Projection: eventProjection{Sequence: int64(index + 4),
+			EventID: fmt.Sprintf("00000000-0000-4000-8000-%012d", index+104), EventType: "work_item.cancelled", SchemaVersion: 1,
+			OrganizationID: organizationID, AggregateType: "work_item", AggregateID: item.ID, AggregateVersion: 2,
+			ActorKind: "human", ActorID: actorID, CommandID: commandID, RequestID: requestID, OccurredAt: cancelledAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "cancel", Reason: "Atomic cancellation",
+				EvidenceIDs: []string{}, Batch: true})})
+	}
+	if _, failure := rebuildSnapshot("healthy-batch-identity", events); failure != nil {
+		t.Fatalf("canonical batch identity did not replay: %v", failure)
+	}
+	tests := []struct {
+		name   string
+		mutate func(*eventRow)
+	}{
+		{"organization", func(row *eventRow) {
+			row.Projection.OrganizationID = otherOrgID
+			var payload WorkItemEvent
+			_ = json.Unmarshal(row.Payload, &payload)
+			payload.WorkItem.OrganizationID = otherOrgID
+			row.Payload = canonicalJSON(payload)
+		}},
+		{"project", func(row *eventRow) {
+			var payload WorkItemEvent
+			_ = json.Unmarshal(row.Payload, &payload)
+			payload.WorkItem.ProjectID = otherProjectID
+			row.Payload = canonicalJSON(payload)
+		}},
+		{"actor", func(row *eventRow) { row.Projection.ActorID = otherActorID }},
+		{"principal", func(row *eventRow) {
+			principal := otherActorID
+			row.Projection.PrincipalID = &principal
+		}},
+		{"request", func(row *eventRow) { row.Projection.RequestID = "different-batch-request" }},
+		{"timestamp", func(row *eventRow) {
+			row.Projection.OccurredAt = otherTime
+			var payload WorkItemEvent
+			_ = json.Unmarshal(row.Payload, &payload)
+			payload.WorkItem.UpdatedAt = otherTime
+			row.Payload = canonicalJSON(payload)
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tampered := append([]eventRow(nil), events...)
+			test.mutate(&tampered[len(tampered)-1])
+			snapshot, failure := rebuildSnapshot("inconsistent-batch-"+test.name, tampered)
+			if failure == nil || failure.Code != "invalid_event_payload" ||
+				failure.Detail != "work item batch command identity is inconsistent" ||
+				failure.Sequence != 4 || failure.EventID != firstEventID {
+				t.Fatalf("inconsistent %s identity did not fail at the command's first event: %+v", test.name, failure)
+			}
+			if len(snapshot.Projects) != 0 || len(snapshot.WorkItems) != 0 || len(snapshot.Activity) != 0 {
+				t.Fatalf("inconsistent %s identity built a partial projection: %+v", test.name, snapshot)
+			}
+			if _, failure := rebuildSnapshot("recovered-batch-"+test.name, events); failure != nil {
+				t.Fatalf("restored %s identity did not recover: %v", test.name, failure)
+			}
+		})
 	}
 }
 
@@ -290,6 +394,149 @@ func TestReplayRejectsDuplicateTargetWithinBatch(t *testing.T) {
 	if failure == nil || failure.Code != "invalid_event_payload" || failure.Detail != "work item batch command repeats an aggregate" ||
 		failure.Sequence != 4 || failure.EventID != "00000000-0000-4000-8000-000000000104" {
 		t.Fatalf("duplicate target within a batch did not fail closed: %+v", failure)
+	}
+}
+
+func TestReplayRejectsMixedMemberWithinBatchCommandBeforeProjection(t *testing.T) {
+	t.Parallel()
+	const (
+		organizationID  = "00000000-0000-4000-8000-000000000010"
+		projectID       = "00000000-0000-4000-8000-000000000020"
+		workID          = "00000000-0000-4000-8000-000000000030"
+		targetID        = "00000000-0000-4000-8000-000000000031"
+		createdWorkID   = "00000000-0000-4000-8000-000000000032"
+		dependencyID    = "00000000-0000-4000-8000-000000000033"
+		actorID         = "00000000-0000-4000-8000-000000000040"
+		batchCommandID  = "00000000-0000-4000-8000-000000000050"
+		createdAt       = "2026-07-13T10:00:00.123456Z"
+		assignedAt      = "2026-07-13T10:01:00.123456Z"
+		batchAt         = "2026-07-13T10:02:00.123456Z"
+		ordinaryAt      = "2026-07-13T10:03:00.123456Z"
+		batchEventID    = "00000000-0000-4000-8000-000000000105"
+		ordinaryEventID = "00000000-0000-4000-8000-000000000106"
+	)
+	item := WorkItemRecord{ID: workID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: "Mixed batch target", Description: "Batch command membership is closed", State: "open",
+		Priority: "normal", Version: 1, CreatedBy: actorID, CreatedAt: createdAt, UpdatedAt: createdAt}
+	target := WorkItemRecord{ID: targetID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: "Dependency target", Description: "Canonical dependency endpoint", State: "open",
+		Priority: "normal", Version: 1, CreatedBy: actorID, CreatedAt: createdAt, UpdatedAt: createdAt}
+	events := []eventRow{
+		{Projection: eventProjection{Sequence: 1, EventID: "00000000-0000-4000-8000-000000000101",
+			EventType: "project.created", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project",
+			AggregateID: projectID, AggregateVersion: 1, ActorKind: "human", ActorID: actorID},
+			Payload: canonicalJSON(Project{ID: projectID, OrganizationID: organizationID, Mode: "exploration", State: "proposed", Version: 1})},
+		{Projection: eventProjection{Sequence: 2, EventID: "00000000-0000-4000-8000-000000000102",
+			EventType: "work_item.created", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+			AggregateID: workID, AggregateVersion: 1, ActorKind: "human", ActorID: actorID,
+			CommandID: "00000000-0000-4000-8000-000000000201", RequestID: "create-mixed-target", OccurredAt: createdAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "create", EvidenceIDs: []string{}})},
+		{Projection: eventProjection{Sequence: 3, EventID: "00000000-0000-4000-8000-000000000103",
+			EventType: "work_item.created", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+			AggregateID: targetID, AggregateVersion: 1, ActorKind: "human", ActorID: actorID,
+			CommandID: "00000000-0000-4000-8000-000000000202", RequestID: "create-dependency-target", OccurredAt: createdAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: target, Command: "create", EvidenceIDs: []string{}})},
+	}
+	item.AssigneeID, item.Version, item.UpdatedAt = &item.CreatedBy, 2, assignedAt
+	events = append(events, eventRow{Projection: eventProjection{Sequence: 4,
+		EventID: "00000000-0000-4000-8000-000000000104", EventType: "work_item.assigned", SchemaVersion: 1,
+		OrganizationID: organizationID, AggregateType: "work_item", AggregateID: workID, AggregateVersion: 2,
+		ActorKind: "human", ActorID: actorID, CommandID: "00000000-0000-4000-8000-000000000203",
+		RequestID: "assign-mixed-target", OccurredAt: assignedAt},
+		Payload: canonicalJSON(WorkItemEvent{WorkItem: item, Command: "assign", EvidenceIDs: []string{}})})
+	item.State, item.Version, item.UpdatedAt = "in_progress", 3, batchAt
+	events = append(events, eventRow{Projection: eventProjection{Sequence: 5, EventID: batchEventID,
+		EventType: "work_item.started", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+		AggregateID: workID, AggregateVersion: 3, ActorKind: "human", ActorID: actorID, CommandID: batchCommandID,
+		RequestID: "mixed-command-batch", OccurredAt: batchAt}, Payload: canonicalJSON(WorkItemEvent{WorkItem: item,
+		Command: "start", Reason: "Valid one-item batch", EvidenceIDs: []string{}, Batch: true})})
+
+	updated := item
+	updated.Description, updated.Version, updated.UpdatedAt = "Ordinary update after the batch", 4, ordinaryAt
+	assigned := item
+	assigned.Version, assigned.UpdatedAt = 4, ordinaryAt
+	created := WorkItemRecord{ID: createdWorkID, OrganizationID: organizationID, ProjectID: projectID,
+		Title: "Ordinary create", Description: "Separate production command", State: "open", Priority: "normal",
+		Version: 1, CreatedBy: actorID, CreatedAt: ordinaryAt, UpdatedAt: ordinaryAt}
+	dependencySource := item
+	dependencySource.Version, dependencySource.UpdatedAt = 4, ordinaryAt
+	dependency := WorkItemDependency{ID: dependencyID, OrganizationID: organizationID, SourceWorkItemID: workID,
+		TargetWorkItemID: targetID, Kind: "relates", Version: 1, CreatedBy: actorID, CreatedAt: ordinaryAt}
+	tests := []struct {
+		name     string
+		ordinary eventRow
+		tamper   func(*eventRow)
+	}{
+		{"update", eventRow{Projection: eventProjection{Sequence: 6, EventID: ordinaryEventID,
+			EventType: "work_item.updated", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+			AggregateID: workID, AggregateVersion: 4, ActorKind: "human", ActorID: actorID,
+			CommandID: "00000000-0000-4000-8000-000000000204", RequestID: "ordinary-update", OccurredAt: ordinaryAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: updated, Command: "update", EvidenceIDs: []string{}})},
+			func(row *eventRow) {
+				var payload WorkItemEvent
+				_ = json.Unmarshal(row.Payload, &payload)
+				payload.WorkItem.UpdatedAt = batchAt
+				row.Payload = canonicalJSON(payload)
+			}},
+		{"assign", eventRow{Projection: eventProjection{Sequence: 6, EventID: ordinaryEventID,
+			EventType: "work_item.assigned", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+			AggregateID: workID, AggregateVersion: 4, ActorKind: "human", ActorID: actorID,
+			CommandID: "00000000-0000-4000-8000-000000000205", RequestID: "ordinary-assign", OccurredAt: ordinaryAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: assigned, Command: "assign", EvidenceIDs: []string{}})},
+			func(row *eventRow) {
+				var payload WorkItemEvent
+				_ = json.Unmarshal(row.Payload, &payload)
+				payload.WorkItem.UpdatedAt = batchAt
+				row.Payload = canonicalJSON(payload)
+			}},
+		{"create", eventRow{Projection: eventProjection{Sequence: 6, EventID: ordinaryEventID,
+			EventType: "work_item.created", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+			AggregateID: createdWorkID, AggregateVersion: 1, ActorKind: "human", ActorID: actorID,
+			CommandID: "00000000-0000-4000-8000-000000000206", RequestID: "ordinary-create", OccurredAt: ordinaryAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: created, Command: "create", EvidenceIDs: []string{}})},
+			func(row *eventRow) {
+				var payload WorkItemEvent
+				_ = json.Unmarshal(row.Payload, &payload)
+				payload.WorkItem.CreatedAt, payload.WorkItem.UpdatedAt = batchAt, batchAt
+				row.Payload = canonicalJSON(payload)
+			}},
+		{"dependency", eventRow{Projection: eventProjection{Sequence: 6, EventID: ordinaryEventID,
+			EventType: "dependency.added", SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item",
+			AggregateID: workID, AggregateVersion: 4, ActorKind: "human", ActorID: actorID,
+			CommandID: "00000000-0000-4000-8000-000000000207", RequestID: "ordinary-dependency", OccurredAt: ordinaryAt},
+			Payload: canonicalJSON(WorkDependencyEvent{Dependency: dependency, Source: dependencySource, Removed: false})},
+			func(row *eventRow) {
+				var payload WorkDependencyEvent
+				_ = json.Unmarshal(row.Payload, &payload)
+				payload.Dependency.CreatedAt, payload.Source.UpdatedAt = batchAt, batchAt
+				row.Payload = canonicalJSON(payload)
+			}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			healthy := append(append([]eventRow(nil), events...), test.ordinary)
+			if _, failure := rebuildSnapshot("healthy-"+test.name, healthy); failure != nil {
+				t.Fatalf("ordinary %s history did not replay before tamper: %v", test.name, failure)
+			}
+			tampered := append([]eventRow(nil), healthy...)
+			member := &tampered[len(tampered)-1]
+			member.Projection.CommandID = batchCommandID
+			member.Projection.RequestID = "mixed-command-batch"
+			member.Projection.OccurredAt = batchAt
+			test.tamper(member)
+			snapshot, failure := rebuildSnapshot("mixed-"+test.name, tampered)
+			if failure == nil || failure.Code != "invalid_event_payload" ||
+				failure.Detail != "work item batch command contains a non-transition member" ||
+				failure.Sequence != 5 || failure.EventID != batchEventID {
+				t.Fatalf("mixed %s batch member did not fail at the command's first event: %+v", test.name, failure)
+			}
+			if len(snapshot.Projects) != 0 || len(snapshot.WorkItems) != 0 || len(snapshot.Activity) != 0 {
+				t.Fatalf("mixed %s batch built a partial projection: %+v", test.name, snapshot)
+			}
+			if _, failure := rebuildSnapshot("recovered-"+test.name, healthy); failure != nil {
+				t.Fatalf("restored %s history did not recover: %v", test.name, failure)
+			}
+		})
 	}
 }
 
