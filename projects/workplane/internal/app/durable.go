@@ -1595,7 +1595,7 @@ func rebuildSnapshot(runID string, events []eventRow) (projectionSnapshot, *Repl
 			if item.AggregateType != "work_item" || !sourceExists || !targetExists || source.ID != item.AggregateID ||
 				dependency.SourceWorkItemID != source.ID || source.OrganizationID != item.OrganizationID ||
 				dependency.OrganizationID != item.OrganizationID || target.OrganizationID != item.OrganizationID ||
-				source.ProjectID != target.ProjectID || source.UpdatedAt != item.OccurredAt ||
+				source.UpdatedAt != item.OccurredAt ||
 				source.Version != item.AggregateVersion || source.Version != priorSource.Version+1 ||
 				!sameWorkIdentity(priorSource, source) || !sameWorkContent(priorSource, source) ||
 				dependency.Version != 1 || (dependency.Kind != "blocks" && dependency.Kind != "relates" && dependency.Kind != "caused-by") {

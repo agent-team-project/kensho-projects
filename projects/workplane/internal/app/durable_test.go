@@ -218,3 +218,74 @@ func TestReplayRejectsBatchMarkerValueTamper(t *testing.T) {
 		t.Fatalf("batch marker value tamper did not fail closed: %+v", failure)
 	}
 }
+
+func TestReplayAcceptsAuthorizedCrossProjectDependencyLifecycle(t *testing.T) {
+	t.Parallel()
+	const (
+		organizationID  = "00000000-0000-4000-8000-000000000010"
+		sourceProjectID = "00000000-0000-4000-8000-000000000020"
+		targetProjectID = "00000000-0000-4000-8000-000000000021"
+		sourceID        = "00000000-0000-4000-8000-000000000030"
+		targetID        = "00000000-0000-4000-8000-000000000031"
+		dependencyID    = "00000000-0000-4000-8000-000000000032"
+		actorID         = "00000000-0000-4000-8000-000000000040"
+		createdAt       = "2026-07-13T10:00:00.123456Z"
+		addedAt         = "2026-07-13T10:01:00.123456Z"
+		removedAt       = "2026-07-13T10:02:00.123456Z"
+	)
+	source := WorkItemRecord{ID: sourceID, OrganizationID: organizationID, ProjectID: sourceProjectID,
+		Title: "Cross-project source", Description: "Authorized source endpoint", State: "open", Priority: "normal",
+		Version: 1, CreatedBy: actorID, CreatedAt: createdAt, UpdatedAt: createdAt}
+	target := WorkItemRecord{ID: targetID, OrganizationID: organizationID, ProjectID: targetProjectID,
+		Title: "Cross-project target", Description: "Authorized target endpoint", State: "open", Priority: "normal",
+		Version: 1, CreatedBy: actorID, CreatedAt: createdAt, UpdatedAt: createdAt}
+	dependency := WorkItemDependency{ID: dependencyID, OrganizationID: organizationID, SourceWorkItemID: sourceID,
+		TargetWorkItemID: targetID, Kind: "relates", Version: 1, CreatedBy: actorID, CreatedAt: addedAt}
+	events := []eventRow{
+		{Projection: eventProjection{Sequence: 1, EventID: "00000000-0000-4000-8000-000000000101", EventType: "project.created",
+			SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project", AggregateID: sourceProjectID,
+			AggregateVersion: 1, ActorKind: "human", ActorID: actorID},
+			Payload: canonicalJSON(Project{ID: sourceProjectID, OrganizationID: organizationID, Mode: "exploration", State: "proposed", Version: 1})},
+		{Projection: eventProjection{Sequence: 2, EventID: "00000000-0000-4000-8000-000000000102", EventType: "project.created",
+			SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "project", AggregateID: targetProjectID,
+			AggregateVersion: 1, ActorKind: "human", ActorID: actorID},
+			Payload: canonicalJSON(Project{ID: targetProjectID, OrganizationID: organizationID, Mode: "exploration", State: "proposed", Version: 1})},
+		{Projection: eventProjection{Sequence: 3, EventID: "00000000-0000-4000-8000-000000000103", EventType: "work_item.created",
+			SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item", AggregateID: sourceID,
+			AggregateVersion: 1, ActorKind: "human", ActorID: actorID, CommandID: "00000000-0000-4000-8000-000000000203",
+			RequestID: "create-cross-project-source", OccurredAt: createdAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: source, Command: "create", EvidenceIDs: []string{}})},
+		{Projection: eventProjection{Sequence: 4, EventID: "00000000-0000-4000-8000-000000000104", EventType: "work_item.created",
+			SchemaVersion: 1, OrganizationID: organizationID, AggregateType: "work_item", AggregateID: targetID,
+			AggregateVersion: 1, ActorKind: "human", ActorID: actorID, CommandID: "00000000-0000-4000-8000-000000000204",
+			RequestID: "create-cross-project-target", OccurredAt: createdAt},
+			Payload: canonicalJSON(WorkItemEvent{WorkItem: target, Command: "create", EvidenceIDs: []string{}})},
+	}
+	source.Version, source.UpdatedAt = 2, addedAt
+	events = append(events, eventRow{Projection: eventProjection{Sequence: 5,
+		EventID: "00000000-0000-4000-8000-000000000105", EventType: "dependency.added", SchemaVersion: 1,
+		OrganizationID: organizationID, AggregateType: "work_item", AggregateID: sourceID, AggregateVersion: 2,
+		ActorKind: "human", ActorID: actorID, CommandID: "00000000-0000-4000-8000-000000000205",
+		RequestID: "add-cross-project-dependency", OccurredAt: addedAt},
+		Payload: canonicalJSON(WorkDependencyEvent{Dependency: dependency, Source: source, Removed: false})})
+	source.Version, source.UpdatedAt = 3, removedAt
+	events = append(events, eventRow{Projection: eventProjection{Sequence: 6,
+		EventID: "00000000-0000-4000-8000-000000000106", EventType: "dependency.removed", SchemaVersion: 1,
+		OrganizationID: organizationID, AggregateType: "work_item", AggregateID: sourceID, AggregateVersion: 3,
+		ActorKind: "human", ActorID: actorID, CommandID: "00000000-0000-4000-8000-000000000206",
+		RequestID: "remove-cross-project-dependency", OccurredAt: removedAt},
+		Payload: canonicalJSON(WorkDependencyEvent{Dependency: dependency, Source: source, Removed: true})})
+
+	snapshot, failure := rebuildSnapshot("cross-project-dependency-lifecycle", events)
+	if failure != nil {
+		t.Fatalf("authorized cross-project dependency did not replay: %v", failure)
+	}
+	if len(snapshot.Dependencies) != 0 || len(snapshot.WorkItems) != 2 {
+		t.Fatalf("cross-project dependency lifecycle projected incorrectly: %+v", snapshot)
+	}
+	for _, item := range snapshot.WorkItems {
+		if item.ID == sourceID && item.Version != 3 {
+			t.Fatalf("cross-project source version = %d, want 3", item.Version)
+		}
+	}
+}
